@@ -493,6 +493,7 @@
       "share_download": "공유 링크로 다운로드",
       "disk_doctor": "스토리지 진단 실행",
       "fixity_mismatch": "설명되지 않은 파일 변경",
+      "fixity_rebaseline": "무결성 기준선 재설정",
       "retention_run": "보존 정책 실행",
       "retention_trash": "보존 정책으로 휴지통 이동",
       "retention_delete": "보존 정책으로 삭제"

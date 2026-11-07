@@ -146,5 +146,16 @@ test('decodeBody: anything that is not a JSON object becomes []', function () {
     assertEqual([], AuditPolicy::decodeBody('"str"'));
 });
 
+test('fixity_check anchors the baseline: scope key + mac= in the detail', function () {
+    $mac = str_repeat('ab', 32);
+    $e = AuditPolicy::successEntry('/api/fm/fixity/check', ['disk' => 'local'], [], claims('tenant7'), ['checked' => 3, 'changed_unexplained' => ['x'], 'missing_unexplained' => [], 'baseline_mac' => $mac]);
+    assertEqual('fixity_check', $e['action']);
+    assertEqual('tenant7', $e['key'], 'scope key');
+    assertEqual("checked=3 unexplained=1 mac={$mac}", $e['detail']);
+    $e = AuditPolicy::successEntry('/api/fm/fixity/check', [], [], claims(''), ['checked' => 0, 'baseline_mac' => 'not-a-mac']);
+    assertEqual('', $e['key']);
+    assertEqual('checked=0 unexplained=0', $e['detail'], 'junk mac is not anchored');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

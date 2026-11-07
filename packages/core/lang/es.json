@@ -493,6 +493,7 @@
       "share_download": "Descargado por enlace compartido",
       "disk_doctor": "Diagnóstico de almacenamiento",
       "fixity_mismatch": "Cambio de archivo inexplicable",
+      "fixity_rebaseline": "Línea base de integridad restablecida",
       "retention_run": "Ejecución de retención",
       "retention_trash": "A la papelera por retención",
       "retention_delete": "Eliminado por retención"

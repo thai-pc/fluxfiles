@@ -132,7 +132,9 @@ final class AuditPolicy
         // themselves — the prefix check could never match. Re-apply the same
         // prefixing FileManager used for the operation itself (idempotent, so
         // this is safe even if a path were already scoped).
-        if ($key !== '') {
+        if ($key !== '' || $action === 'fixity_check') {
+            // fixity_check names the whole scope (the tenant root): the baseline anchor
+            // the audit-export module looks up per scope.
             $key = $claims->scopePath((string) $key);
         }
         $disk = $body['disk'] ?? $body['src_disk'] ?? $post['disk'] ?? 'local';
@@ -161,9 +163,12 @@ final class AuditPolicy
                         (int) ($data['acted'] ?? 0), (int) ($data['held'] ?? 0))
                     : null;
             case 'fixity_check':
+                // `mac=` anchors this run's baseline in the HMAC-chained log: the module
+                // rejects a deleted or replayed fixity.json against the latest anchor.
                 return is_array($data)
                     ? sprintf('checked=%d unexplained=%d', (int) ($data['checked'] ?? 0),
                         count($data['changed_unexplained'] ?? []) + count($data['missing_unexplained'] ?? []))
+                        . (preg_match('/^[0-9a-f]{64}$/', (string) ($data['baseline_mac'] ?? '')) ? ' mac=' . $data['baseline_mac'] : '')
                     : null;
             case 'virus_scan':
                 // The verdict IS the event.

@@ -493,6 +493,7 @@
       "share_download": "Gedownload via deellink",
       "disk_doctor": "Opslagdiagnose uitgevoerd",
       "fixity_mismatch": "Onverklaarde bestandswijziging",
+      "fixity_rebaseline": "Integriteitsbasislijn opnieuw ingesteld",
       "retention_run": "Bewaartermijn uitgevoerd",
       "retention_trash": "Naar prullenbak door bewaartermijn",
       "retention_delete": "Verwijderd door bewaartermijn"

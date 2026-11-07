@@ -1637,7 +1637,12 @@ class FluxFilesController
                     ? $this->metaRepo->readAuditWindow($disk, $since)
                     : $this->metaRepo->readAudit($disk);
             if ($m instanceof \FluxFiles\FixityProviderInterface) {
-                $report = $m->runFixityCheck($fm, $disk, $entries);
+                // Optional 5th argument (not on the interface): see core's fixity route.
+                $rebaseline = $request->input('rebaseline', false) === true;
+                if ($rebaseline && (new \ReflectionMethod($m, 'runFixityCheck'))->getNumberOfParameters() < 5) {
+                    throw new ApiException("The 'audit-export' module must be updated", 501, 'module_update_required', ['module' => 'audit-export']);
+                }
+                $report = $m->runFixityCheck($fm, $disk, $entries, 1073741824, $rebaseline);
             } elseif (method_exists($fm, 'runFixityCheck')) {
                 $report = $fm->runFixityCheck($disk, $entries);
             } else {
@@ -1648,6 +1653,14 @@ class FluxFilesController
                     $this->logAuditQuiet($claims, 'fixity_mismatch', $disk, $claims->scopePath((string) $key), $what);
                 }
             }
+            if (!empty($report['rebaselined'])) {
+                $this->logAuditQuiet($claims, 'fixity_rebaseline', $disk, $claims->scopePath(''), (string) ($report['baseline_invalid_reason'] ?? ''));
+            }
+            // The per-run anchor (`mac=` ties the next run's manifest to this one).
+            $this->logAuditQuiet($claims, 'fixity_check', $disk, $claims->scopePath(''), sprintf('checked=%d unexplained=%d%s',
+                (int) ($report['checked'] ?? 0),
+                count($report['changed_unexplained'] ?? []) + count($report['missing_unexplained'] ?? []),
+                preg_match('/^[0-9a-f]{64}$/', (string) ($report['baseline_mac'] ?? '')) ? ' mac=' . $report['baseline_mac'] : ''));
             return $this->ok($report);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());

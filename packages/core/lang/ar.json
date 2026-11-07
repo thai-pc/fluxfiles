@@ -493,6 +493,7 @@
       "share_download": "نُزّل عبر رابط مشاركة",
       "disk_doctor": "تشغيل تشخيص التخزين",
       "fixity_mismatch": "تغيير ملف غير مبرر",
+      "fixity_rebaseline": "تمت إعادة تعيين خط أساس السلامة",
       "retention_run": "تشغيل الاحتفاظ",
       "retention_trash": "نُقل للمهملات بالاحتفاظ",
       "retention_delete": "حُذف بالاحتفاظ"

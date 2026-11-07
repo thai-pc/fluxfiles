@@ -493,6 +493,7 @@
       "share_download": "共有リンクからダウンロード",
       "disk_doctor": "ストレージ診断を実行",
       "fixity_mismatch": "説明のつかないファイル変更",
+      "fixity_rebaseline": "整合性ベースラインをリセット",
       "retention_run": "保持ポリシー実行",
       "retention_trash": "保持ポリシーでゴミ箱へ",
       "retention_delete": "保持ポリシーで削除"
