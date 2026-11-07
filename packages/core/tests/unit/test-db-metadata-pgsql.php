@@ -538,10 +538,10 @@ test('rate limiter: concurrent FIRST hits on distinct cold keys all succeed (no 
 
 test('rate limiter: the lock is per key, not global (a held key does not block another key)', function () use ($conn, $dsn, $user, $pass) {
     $conn->pdo()->exec('DELETE FROM rate_limits');
-    $lockKey = json_encode(['rate_limits', 'held-key', 'read']);
+    $keyJson = json_encode(['held-key', 'read']);
     $holder = new Connection($dsn, $user, $pass);
     $holder->pdo()->beginTransaction();
-    $holder->pdo()->prepare('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))')->execute([$lockKey]);
+    $holder->pdo()->prepare('SELECT pg_advisory_xact_lock(hashtext(?), hashtext(?))')->execute(['rate_limits', $keyJson]);
     $release = fn () => $holder->pdo()->rollBack();
     try {
         $t = microtime(true);

@@ -742,6 +742,81 @@ test('WpRateLimiterStorage forgets hits older than the window', function () use 
     assertEqual(1, (int) $pdo->query("SELECT COUNT(*) FROM {$tRate} WHERE identifier = 'rl-old'")->fetchColumn(), 'stale rows swept, one fresh hit');
 });
 
+/**
+ * Fire $workers processes at once at WpRateLimiterStorage::check() on COLD keys
+ * (no pre-seeded row). Each worker is its own PHP process with its own PDO
+ * connection and a minimal wpdb stand-in. Returns [ok, limited, errors[]].
+ */
+function wpRaceColdKey(string $dsn, string $user, string $pass, string $prefix, int $workers, int $limit, bool $distinct): array
+{
+    $script = tempnam(sys_get_temp_dir(), 'ff_wprl_worker_') . '.php';
+    file_put_contents($script, '<?php
+define("ABSPATH", sys_get_temp_dir() . "/");
+define("ARRAY_A", "ARRAY_A");
+require ' . var_export(realpath(__DIR__ . '/../../core/vendor/autoload.php'), true) . ';
+require ' . var_export(realpath(__DIR__ . '/../includes/WpRateLimiterStorage.php'), true) . ';
+class FluxFilesPlugin { public static function debugLog($m) { fwrite(STDERR, $m); } }
+class RaceWpdb {
+    public string $prefix; public string $last_error = ""; private PDO $pdo;
+    function __construct(PDO $p, string $prefix) { $this->pdo = $p; $this->prefix = $prefix; }
+    function prepare($sql, ...$args) { if (count($args) === 1 && is_array($args[0])) $args = $args[0]; $i = 0;
+        return preg_replace_callback("/%s|%d|%i/", function ($m) use (&$i, $args) { $v = $args[$i++] ?? null;
+            return $m[0] === "%i" ? "`" . $v . "`" : ($m[0] === "%d" ? (string) (int) $v : $this->pdo->quote((string) $v)); }, $sql); }
+    function query($sql) { try { return $this->pdo->exec($sql); } catch (Throwable $e) { $this->last_error = $e->getMessage(); return false; } }
+    function get_var($sql) { try { $r = $this->pdo->query($sql)->fetch(PDO::FETCH_NUM); return $r ? $r[0] : null; } catch (Throwable $e) { $this->last_error = $e->getMessage(); return null; } }
+    function get_results($sql, $o = null) { try { return $this->pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC); } catch (Throwable $e) { $this->last_error = $e->getMessage(); return []; } }
+}
+[$_, $dsn, $user, $pass, $prefix, $key, $limit, $start] = $argv;
+$GLOBALS["wpdb"] = new RaceWpdb(new PDO($dsn, $user, $pass), $prefix);
+$l = new WpRateLimiterStorage((int) $limit, (int) $limit, 60, null);
+while (microtime(true) < (float) $start) {}
+try { $l->check($key, "read"); echo "OK"; }
+catch (\FluxFiles\ApiException $e) { echo $e->getHttpCode() === 429 ? "LIMITED" : "ERR:" . $e->getMessage(); }
+catch (Throwable $e) { echo "ERR:" . substr($e->getMessage(), 0, 160); }');
+    $base = 'wpcold-' . bin2hex(random_bytes(4));
+    $start = microtime(true) + 1.0;
+    $procs = [];
+    $pipes = [];
+    for ($i = 0; $i < $workers; $i++) {
+        $key = $distinct ? "{$base}-u{$i}" : $base;
+        $procs[$i] = proc_open(['php', $script, $dsn, $user, $pass, $prefix, $key, (string) $limit, (string) $start], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes[$i]);
+    }
+    $res = [0, 0, []];
+    foreach ($pipes as $i => $p) {
+        $out = stream_get_contents($p[1]);
+        stream_get_contents($p[2]);
+        proc_close($procs[$i]);
+        if ($out === 'OK') {
+            $res[0]++;
+        } elseif ($out === 'LIMITED') {
+            $res[1]++;
+        } else {
+            $res[2][] = $out;
+        }
+    }
+    @unlink($script);
+    return $res;
+}
+
+test('WpRateLimiterStorage: concurrent FIRST hits on one cold key never overshoot, error or deadlock', function () use ($pdo, $tRate, $dsn, $user, $pass, $prefix) {
+    $pdo->exec("DELETE FROM {$tRate}");
+    for ($round = 0; $round < 3; $round++) {
+        [$ok, $limited, $errs] = wpRaceColdKey($dsn, $user, $pass, $prefix, 16, 5, false);
+        assertEqual([], $errs, 'no worker may error: ' . json_encode($errs));
+        assertEqual(5, $ok, "round {$round}: exactly the limit must be accepted");
+        assertEqual(11, $limited);
+    }
+});
+
+test('WpRateLimiterStorage: concurrent FIRST hits on distinct cold keys all succeed', function () use ($pdo, $tRate, $dsn, $user, $pass, $prefix) {
+    $pdo->exec("DELETE FROM {$tRate}");
+    for ($round = 0; $round < 3; $round++) {
+        [$ok, , $errs] = wpRaceColdKey($dsn, $user, $pass, $prefix, 16, 5, true);
+        assertEqual([], $errs, 'no worker may error: ' . json_encode($errs));
+        assertEqual(16, $ok, "round {$round}: every distinct key is below its own limit");
+    }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // Cleanup
 // ═══════════════════════════════════════════════════════════════

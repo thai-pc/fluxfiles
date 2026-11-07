@@ -537,7 +537,7 @@ test('rate limiter: concurrent FIRST hits on distinct cold keys all succeed (no 
 
 test('rate limiter: the lock is per key, not global (a held key does not block another key)', function () use ($conn, $dsn, $user, $pass) {
     $conn->pdo()->exec('DELETE FROM rate_limits');
-    $lockKey = json_encode(['rate_limits', 'held-key', 'read']);
+    $lockKey = 'rate_limits|' . json_encode(['held-key', 'read']);
     $holder = new Connection($dsn, $user, $pass);
     $name = 'fxrl_' . sha1($lockKey);
     $holder->pdo()->prepare('SELECT GET_LOCK(?, 10)')->execute([$name]);
