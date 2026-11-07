@@ -104,20 +104,33 @@ class FluxFilesPlugin
         if ($networkWide && self::isMultisite() && function_exists('get_sites')) {
             // Network activation runs this once, on the main site only: every other
             // sub-site would be left without a secret ("Unable to generate token").
-            $offset = 0;
-            $batch = 100;
-            do {
-                $ids = (array) get_sites(['fields' => 'ids', 'number' => $batch, 'offset' => $offset]);
-                foreach ($ids as $id) {
-                    switch_to_blog((int) $id);
-                    try {
-                        self::initSite();
-                    } finally {
-                        restore_current_blog();
+            // WordPress records the plugin as active only AFTER this hook returns, so the
+            // loop has a budget (sites and seconds) and is skipped on a large network; the
+            // sites it does not reach are set up by ensureSiteReady() on their first request.
+            $network = function_exists('get_current_network_id') ? (int) get_current_network_id() : 1;
+            if (!(function_exists('wp_is_large_network') && wp_is_large_network('sites'))) {
+                $maxSites = max(0, (int) apply_filters('fluxfiles_activation_max_sites', 200));
+                $deadline = microtime(true) + (float) apply_filters('fluxfiles_activation_budget_seconds', 10);
+                $done = 0;
+                $offset = 0;
+                $batch = 100;
+                do {
+                    $ids = (array) get_sites(['fields' => 'ids', 'number' => $batch, 'offset' => $offset, 'network_id' => $network]);
+                    foreach ($ids as $id) {
+                        if ($done >= $maxSites || microtime(true) >= $deadline) {
+                            break 2;
+                        }
+                        switch_to_blog((int) $id);
+                        try {
+                            self::initSite();
+                        } finally {
+                            restore_current_blog();
+                        }
+                        $done++;
                     }
-                }
-                $offset += $batch;
-            } while (count($ids) === $batch);
+                    $offset += $batch;
+                } while (count($ids) === $batch);
+            }
         } else {
             self::initSite();
         }
@@ -288,7 +301,13 @@ class FluxFilesPlugin
             return;
         }
         self::writeProtectFile($root . '/.htaccess', self::rootHtaccess());
-        self::writeProtectFile($uploads . '/.htaccess', self::uploadsHtaccess());
+        // Private local storage: nothing under uploads/ may be fetched by its plain URL
+        // (files stream through the signed REST route), so the folder is denied too.
+        if ((bool) get_option('fluxfiles_local_private', false)) {
+            self::writeProtectFile($uploads . '/.htaccess', self::rootHtaccess(), '-private');
+        } else {
+            self::writeProtectFile($uploads . '/.htaccess', self::uploadsHtaccess());
+        }
         foreach ([$root, $uploads] as $dir) {
             if (!file_exists($dir . '/index.php')) {
                 @file_put_contents($dir . '/index.php', FluxFilesStorage::INDEX_STUB);
@@ -296,13 +315,13 @@ class FluxFilesPlugin
         }
     }
 
-    private static function writeProtectFile(string $path, string $body): void
+    private static function writeProtectFile(string $path, string $body, string $variant = ''): void
     {
-        $header = self::PROTECT_MARKER . self::PROTECT_VERSION;
+        $header = self::PROTECT_MARKER . self::PROTECT_VERSION . $variant;
         if (is_file($path)) {
             $current = (string) @file_get_contents($path, false, null, 0, 256);
-            if (strpos($current, $header) !== false) {
-                return; // already current
+            if (strtok($current, "\r\n") === $header) {
+                return; // already current (this mode)
             }
             if (strpos($current, self::PROTECT_MARKER) === false) {
                 return; // operator-authored — leave it alone

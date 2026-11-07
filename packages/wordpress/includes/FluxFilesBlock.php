@@ -55,6 +55,9 @@ class FluxFilesBlock
             FLUXFILES_VERSION,
             true
         );
+        foreach (['fluxfiles-picker-url', 'fluxfiles-block'] as $handle) {
+            wp_set_script_translations($handle, 'fluxfiles');
+        }
         wp_enqueue_style('fluxfiles-admin', FLUXFILES_PLUGIN_URL . 'assets/admin.css', [], FLUXFILES_VERSION);
 
         $token = '';

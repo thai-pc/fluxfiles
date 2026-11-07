@@ -30,17 +30,24 @@
         var raw = (file && (file.permanent_url || file.url)) || '';
         var url = absUrl(raw, endpoint);
         var reason = raw === '' ? 'preview' : (url === '' ? 'unsafe' : (isTokenUrl(url) ? 'token' : ''));
+        // A presigned S3/R2 URL is allowed (same as the editor adapters) but expires.
+        if (!reason && /[?&](X-Amz-|Signature=)/.test(url) && window.console) {
+            console.warn('[FluxFiles] Inserting a presigned (expiring) URL; it will break when it expires. Use a public disk or a public URL for embeds.');
+        }
         return { url: reason ? '' : url, reason: reason };
     }
     function refusalMessage(reason, name, i18n) {
         var __ = (i18n && i18n.__) || function (s) { return s; };
         var sprintf = (i18n && i18n.sprintf) || function (s, n) { return s.replace('%s', n); };
         if (reason === 'token') {
+            /* translators: %s: file name */
             return sprintf(__('"%s" is stored on private storage, so it has no permanent link and was not inserted. A link would stop working after an hour. Use a public disk or set a public URL for the disk.', 'fluxfiles'), name);
         }
         if (reason === 'unsafe') {
+            /* translators: %s: file name */
             return sprintf(__('"%s" has a URL that is not http(s), so it was not inserted.', 'fluxfiles'), name);
         }
+        /* translators: %s: file name */
         return sprintf(__('"%s" is preview-only (no embeddable URL), so it was not inserted.', 'fluxfiles'), name);
     }
     root.FluxFilesPickerUrl = { resolve: resolve, refusalMessage: refusalMessage };

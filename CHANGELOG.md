@@ -12,7 +12,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - WordPress plugin: two `[fluxfiles]` shortcodes on one page no longer replace each other silently (the SDK drives one iframe per page); the second shows a notice. The JWT secret and the S3/R2 secret keys are no longer echoed into the Settings page (blank = keep, S3/R2 have a remove checkbox). The block uses API version 3 and keyed toolbar buttons, Contributors see a role-appropriate message instead of "not configured", and the shortcode and Settings strings are translatable.
 
 ### Added
-- WordPress plugin: Settings > "Private local storage" (`fluxfiles_local_private`), the switch the readme and the nginx notice already pointed at. Plugin 1.1.1.
+- WordPress plugin: Settings > "Private local storage" (`fluxfiles_local_private`), the switch the readme and the nginx notice already pointed at. On Apache it now writes a deny-all `.htaccess` for the uploads folder; on nginx the warning stays (with a one-line deny rule) because the setting only stops plain URLs. Files written before keep their permissions. The activation loop is bounded (200 sites / 10 s, skipped on a large network; the rest is set up on first request), and uninstall no longer fatals on an unreadable directory, keeps the root deny-all while other files live there, and warns on short JWT secrets.
 
 ## [1.0.19] — 2026-11-07
 

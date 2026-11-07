@@ -200,8 +200,8 @@ Deleting the plugin always removes its settings and rate-limit counters. The sto
 their metadata/trash/audit/legal-hold tables and the secret key are **kept** unless you tick
 "Delete all FluxFiles data when the plugin is deleted" first. With it on, the trash, variants and
 other FluxFiles bookkeeping (`_fluxfiles/`, `_variants/`) in its own folder are removed, but the files in the
-folder are never deleted (the plugin cannot tell which ones it wrote, and some may predate it); nothing is deleted at a custom location set via
-`FLUXFILES_STORAGE_DIR` or the `fluxfiles_storage_base` filter.
+folder are never deleted (the plugin cannot tell which ones it wrote, and some may predate it); at a custom location set via
+`FLUXFILES_STORAGE_DIR` or the `fluxfiles_storage_base` filter only the rate-limit counters are deleted.
 
 ### Multisite layout
 
@@ -283,8 +283,11 @@ Follow these steps in order, from `wp-content/`:
    skipped, so the legacy index is kept and only missing files are added), then
    `wp maintenance-mode deactivate`.
 
-…or enable **private local storage** in the settings, which stops serving the
-directory statically at all (files stream through the signed REST route).
+…or enable **private local storage** in the settings: the file manager stops handing
+out plain URLs (files stream through the signed REST route) and, on Apache, the folder is
+denied by its `.htaccess`. nginx ignores `.htaccess`, so the rule `location ^~ <storage root>/ { deny all; }`
+is still needed there (the admin notice shows it, also while private storage is on). Files written
+before you switched it on keep their old permissions.
 
 On nginx the plugins screen and Settings → FluxFiles show an admin notice with
 these rules (rooted at your real content path) while the local disk is public.

@@ -61,7 +61,7 @@ class FluxFilesAdmin
 
         register_setting('fluxfiles', 'fluxfiles_secret', [
             'type' => 'string',
-            'sanitize_callback' => $this->keepSecret('fluxfiles_secret', false),
+            'sanitize_callback' => $this->keepSecret('fluxfiles_secret', false, 32),
         ]);
         register_setting('fluxfiles', 'fluxfiles_max_upload', [
             'type' => 'integer',
@@ -303,8 +303,10 @@ class FluxFilesAdmin
         if ($page !== 'plugins.php' && !($page === 'options-general.php' && $screen === 'fluxfiles')) {
             return;
         }
-        if ((bool) get_option('fluxfiles_local_private', false)
-            || !in_array('local', (array) get_option('fluxfiles_disks', ['local']), true)
+        // Private local storage does NOT hide this notice: it only stops handing out plain
+        // URLs. nginx still serves the folder (audit log, index and trash live in its
+        // _fluxfiles/) until the operator denies it.
+        if (!in_array('local', (array) get_option('fluxfiles_disks', ['local']), true)
             || !apply_filters('fluxfiles_nginx_storage_notice', true)) {
             return;
         }
@@ -325,7 +327,10 @@ class FluxFilesAdmin
         // Multisite keeps each site's uploads under sites/<blog_id>/uploads/.
         $multisite = function_exists('is_multisite') && is_multisite();
         $dir = $multisite ? $root . 'sites/[0-9]+/uploads/' : $root . 'uploads/';
-        $snippet = "location ^~ {$root} {\n"
+        $private = (bool) get_option('fluxfiles_local_private', false);
+        $snippet = $private
+            ? "location ^~ {$root} {\n    deny all;\n}"
+            : "location ^~ {$root} {\n"
             . '    location ' . ($multisite ? '~ ^' : '^~ ') . $dir . " {\n"
             . "        allow all;\n"
             . "        add_header X-Content-Type-Options \"nosniff\" always;\n"
@@ -343,9 +348,13 @@ class FluxFilesAdmin
             . "}";
         printf(
             '<div class="notice notice-warning"><p><strong>FluxFiles:</strong> %s</p><pre style="white-space:pre-wrap">%s</pre><p>%s</p></div>',
-            esc_html__('This site runs on nginx, which ignores the .htaccess protecting the FluxFiles uploads folder. Uploads there are served from the same origin as wp-admin: the folder must never execute PHP and must not serve HTML/SVG/XML as active content, and its _fluxfiles/ bookkeeping must not be public. Add rules like these to your server block (then reload nginx):', 'fluxfiles'),
+            $private
+                ? esc_html__('Private local storage is on, but this site runs on nginx, which ignores the .htaccess that denies the FluxFiles folder. Until you deny it in your server block, the files and the _fluxfiles/ bookkeeping (audit log with IP addresses, index, trash) can still be fetched by their plain URL. Add this rule (then reload nginx):', 'fluxfiles')
+                : esc_html__('This site runs on nginx, which ignores the .htaccess protecting the FluxFiles uploads folder. Uploads there are served from the same origin as wp-admin: the folder must never execute PHP and must not serve HTML/SVG/XML as active content, and its _fluxfiles/ bookkeeping must not be public. Add rules like these to your server block (then reload nginx):', 'fluxfiles'),
             esc_html($snippet),
-            esc_html__('Alternatively turn on private local storage so files are only served through signed links.', 'fluxfiles')
+            $private
+                ? esc_html__('FluxFiles keeps serving files through signed links, so denying the folder does not break the file manager.', 'fluxfiles')
+                : esc_html__('Alternatively turn on private local storage and deny the folder (the rule is shown here once it is on); files are then only served through signed links.', 'fluxfiles')
         );
     }
 
@@ -511,7 +520,7 @@ class FluxFilesAdmin
             . '<p class="description">%s</p>',
             $on ? 'checked' : '',
             esc_html__('Serve local files only through signed links', 'fluxfiles'),
-            esc_html__('Recommended on nginx, where the .htaccess rules protecting the uploads folder are ignored. Files are then no longer reachable by their plain URL; they are streamed through FluxFiles on short-lived links, so a link saved in a post stops working. Use the Media Library attachment bridge or an S3/R2 disk with a public URL for permanent links.', 'fluxfiles')
+            esc_html__('The file manager stops handing out plain URLs and streams files through FluxFiles on short-lived links, so a link saved in a post stops working. On Apache the uploads folder is then denied by its .htaccess. On nginx you must deny the folder yourself (a notice shows the rule). Files written before you switched this on keep their old permissions. Use an S3/R2 disk with a public URL for permanent links.', 'fluxfiles')
         );
     }
 
@@ -525,7 +534,7 @@ class FluxFilesAdmin
             $on ? 'checked' : '',
             esc_html__('Delete all FluxFiles data when the plugin is deleted', 'fluxfiles'),
             esc_html__('Warning:', 'fluxfiles'),
-            esc_html__('Off by default: deleting the plugin from the Plugins screen then removes only the settings and rate-limit counters, and KEEPS the files in the local FluxFiles storage folder together with their metadata, trash, audit log and legal-hold tables, the secret key (the audit log key) and the settings that decide where and how that data is read (storage backend, storage location, private mode), so a reinstall picks everything up again. When on, all of that is permanently removed, including the trash and the generated variants. The files in the storage folder are never deleted, whoever put them there: remove the folder by hand if you no longer need them. Nothing is deleted from a custom location set with the FLUXFILES_STORAGE_DIR constant or the fluxfiles_storage_base filter, nor from S3, R2 or SFTP.', 'fluxfiles')
+            esc_html__('Off by default: deleting the plugin from the Plugins screen then removes only the settings and rate-limit counters, and KEEPS the files in the local FluxFiles storage folder together with their metadata, trash, audit log and legal-hold tables, the secret key (the audit log key) and the settings that decide where and how that data is read (storage backend, storage location, private mode), so a reinstall picks everything up again. When on, all of that is permanently removed, including the trash and the generated variants. The files in the storage folder are never deleted, whoever put them there: remove the folder by hand if you no longer need them. From a custom location set with the FLUXFILES_STORAGE_DIR constant or the fluxfiles_storage_base filter only the rate-limit counters are deleted, and nothing from S3, R2 or SFTP.', 'fluxfiles')
         );
     }
 
@@ -539,10 +548,21 @@ class FluxFilesAdmin
      * can be removed with the companion `<option>_clear` checkbox; the JWT secret
      * can not be blanked (every token would fail).
      */
-    private function keepSecret(string $option, bool $clearable): callable
+    private function keepSecret(string $option, bool $clearable, int $minBytes = 0): callable
     {
-        return static function ($value) use ($option, $clearable): string {
-            $new = sanitize_text_field((string) $value);
+        return static function ($value) use ($option, $clearable, $minBytes): string {
+            // trim only: sanitize_text_field() would strip %xx octets and <...> from a
+            // secret and silently change it.
+            $new = trim((string) $value);
+            if ($new !== '' && strlen($new) < $minBytes) {
+                add_settings_error(
+                    $option,
+                    $option . '_short',
+                    /* translators: %d: minimum number of characters */
+                    sprintf(esc_html__('The secret must be at least %d characters long; the stored one was kept.', 'fluxfiles'), $minBytes)
+                );
+                return (string) get_option($option, '');
+            }
             if ($new !== '') {
                 return $new;
             }

@@ -78,16 +78,24 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
         if (!is_dir($dir)) {
             return;
         }
-        $it = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($it as $f) {
-            if ($f->isDir() && !$f->isLink()) {
-                $rmdirIfEmpty($f->getPathname());
-            } else {
-                $rmFile($f->getPathname());
+        // An unreadable directory (0700 dirs written by another user, chmod 000) must not
+        // abort the uninstall: skip that subtree and carry on, or the plugin could never
+        // be deleted.
+        try {
+            $it = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+                RecursiveIteratorIterator::CHILD_FIRST,
+                RecursiveIteratorIterator::CATCH_GET_CHILD
+            );
+            foreach ($it as $f) {
+                if ($f->isDir() && !$f->isLink()) {
+                    $rmdirIfEmpty($f->getPathname());
+                } else {
+                    $rmFile($f->getPathname());
+                }
             }
+        } catch (\UnexpectedValueException $e) {
+            return;
         }
         $rmdirIfEmpty($dir);
     };
@@ -148,7 +156,11 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
         if (is_link($dir) || !is_dir($dir)) {
             return;
         }
-        foreach ((array) scandir($dir) as $name) {
+        $entries = @scandir($dir);
+        if ($entries === false) {
+            return; // unreadable: leave it alone
+        }
+        foreach ($entries as $name) {
             if ($name === '.' || $name === '..') {
                 continue;
             }
@@ -198,7 +210,12 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
             $guards($uploads);
         }
         $rmdirIfEmpty($uploads);
-        $guards($root);
+        // The root's deny-all keeps anything else that lives there (another tool's state)
+        // from becoming web-served: remove it only when nothing else is left.
+        $left = is_dir($root) ? @scandir($root) : false;
+        if ($left !== false && array_diff($left, ['.', '..', '.htaccess', 'index.php']) === []) {
+            $guards($root);
+        }
         $rmdirIfEmpty($root); // only if nothing else lives there
     };
 

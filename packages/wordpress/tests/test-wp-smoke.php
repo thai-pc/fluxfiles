@@ -2682,6 +2682,7 @@ test('settings: the stored secrets are never echoed into the page; a blank save 
     if (!function_exists('esc_url')) { function esc_url($u) { return $u; } }
     if (!function_exists('admin_url')) { function admin_url($p = '') { return 'http://wp.test/wp-admin/' . $p; } }
     if (!function_exists('add_settings_section')) { function add_settings_section(...$a) {} }
+    if (!function_exists('add_settings_error')) { function add_settings_error($setting, $code, $msg, $type = 'error') { $GLOBALS['WP_SETTINGS_ERRORS'][] = [$setting, $code]; } }
     if (!function_exists('add_settings_field')) { function add_settings_field($id, $title, $cb, ...$a) { $GLOBALS['WP_FIELDS'][$id] = $cb; } }
     if (!function_exists('register_setting')) { function register_setting($g, $name, $args = []) { $GLOBALS['WP_SETTINGS'][$name] = $args; } }
     $GLOBALS['WP_FIELDS'] = []; $GLOBALS['WP_SETTINGS'] = [];
@@ -2708,6 +2709,10 @@ test('settings: the stored secrets are never echoed into the page; a blank save 
         assertEqual($jwt, $san('fluxfiles_secret', ''), 'blank keeps the JWT secret');
         assertEqual($jwt, $san('fluxfiles_secret', '   '), 'whitespace keeps it too');
         assertEqual('a-brand-new-secret-0123456789abcdef', $san('fluxfiles_secret', ' a-brand-new-secret-0123456789abcdef '), 'a typed value replaces it');
+        assertEqual('pa%41ss<x>word-0123456789abcdefghijklm', $san('fluxfiles_secret', 'pa%41ss<x>word-0123456789abcdefghijklm'), 'a secret is trimmed only, never mangled');
+        $GLOBALS['WP_SETTINGS_ERRORS'] = [];
+        assertEqual($jwt, $san('fluxfiles_secret', 'too-short'), 'a secret under 32 characters is refused, the stored one kept');
+        assertEqual([['fluxfiles_secret', 'fluxfiles_secret_short']], $GLOBALS['WP_SETTINGS_ERRORS'], 'with a settings error');
         $_POST = ['fluxfiles_secret_clear' => '1'];
         assertEqual($jwt, $san('fluxfiles_secret', ''), 'the JWT secret has no clear switch');
         assertEqual('S3-SECRET-VALUE-XYZ', $san('fluxfiles_s3_secret', ''), 'blank keeps the S3 secret');
@@ -2731,6 +2736,23 @@ test('settings: the stored secrets are never echoed into the page; a blank save 
     } finally {
         $GLOBALS['WP_OPTIONS']['fluxfiles_secret'] = $jwt;
         [$GLOBALS['WP_OPTIONS']['fluxfiles_s3_secret'], $GLOBALS['WP_OPTIONS']['fluxfiles_r2_secret'], $_POST] = $keep;
+    }
+});
+
+test('private local storage keeps the nginx warning (it only stops plain URLs; the server must still deny the folder)', function () {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $keep = [$_SERVER['SERVER_SOFTWARE'] ?? null, $GLOBALS['pagenow'] ?? null, $GLOBALS['WP_OPTIONS']['fluxfiles_local_private'] ?? null];
+    try {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_disks'] = ['local'];
+        $_SERVER['SERVER_SOFTWARE'] = 'nginx/1.25.3';
+        $GLOBALS['pagenow'] = 'plugins.php';
+        $GLOBALS['WP_OPTIONS']['fluxfiles_local_private'] = '1';
+        $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+        ob_start(); $admin->renderNginxStorageNotice(); $out = (string) ob_get_clean();
+        assertTrue(strpos($out, 'deny all;') !== false && strpos($out, 'allow all') === false, 'a plain deny rule is shown');
+        assertTrue(strpos($out, '/wp-content/uploads/fluxfiles/') !== false && strpos($out, '_fluxfiles/') !== false, 'names the folder and the bookkeeping');
+    } finally {
+        [$_SERVER['SERVER_SOFTWARE'], $GLOBALS['pagenow'], $GLOBALS['WP_OPTIONS']['fluxfiles_local_private']] = $keep;
     }
 });
 

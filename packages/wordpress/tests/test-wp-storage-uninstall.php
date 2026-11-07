@@ -64,6 +64,7 @@ function add_filter($t, $cb, $p = 10, $a = 1) { $GLOBALS['F'][$t][] = $cb; retur
 function apply_filters($t, $v, ...$a) {
     global $FXT;
     if ($t === 'fluxfiles_storage_base' && !empty($FXT['filter'])) { return $FXT['filter']; }
+    if ($t === 'fluxfiles_activation_max_sites' && isset($FXT['max_sites'])) { return $FXT['max_sites']; }
     return $v;
 }
 function add_action(...$a) {}
@@ -125,10 +126,12 @@ function scenario(array $cfg, string $body, bool $core = false): array
         . $body;
     $file = tempnam(sys_get_temp_dir(), 'fxs') . '.php';
     file_put_contents($file, $script);
-    $proc = proc_open([PHP_BINARY, $file], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, ['FXT' => json_encode($cfg), 'PATH' => getenv('PATH') ?: '']);
+    $errFile = $file . '.err';
+    $proc = proc_open([PHP_BINARY, $file], [1 => ['pipe', 'w'], 2 => ['file', $errFile, 'w']], $pipes, null, ['FXT' => json_encode($cfg), 'PATH' => getenv('PATH') ?: '']);
     $out = stream_get_contents($pipes[1]);
-    $err = stream_get_contents($pipes[2]);
     proc_close($proc);
+    $err = (string) @file_get_contents($errFile, false, null, 0, 4000);
+    @unlink($errFile);
     @unlink($file);
     if (!preg_match('/@@(.*)@@/s', $out, $m)) {
         throw new \RuntimeException("scenario produced no result.\nstdout: {$out}\nstderr: {$err}");
@@ -424,7 +427,7 @@ test('stored files are kept; with the opt-in only the plugin\'s own bookkeeping 
         assertEqual(!$wiped, is_dir($base . '/uploads/sub/_fluxfiles') || is_dir($base . '/uploads/_fluxfiles'), "{$label}: _fluxfiles/ at any depth");
         assertEqual(!$wiped, is_dir($base . '/uploads/other/_FluxFiles'), "{$label}: _fluxfiles/ case-folded");
         assertEqual(!$wiped, is_dir($base . '/uploads/sub/_variants'), "{$label}: _variants/");
-        assertEqual(!$wiped, is_file($base . '/.htaccess'), "{$label}: root protection files");
+        assertTrue(is_file($base . '/.htaccess'), "{$label}: the root deny-all stays while anything else lives in the root");
         assertTrue(is_file($base . '/uploads/.htaccess') && is_file($base . '/uploads/index.php'), "{$label}: uploads protection stays while user files remain there");
         rrm($t);
     }
@@ -592,6 +595,45 @@ test('the Pro plugin\'s options / transient / user meta are never touched by uni
     }
 });
 
+test('uninstall survives unreadable directories (chmod 000) and still removes options and tables', function () use ($runUninstall) {
+    if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+        return; // root ignores permissions
+    }
+    $t = tmpTree();
+    $base = ownBase($t);
+    mkdir($base . '/uploads/_fluxfiles/trash/abc', 0777, true);
+    mkdir($base . '/uploads/locked/inner', 0777, true);
+    mkdir($base . '/rate_limit.d/sub', 0777, true);
+    file_put_contents($base . '/uploads/_fluxfiles/audit.log', 'a');
+    file_put_contents($base . '/uploads/pre-existing.pdf', 'x');
+    chmod($base . '/uploads/_fluxfiles/trash/abc', 0000);
+    chmod($base . '/uploads/locked', 0000);
+    chmod($base . '/rate_limit.d/sub', 0000);
+    try {
+        $u = scenario(ownBaseCfg($t, '1'), $runUninstall);
+        assertTrue(in_array('fluxfiles_max_upload', $u['delete_option'][1] ?? [], true) && in_array('fluxfiles_secret', $u['delete_option'][1] ?? [], true), 'options were still deleted');
+        assertTrue(count($u['queries']) > 0, 'tables were still dropped');
+        assertTrue(is_file($base . '/uploads/pre-existing.pdf'), 'user file untouched');
+        assertTrue(!is_file($base . '/uploads/_fluxfiles/audit.log'), 'the readable part of the bookkeeping was removed');
+    } finally {
+        foreach (['/uploads/_fluxfiles/trash/abc', '/uploads/locked', '/rate_limit.d/sub'] as $d) { @chmod($base . $d, 0777); }
+        rrm($t);
+    }
+});
+
+test('root deny-all is kept while another tool\'s state lives in the root (never web-serve a sibling)', function () use ($runUninstall, $stubBody) {
+    $t = tmpTree();
+    $base = ownBase($t);
+    mkdir($base . '/uploads/_fluxfiles', 0777, true);
+    mkdir($base . '/pro-state', 0777, true);
+    file_put_contents($base . '/pro-state/secret.json', '{}');
+    file_put_contents($base . '/.htaccess', "# FluxFiles storage protection v1\nRequire all denied\n");
+    file_put_contents($base . '/index.php', $stubBody);
+    scenario(ownBaseCfg($t, '1'), $runUninstall);
+    assertTrue(is_file($base . '/.htaccess') && is_file($base . '/pro-state/secret.json'), 'deny-all still there');
+    rrm($t);
+});
+
 // ── multisite activation: every sub-site gets its secret/defaults/storage ─────
 $msPrelude = <<<'PHP'
 function flush_rewrite_rules() { $GLOBALS['FLUSH'] = ($GLOBALS['FLUSH'] ?? 0) + 1; }
@@ -647,6 +689,38 @@ test('multisite: the lazy safety net initialises a site that missed activation, 
     assertEqual('mine', $r['opt'][2]['fluxfiles_secret'], 'existing secret kept');
     assertEqual([2], $r['db'], 'initialised exactly once');
     assertTrue(empty($r['opt'][1]['fluxfiles_secret']), 'other sites untouched');
+    rrm($t);
+});
+
+test('multisite: activation is bounded (site budget, large network) and scoped to this network; the lazy path covers the rest', function () use ($msPrelude, $msOut) {
+    $t = tmpTree();
+    $cfg = ['content' => $t . '/wp-content', 'multisite' => true, 'site_count' => 5, 'max_sites' => 2];
+    $r = scenario($cfg, $msPrelude . '$plugin->activate(true);' . 'fx_out(["opt" => $GLOBALS["OPT"], "args" => $GLOBALS["LOG"]["sites_args"], "flush" => $GLOBALS["FLUSH"] ?? 0]);');
+    assertTrue(!empty($r['opt'][1]['fluxfiles_secret']) && !empty($r['opt'][2]['fluxfiles_secret']) && empty($r['opt'][3]['fluxfiles_secret']), 'stops at the budget: ' . json_encode(array_keys($r['opt'])));
+    assertEqual([7], $r['args'], 'scoped to the current network, one page');
+    assertEqual(1, $r['flush'], 'and activation still completes');
+    // Large network: no eager loop at all; the first request of each site sets it up.
+    $r = scenario($cfg, $msPrelude . 'function wp_is_large_network($w = "sites") { return true; } $plugin->activate(true); switch_to_blog(4); $plugin::ensureSiteReady(); restore_current_blog();' . $msOut);
+    assertTrue(empty($r['opt'][1]['fluxfiles_secret']) && !empty($r['opt'][4]['fluxfiles_secret']), 'large network: lazy only');
+    assertEqual(1, $r['flush'], 'activation returns');
+    rrm($t);
+});
+
+test('private local storage: the uploads folder is denied (Apache), the rule flips with the setting, operator files are left alone', function () use ($msPrelude) {
+    $t = tmpTree();
+    $body = $msPrelude . '$p = FluxFilesPlugin::storagePath(); wp_mkdir_p($p . "/uploads");'
+        . 'FluxFilesPlugin::protectStorage(); $a = file_get_contents($p . "/uploads/.htaccess");'
+        . '$GLOBALS["OPT"][1]["fluxfiles_local_private"] = "1"; FluxFilesPlugin::protectStorage(); $b = file_get_contents($p . "/uploads/.htaccess");'
+        . 'FluxFilesPlugin::protectStorage(); $b2 = file_get_contents($p . "/uploads/.htaccess");'
+        . '$GLOBALS["OPT"][1]["fluxfiles_local_private"] = "0"; FluxFilesPlugin::protectStorage(); $c = file_get_contents($p . "/uploads/.htaccess");'
+        . 'file_put_contents($p . "/uploads/.htaccess", "my rules\n"); $GLOBALS["OPT"][1]["fluxfiles_local_private"] = "1"; FluxFilesPlugin::protectStorage(); $d = file_get_contents($p . "/uploads/.htaccess");'
+        . 'fx_out(compact("a", "b", "b2", "c", "d"));';
+    $r = scenario(['content' => $t . '/wp-content'], $body);
+    assertTrue(strpos($r['a'], 'Require all granted') !== false, 'public mode serves the uploads');
+    assertTrue(strpos($r['b'], 'Require all denied') !== false && strpos($r['b'], 'Require all granted') === false, 'private mode denies it');
+    assertEqual($r['b'], $r['b2'], 'idempotent');
+    assertTrue(strpos($r['c'], 'Require all granted') !== false, 'switching back restores the public rules');
+    assertEqual("my rules\n", $r['d'], 'an operator-authored .htaccess is never overwritten');
     rrm($t);
 });
 
