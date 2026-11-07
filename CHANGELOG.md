@@ -6,7 +6,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
 ## [Unreleased]
 
 ### Security
-- **`POST /api/fm/retention/run`: an unrecognised `dry_run` ran LIVE.** `dry_run` was parsed with `FILTER_VALIDATE_BOOLEAN`, so `"yes please"`, `""` or an array evaluated to false and the sweep trashed/deleted files. Now only an explicit false (`false`, `0`, `"0"`, `"false"`, `"no"`, `"off"`) runs live; missing, null or anything else is a dry run. Same parsing in core, the Laravel proxy and the WordPress plugin (guard: `tests/unit/test-retention-dry-run-parse.php`).
+- **`POST /api/fm/retention/run`: an unrecognised `dry_run` ran LIVE.** `dry_run` was parsed with `FILTER_VALIDATE_BOOLEAN`, so `"yes please"`, `""` or an array evaluated to false and the sweep trashed/deleted files. Now only an explicit false (bool `false`, int `0`, or the exact string `0`/`false`/`no`/`off`, trimmed, any case) runs live; missing, null or anything else is a dry run. Same parsing in core, the Laravel proxy and the WordPress plugin (guard: `tests/unit/test-retention-dry-run-parse.php`).
 
 ### Fixed
 - Retention sweep (legal-hold module): held files no longer count toward the per-call cap, so a large held tree sorting first can't starve eligible files (module release notes).

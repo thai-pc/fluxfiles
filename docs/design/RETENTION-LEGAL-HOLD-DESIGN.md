@@ -733,7 +733,7 @@ what shipped is an explicit, operator-scheduled run instead.
   restorable) or `delete` (permanent). Documented in `docs/reference/CONFIG.md` §2.13.
 - **`POST /api/fm/retention/run {disk, dry_run?}`** — gated by `audit` perm +
   `ModuleRegistry::require('legal-hold', …)` (so `allow_legal_hold`).
-  `dry_run` defaults to **true** and only reports. A real run trashes/deletes
+  `dry_run` defaults to **true** and only reports; only an explicit false (`false`, `0`, or the string `0`/`false`/`no`/`off`, trimmed, any case; floats like `0.0` do not count) runs live, anything else is a dry run. A real run trashes/deletes
   files under each rule's path whose `modified` is older than `days`, at most 500
   per call (`truncated: true` → call again). Every action goes through
   `FileManager::trash()`/`delete()`, so `owner_only`, the `delete` perm and

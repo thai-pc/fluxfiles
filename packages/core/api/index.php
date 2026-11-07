@@ -1136,8 +1136,8 @@ function routeRequest(
             throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
         }
         $module = \FluxFiles\ModuleRegistry::requireCapability('legal-hold', \FluxFiles\RetentionProviderInterface::class, \FluxFiles\ModuleRegistry::license(), $claims);
-        // Fail safe: only an explicit false (false/0/"0"/"false"/"no"/"off") runs live; anything else is a dry run.
-        $dryRun = !in_array(is_scalar($raw = $body['dry_run'] ?? true) ? strtolower(trim(is_bool($raw) ? ($raw ? '1' : '0') : (string) $raw)) : '1', ['0', 'false', 'no', 'off'], true);
+        // Fail safe: only an explicit false (false, int 0, or the string 0/false/no/off) runs live; anything else is a dry run.
+        $dryRun = !(($raw = $body['dry_run'] ?? true) === false || $raw === 0 || (is_string($raw) && in_array(strtolower(trim($raw, " \t\n\r")), ['0', 'false', 'no', 'off'], true)));
         // The module owns the sweep; core carries no fallback (an old module gets 501 module_update_required).
         $report = $module->runRetention($fm, $disk, $dryRun);
         if (!$dryRun) {

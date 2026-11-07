@@ -2772,8 +2772,8 @@ class FluxFilesApi
             }
             $fm = $this->fileManager($claims);
             $module = \FluxFiles\ModuleRegistry::require('legal-hold', FluxFilesPlugin::license(), $claims);
-            // Fail safe: only an explicit false (false/0/"0"/"false"/"no"/"off") runs live; anything else is a dry run.
-            $dryRun = !in_array(is_scalar($raw = $body['dry_run'] ?? true) ? strtolower(trim(is_bool($raw) ? ($raw ? '1' : '0') : (string) $raw)) : '1', ['0', 'false', 'no', 'off'], true);
+            // Fail safe: only an explicit false (false, int 0, or the string 0/false/no/off) runs live; anything else is a dry run.
+            $dryRun = !(($raw = $body['dry_run'] ?? true) === false || $raw === 0 || (is_string($raw) && in_array(strtolower(trim($raw, " \t\n\r")), ['0', 'false', 'no', 'off'], true)));
             if ($module instanceof \FluxFiles\RetentionProviderInterface) {
                 $report = $module->runRetention($fm, $disk, $dryRun);
             } else {

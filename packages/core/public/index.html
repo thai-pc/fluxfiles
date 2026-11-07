@@ -2301,7 +2301,7 @@
                 <div class="ff-aivision-ops">
                     <button class="ff-btn ff-btn-ghost" :disabled="retentionBusy" @click="runRetention(true)"
                             x-text="retentionBusy && retentionMode === 'preview' ? t('retention.busy') : t('retention.preview')"></button>
-                    <button class="ff-btn ff-btn-danger" :disabled="retentionBusy || !retentionResult || !retentionResult.dry_run || !retentionResult.items.length" @click="runRetention(false)"
+                    <button class="ff-btn ff-btn-danger" :disabled="retentionBusy || !retentionResult || !retentionResult.dry_run || !retentionActionable" @click="runRetention(false)"
                             x-text="retentionBusy && retentionMode === 'apply' ? t('retention.busy') : t('retention.apply')"></button>
                 </div>
                 <p class="ff-new-folder-error" x-show="retentionError" x-text="retentionError"></p>
@@ -2312,7 +2312,7 @@
                     <div>
                         <p class="ff-scan-result" :class="retentionResult.errors > 0 ? 'ff-scan-infected' : 'ff-scan-clean'"
                            x-text="retentionResult.dry_run
-                               ? t('retention.preview_summary', { count: retentionResult.items.length, held: retentionResult.held })
+                               ? t('retention.preview_summary', { count: retentionActionable, held: retentionResult.held })
                                : t('retention.applied_summary', { count: retentionResult.acted, held: retentionResult.held, errors: retentionResult.errors })"></p>
                         <p class="ff-activity-note" x-show="retentionResult.truncated" x-text="t('retention.truncated')"></p>
                         <ul class="ff-integrity-list">
