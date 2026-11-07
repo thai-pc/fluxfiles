@@ -18,7 +18,7 @@ namespace FluxFiles;
  *
  * Bring your own key: the provider, key and model come from the server environment
  * (FLUXFILES_AI_PROVIDER / _API_KEY / _MODEL, plus _BASE_URL for a self-hosted or
- * unlisted OpenAI-compatible endpoint). Nothing is proxied through fluxfiles.dev.
+ * unlisted OpenAI-compatible endpoint). Nothing is proxied through a FluxFiles-operated server.
  */
 class AiTagger
 {

@@ -349,7 +349,7 @@ private-local-media requirement.
 | `FLUXFILES_INTAKE_UPLOAD_TOTAL` | `60` | Intake upload attempts/min per portal id, **no IP component** — the ceiling IP rotation can't escape. Keep it above the number of legitimate concurrent contributors a portal expects. |
 | `FLUXFILES_CORE_VERSION` | — | The running core's version (`1.0.6`), for installs where Composer cannot tell (git checkout, release zip, Docker: the root package is `dev-*`). `fluxfiles update <module>` sends it as `core_version` and refuses a module whose `requires_core` it fails; unset on such an install, the update is refused unless `--force`. Ignored when not a valid version. |
 | `FLUXFILES_LICENSE_KEY` | — | Signed license for paid modules (offline-verified). |
-| `FLUXFILES_UPDATE_URL` | — | Vendor update server for `fluxfiles update <module>` (paid). |
+| `FLUXFILES_UPDATE_URL` | `https://fluxfiles-updates.thai-pc.com` | Vendor update server for `fluxfiles update <module>` (paid). |
 | `FLUXFILES_DEMO` | `false` | Public "try it live" mode: `/public/` mints a hardened per-visitor token (own `demo/<id>/` sandbox, images only, small caps, owner-only, dangerous claims off) injected as `window.__FM_BOOT__` — safe to embed by iframe on a marketing site. |
 | `FLUXFILES_DEMO_TTL_HOURS` | `6` | Demo sandbox lifetime + token TTL; older sandboxes auto-purge. |
 | `FLUXFILES_DEMO_MAX_MB` / `_QUOTA_MB` / `_MAX_FILES` | `5` / `50` / `30` | Demo per-file size / total quota / file-count caps. |

@@ -1688,7 +1688,7 @@
             <div class="ff-links-body" x-show="linkStage === 'error'">
                 <p class="ff-new-folder-error ff-links-error" x-text="linkError"></p>
                 <p x-show="linkErrorIsInstall">
-                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                    <a class="ff-links-docs" href="https://fluxfiles.thai-pc.com/docs/" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
                 </p>
                 <div class="ff-links-actions">
                     <button class="ff-btn ff-btn-primary" @click="closeLinkModal()" x-text="t('common.close')"></button>
@@ -1714,7 +1714,7 @@
             <div class="ff-activity-body">
                 <p class="ff-new-folder-error" x-show="linksError" x-text="linksError"></p>
                 <p x-show="linksError && linksErrorIsInstall">
-                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                    <a class="ff-links-docs" href="https://fluxfiles.thai-pc.com/docs/" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
                 </p>
                 <div x-show="linksLoading" class="ff-activity-state" x-text="t('common.loading')"></div>
 
@@ -1812,7 +1812,7 @@
                 <p class="ff-links-teaser"><strong x-text="t('intake.title')"></strong> — <span x-text="t('intake.pro_teaser')"></span></p>
                 <p class="ff-links-teaser"><strong x-text="t('versions.title')"></strong> — <span x-text="t('versions.pro_teaser')"></span></p>
                 <div class="ff-links-actions">
-                    <a class="ff-btn ff-btn-primary" href="https://fluxfiles.dev/pricing" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                    <a class="ff-btn ff-btn-primary" href="https://fluxfiles.thai-pc.com/pricing/" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
                     <button class="ff-btn" @click="closeLocked()" x-text="t('common.close')"></button>
                 </div>
             </div>
@@ -2219,7 +2219,7 @@
             <div class="ff-activity-body">
                 <p class="ff-new-folder-error" x-show="versionsError" x-text="versionsError"></p>
                 <p x-show="versionsError && versionsErrorIsInstall">
-                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                    <a class="ff-links-docs" href="https://fluxfiles.thai-pc.com/docs/" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
                 </p>
                 <div x-show="versionsLoading" class="ff-activity-state" x-text="t('common.loading')"></div>
                 <div x-show="!versionsLoading && !versionsError && versionEntries.length === 0" class="ff-activity-state" x-text="t('versions.empty_state')"></div>
@@ -2260,7 +2260,7 @@
             <div class="ff-activity-body">
                 <p class="ff-new-folder-error" x-show="aiVisionError" x-text="aiVisionError"></p>
                 <p x-show="aiVisionError && aiVisionErrorIsInstall">
-                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                    <a class="ff-links-docs" href="https://fluxfiles.thai-pc.com/docs/" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
                 </p>
                 <p class="ff-activity-state" x-show="aiVisionResultPath" x-text="t('aivision.done_at', { path: aiVisionResultPath })"></p>
                 <div class="ff-aivision-ops">
@@ -2306,7 +2306,7 @@
                 </div>
                 <p class="ff-new-folder-error" x-show="retentionError" x-text="retentionError"></p>
                 <p x-show="retentionError && retentionErrorIsInstall">
-                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                    <a class="ff-links-docs" href="https://fluxfiles.thai-pc.com/docs/" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
                 </p>
                 <template x-if="retentionResult">
                     <div>
@@ -2350,7 +2350,7 @@
                 </div>
                 <p class="ff-new-folder-error" x-show="ocrError" x-text="ocrError"></p>
                 <p x-show="ocrError && ocrErrorIsInstall">
-                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                    <a class="ff-links-docs" href="https://fluxfiles.thai-pc.com/docs/" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
                 </p>
                 <template x-if="ocrText !== null">
                     <div class="ff-ocr-result">
@@ -2381,7 +2381,7 @@
                 <p class="ff-scan-result ff-scan-infected" x-show="virusResult && !virusResult.clean" x-text="t('virus.infected', { threat: virusResult?.threat || '' })"></p>
                 <p class="ff-new-folder-error" x-show="virusError" x-text="virusError"></p>
                 <p x-show="virusError && virusErrorIsInstall">
-                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                    <a class="ff-links-docs" href="https://fluxfiles.thai-pc.com/docs/" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
                 </p>
                 <div class="ff-aivision-ops" x-show="!virusBusy && (virusResult || virusError)">
                     <button class="ff-btn ff-btn-ghost" @click="runVirusScan()" x-text="t('virus.rescan')"></button>
@@ -2418,7 +2418,7 @@
                 </div>
                 <p class="ff-new-folder-error" x-show="backupError" x-text="backupError"></p>
                 <p x-show="backupError && backupErrorIsInstall">
-                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                    <a class="ff-links-docs" href="https://fluxfiles.thai-pc.com/docs/" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
                 </p>
                 <template x-if="backupResult">
                     <div>
@@ -2447,7 +2447,7 @@
             <div class="ff-activity-body">
                 <p class="ff-new-folder-error" x-show="legalHoldError" x-text="legalHoldError"></p>
                 <p x-show="legalHoldError && legalHoldErrorIsInstall">
-                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                    <a class="ff-links-docs" href="https://fluxfiles.thai-pc.com/docs/" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
                 </p>
 
                 <!-- State 1: no active hold on this item -->
