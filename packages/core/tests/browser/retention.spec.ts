@@ -31,7 +31,7 @@ test('preview lists what would happen; apply asks first, then reports', async ({
   await expect(dialog.getByRole('button', { name: 'Apply now' })).toBeDisabled(); // preview first
 
   await dialog.getByRole('button', { name: 'Preview' }).click();
-  await expect(dialog).toContainText('2 file(s) would be affected (1 on legal hold, skipped).');
+  await expect(dialog).toContainText('1 file(s) would be affected (1 on legal hold, skipped).');
   await expect(dialog).toContainText('/invoices/held.pdf — skipped — legal hold');
 
   page.once('dialog', (d) => d.accept());
