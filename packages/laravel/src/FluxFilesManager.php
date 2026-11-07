@@ -544,9 +544,10 @@ class FluxFilesManager
      */
     public function tokenForResolvedUser($user, array $overrides = []): string
     {
-        // No resolver and nothing explicit (e.g. a stale refresh ticket with empty
-        // overrides): token() would fill every claim from the config defaults.
-        if ($overrides === [] && !$this->hasClaimsResolver()) {
+        // No resolver: token() would fill perms/prefix/owner_only from the config
+        // defaults whatever the overrides carry (a `locale` or `disks` override says
+        // nothing about scope). Explicit mints go through token().
+        if (!$this->hasClaimsResolver()) {
             throw self::resolverRequired();
         }
         return $this->token($user, self::mergeOverrides($this->claimsFor($user), $overrides));
@@ -722,7 +723,7 @@ class FluxFilesManager
         if ($secret === '') {
             throw new \RuntimeException('FLUXFILES_SECRET is not configured.');
         }
-        return hash_hmac('sha256', 'fluxfiles/laravel/refresh-ticket/v1', $secret, true);
+        return hash_hmac('sha256', 'fluxfiles/laravel/refresh-ticket/v2', $secret, true);
     }
 
     private static function b64url(string $raw): string

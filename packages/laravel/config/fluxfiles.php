@@ -129,8 +129,8 @@ return [
     | null = no per-user policy: every implicit mint is REFUSED -- tokenForUser()
     | throws, <x-fluxfiles> renders a "not available" message, @fluxfilesToken
     | prints nothing (all log the reason), session-only API requests (no Bearer)
-    | get 401, and the refresh route only re-mints from the component's signed
-    | refresh ticket. None of them ever fall back to the config `defaults` below.
+    | get 401, and the refresh route answers 403 token_refresh_unconfigured (a
+    | refresh ticket does not help: it only refines the resolver). None of them ever fall back to the config `defaults` below.
     | Mint explicitly with FluxFiles::token($user, [...]) if you need a fixed scope.
     |
     */

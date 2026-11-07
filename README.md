@@ -1214,8 +1214,8 @@ $token = fluxfiles_token(
 
 > Issuing tokens from a JS backend instead? `@fluxfiles/node`'s `createToken()`
 > takes the same claims (and so does Python's `fluxfiles-token`). The Laravel adapter
-> wraps this as `FluxFiles::tokenForUser([...])` — see its README's *Per-tenant
-> configuration*.
+> wraps this as `FluxFiles::token($user, [...])` (or the per-user `claims_resolver`
+> behind `tokenForUser()`) — see its README's *Per-user token policy*.
 
 For the strongest isolation, give each tenant their own bucket or SFTP server with
 [BYOB](#byob-bring-your-own-bucket) (`byob_disks`).

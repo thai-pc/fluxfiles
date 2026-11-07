@@ -1106,8 +1106,8 @@ class FluxFilesController
      *  - with an `X-FluxFiles-Refresh-Ticket` header (the <x-fluxfiles> default
      *    hook sends one): the exact overrides the page rendered with, on top of
      *    the claims resolver — so a refresh never widens the scope;
-     *  - without one: the claims resolver's policy, and only if one is configured
-     *    (else 403 token_refresh_unconfigured).
+     *  - without one: the claims resolver's policy.
+     * Both need a configured resolver (else 403 token_refresh_unconfigured).
      * Cookie-only, so it gets the same Origin check as FluxFilesAuth's fallback.
      */
     public function token(Request $request): JsonResponse
@@ -1122,6 +1122,15 @@ class FluxFilesController
                 throw new ApiException('Origin not allowed', 403, 'origin_denied');
             }
             $manager = app(\FluxFiles\Laravel\FluxFilesManager::class);
+            if (!$manager->hasClaimsResolver()) {
+                // Tickets from before the fix (and any hand-rolled hook) carry
+                // arbitrary overrides that token() would fill with the config defaults.
+                throw new ApiException(
+                    'Token refresh needs a configured fluxfiles.claims_resolver',
+                    403,
+                    'token_refresh_unconfigured'
+                );
+            }
             $ticket = (string) $request->header('X-FluxFiles-Refresh-Ticket', '');
             if ($ticket !== '') {
                 try {
@@ -1130,14 +1139,8 @@ class FluxFilesController
                     throw new ApiException('Invalid refresh ticket', 403, 'token_refresh_failed');
                 }
                 $token = $manager->tokenForResolvedUser($user, $overrides);
-            } elseif ($manager->hasClaimsResolver()) {
-                $token = $manager->tokenForResolvedUser($user);
             } else {
-                throw new ApiException(
-                    'Token refresh needs a refresh ticket or a configured fluxfiles.claims_resolver',
-                    403,
-                    'token_refresh_unconfigured'
-                );
+                $token = $manager->tokenForResolvedUser($user);
             }
             $resp = $this->ok(['token' => $token]);
         } catch (ApiException $e) {

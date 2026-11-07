@@ -81,7 +81,7 @@ pass the token over `postMessage`, never in a URL
    ]);
    ```
 
-   Laravel apps use `FluxFiles::token()` / `tokenForUser()`
+   Laravel apps use `FluxFiles::token()` / `tokenForUser()` (the latter needs a `claims_resolver`)
    ([Laravel README](../../packages/laravel/README.md)). WordPress mints tokens itself
    from the user's capabilities ([WordPress README](../../packages/wordpress/README.md#who-gets-a-token)).
    Node and Python backends use [`@fluxfiles/node`](../../packages/node) and

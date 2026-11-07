@@ -15,7 +15,7 @@
 
 @if($token === null)
 <div id="{{ $containerId }}" style="width:{{ $width }};height:{{ $height }}">
-    <p>The file manager is not available for your account.</p>
+    <p>{{ __('The file manager is not available for your account.') }}</p>
 </div>
 @else
 <div id="{{ $containerId }}" style="width:{{ $width }};height:{{ $height }}"></div>

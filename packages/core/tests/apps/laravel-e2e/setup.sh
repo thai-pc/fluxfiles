@@ -46,8 +46,10 @@ if ! grep -q "GenericUser" routes/web.php; then
   cat >> routes/web.php <<'PHP'
 
 // FluxFiles e2e: a page embedding the real <x-fluxfiles> component. A fake user
-// lets FluxFilesManager::tokenForUser() mint a JWT without a DB-backed login.
+// avoids a DB-backed login; <x-fluxfiles> refuses without a claims resolver, so
+// register one (scopes the e2e user to the whole test root).
 Route::get('/files', function () {
+    \FluxFiles\Laravel\FluxFilesFacade::resolveClaimsUsing(fn ($u) => ['prefix' => '', 'perms' => ['read', 'write', 'delete']]);
     auth()->setUser(new \Illuminate\Auth\GenericUser(['id' => 'laravel-e2e']));
     return view('files');
 });

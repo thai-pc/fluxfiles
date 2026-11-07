@@ -128,7 +128,7 @@ Managing a **remote VPS / shared host** over SFTP is supported in both modes.
 
 ### Per-user token policy (claims resolver)
 
-Tokens minted **without** an explicit overrides array — `tokenForUser()`,
+Tokens minted by the resolver-based helpers — `tokenForUser()`, `tokenForResolvedUser()`,
 `<x-fluxfiles>`, `@fluxfilesToken`, the `GET {route_prefix}/token` refresh route and
 the session fallback below — take their scope from a resolver you register once.
 **Without a resolver they all refuse** (`tokenForUser()` throws, `<x-fluxfiles>` renders
@@ -164,14 +164,18 @@ The resolver returns the same array `token()` accepts. Explicit overrides (a
 component's `:overrides`, `tokenForUser([...])`) are merged **on top**, and the two
 `claims` maps are merged key by key. Throw from the resolver to refuse a user; a
 non-array result is an error, never "no restrictions". `token($user, $overrides)`
-itself is unchanged — it never consults the resolver.
+itself is unchanged — it never consults the resolver, so any claim you omit
+(`perms`, `prefix`, `disks`, …) comes from `config('fluxfiles.defaults')` (read/write/delete,
+empty prefix). That is your responsibility: always pass `prefix` and `perms` explicitly, or
+use the resolver. `tokenWithByob()` behaves the same.
 
 **Token refresh.** `<x-fluxfiles>`'s default `onTokenRefresh` sends a signed
 *refresh ticket* (an `X-FluxFiles-Refresh-Ticket` header, never the URL) that binds
 the tag's `:overrides` to the logged-in user, so an expired token is re-minted with
-the **same** scope it was rendered with. Without a ticket the route uses the
-resolver, and without either it answers `403 token_refresh_unconfigured` (the UI then
-asks for a reload). Tickets last `refresh_ticket_ttl` seconds (default 12 h); the
+the **same** scope it was rendered with. The ticket only refines the
+resolver's policy: without a configured resolver the route answers
+`403 token_refresh_unconfigured` (the UI then asks for a reload). Custom hooks without a
+resolver need their own endpoint calling `FluxFiles::token()`. Tickets last `refresh_ticket_ttl` seconds (default 12 h); the
 response is `Cache-Control: no-store`.
 
 ### Session-only requests (proxy mode)

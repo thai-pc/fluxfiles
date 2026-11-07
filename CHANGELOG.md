@@ -12,17 +12,25 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - **Security: `<x-fluxfiles>`, `FluxFiles::tokenForUser()` and `@fluxfilesToken` minted a full-disk token when no
   `claims_resolver` was configured.** With the published default (`'claims_resolver' => null`) every logged-in
   user got `perms [read,write,delete]` and `prefix ""` from `config('fluxfiles.defaults')`, i.e. access to every
-  other user's files. The middleware and `GET {route_prefix}/token` already refused (GHSA-m73q-w9rc-jcxh, 0.2.51),
+  other user's files. The middleware and ticket-less `GET {route_prefix}/token` already refused (GHSA-m73q-w9rc-jcxh, 0.2.51),
   but these three implicit paths did not, despite the changelog and README saying they no longer fell back.
-  They now refuse the same way: `tokenForUser()` and `tokenForResolvedUser()` (with no overrides) throw
+  `GET {route_prefix}/token` was also affected when called WITH a refresh ticket (the component's default
+  refresh hook): only the ticket-less call refused. A pre-upgrade ticket (0.2.51 to 1.0.3, `:overrides` in it)
+  re-minted a defaults-filled token for up to `refresh_ticket_ttl` (12 h).
+  They now refuse the same way: `tokenForUser()` and `tokenForResolvedUser()` (whatever the overrides) throw
   `FluxFiles\Laravel\ClaimsResolverRequired`; `<x-fluxfiles>` renders a "not available" message and
   `@fluxfilesToken` prints nothing (new null-safe `tokenForUserOrNull()`), both logging the reason with
-  `error_log`. Explicit `FluxFiles::token($user, [...])` is unchanged. **Action:** configure
+  `error_log`. `GET /token` now answers `403 token_refresh_unconfigured` without a resolver, and the refresh-ticket
+  MAC key is bumped (`refresh-ticket/v2`) so every pre-fix ticket stops verifying (a page reload gets a new one).
+  Explicit `FluxFiles::token($user, [...])` is unchanged, but note it fills omitted claims from the defaults.
+  After upgrading, rotate `FLUXFILES_SECRET`: already-minted JWTs stay valid until `exp`. **Action:** configure
   `fluxfiles.claims_resolver`, or switch hand-written `tokenForUser([...])` calls to `FluxFiles::token($user, [...])`.
 - **Security: the upload route no longer returns the raw exception message** (`Upload failed: SQLSTATE[...] host=...`)
   on an unexpected 500; it is logged server-side and the client gets `Upload failed`.
 - **Laravel 13**: `illuminate/*` constraints now allow `^13.0` (Laravel 13 needs PHP 8.3). Laravel 10 is end-of-life
   but still installs, so it stays in the range for now.
+
+## [1.0.15] — 2026-11-07
 
 > Released: `core-v1.1.2` (comment-only phpcs annotations). The WordPress changes ship with `wordpress-v1.1.0`, the free WordPress.org build.
 

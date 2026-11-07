@@ -911,6 +911,9 @@ test('implicit token paths refuse without a claims resolver (never the config de
             'tokenForUser(overrides)'       => fn () => $mgr->tokenForUser(['claims' => ['allow_zip' => false]]),
             'tokenForResolvedUser(user)'    => fn () => $mgr->tokenForResolvedUser(new StubUser(7)),
             'tokenForResolvedUser(user,[])' => fn () => $mgr->tokenForResolvedUser(new StubUser(7), []),
+            'tokenForResolvedUser(locale)'  => fn () => $mgr->tokenForResolvedUser(new StubUser(7), ['locale' => 'vi']),
+            'tokenForResolvedUser(disks)'   => fn () => $mgr->tokenForResolvedUser(new StubUser(7), ['disks' => ['local']]),
+            'tokenForResolvedUser(claims)'  => fn () => $mgr->tokenForResolvedUser(new StubUser(7), ['claims' => ['allow_zip' => false]]),
         ];
         foreach ($paths as $what => $fn) {
             try {
@@ -930,6 +933,19 @@ test('implicit token paths refuse without a claims resolver (never the config de
         assertEqual('rt/7', decodeJwt($mgr->tokenForUserOrNull())['prefix'], 'resolver configured → token');
     } finally {
         unset($GLOBALS['LARAVEL_AUTH_USER']);
+    }
+});
+
+test('refresh tickets minted before the fix (MAC label v1) no longer verify', function () {
+    $mgr = new FluxFilesManager();
+    $u = new StubUser(3);
+    $key = hash_hmac('sha256', 'fluxfiles/laravel/refresh-ticket/v1', $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'], true);
+    $body = rtrim(strtr(base64_encode(json_encode(['sub' => '3', 'exp' => time() + 3600, 'o' => ['disks' => ['local']]])), '+/', '-_'), '=');
+    $old = $body . '.' . rtrim(strtr(base64_encode(hash_hmac('sha256', $body, $key, true)), '+/', '-_'), '=');
+    try {
+        $mgr->verifyRefreshTicket($u, $old);
+        throw new \LogicException('pre-fix ticket still verifies');
+    } catch (\RuntimeException $e) {
     }
 });
 
@@ -1003,9 +1019,17 @@ test('A-H3/A-N11: GET /token never mints the bare config defaults; no-store; Ori
     assertEqual('token_refresh_unconfigured', $body['error_code'] ?? null, 'error code');
     assertTrue(strpos($h['cache-control'] ?? '', 'no-store') !== false, 'no-store on errors too');
 
-    // With the component's ticket: exactly the rendered overrides.
+    // A ticket does not help without a resolver (pre-fix tickets carry arbitrary overrides).
+    foreach ([['prefix' => 'tag/9', 'perms' => ['read']], ['disks' => ['local']], ['locale' => 'vi'], []] as $o) {
+        [$st, $body] = $call(['X-FluxFiles-Refresh-Ticket' => (new FluxFilesManager())->refreshTicket($user, $o)]);
+        assertEqual(403, $st, 'ticket ' . json_encode($o) . ' + no resolver → refused');
+        assertTrue(!isset($body['data']['token']), 'no token in the body');
+    }
+
+    // With the component's ticket (and a resolver): the rendered overrides on top of it.
+    $rcfg = ['fluxfiles.claims_resolver' => SmokeTenantResolver::class];
     $ticket = (new FluxFilesManager())->refreshTicket($user, ['prefix' => 'tag/9', 'perms' => ['read']]);
-    [$st, $body, $h] = $call(['X-FluxFiles-Refresh-Ticket' => $ticket]);
+    [$st, $body, $h] = $call(['X-FluxFiles-Refresh-Ticket' => $ticket], $rcfg);
     assertEqual(200, $st, 'ticket refresh ok');
     $p = decodeJwt($body['data']['token']);
     assertEqual('tag/9', $p['prefix'], 'same prefix as the page');
@@ -1014,7 +1038,7 @@ test('A-H3/A-N11: GET /token never mints the bare config defaults; no-store; Ori
 
     // Someone else's ticket → refused.
     $foreign = (new FluxFilesManager())->refreshTicket(new StubUser(10), ['prefix' => '']);
-    [$st] = $call(['X-FluxFiles-Refresh-Ticket' => $foreign]);
+    [$st] = $call(['X-FluxFiles-Refresh-Ticket' => $foreign], $rcfg);
     assertEqual(403, $st, "another user's ticket is refused");
 
     // Resolver configured: its policy.
@@ -1023,7 +1047,7 @@ test('A-H3/A-N11: GET /token never mints the bare config defaults; no-store; Ori
     assertEqual('tenants/9', decodeJwt($body['data']['token'])['prefix'], 'resolver prefix');
 
     // Cross-site caller (cookie-only route) → refused before minting.
-    [$st, $body] = $call(['X-FluxFiles-Refresh-Ticket' => $ticket, 'Origin' => 'https://evil.example']);
+    [$st, $body] = $call(['X-FluxFiles-Refresh-Ticket' => $ticket, 'Origin' => 'https://evil.example'], $rcfg);
     assertEqual(403, $st, 'cross-origin refresh refused');
     assertEqual('origin_denied', $body['error_code'] ?? null, 'origin_denied');
 });
