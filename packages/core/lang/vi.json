@@ -275,6 +275,8 @@
     "missing_param": "Thiếu thông tin bắt buộc",
     "invalid_json": "Dữ liệu yêu cầu không hợp lệ",
     "origin_denied": "Truy cập bị từ chối từ nguồn này",
+    "token_refresh_unconfigured": "Chưa cấu hình đăng nhập cho trình quản lý tệp. Vui lòng tải lại",
+    "token_refresh_failed": "Không thể làm mới phiên. Vui lòng tải lại",
     "ext_changed": "Không thể thay đổi phần mở rộng của tệp",
     "load_failed": "Không tải được thư mục này",
     "move_into_self": "Không thể di chuyển thư mục vào chính nó",

@@ -66,7 +66,7 @@ class FluxFilesServiceProvider extends ServiceProvider
 
         // Blade directives
         Blade::directive('fluxfilesToken', function (string $expression) {
-            return "<?php echo app(\\FluxFiles\\Laravel\\FluxFilesManager::class)->tokenForUser({$expression}); ?>";
+            return "<?php echo app(\\FluxFiles\\Laravel\\FluxFilesManager::class)->tokenForUserOrNull({$expression}); ?>";
         });
 
         Blade::directive('fluxfilesEndpoint', function () {

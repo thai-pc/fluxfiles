@@ -53,6 +53,7 @@ if (!function_exists('storage_path')) {
 // instead of in a user's production app.
 $coreAutoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
 require_once $coreAutoload;   // FluxFiles\JwtCompat, CredentialEncryptor
+require_once __DIR__ . '/../src/ClaimsResolverRequired.php';
 require_once __DIR__ . '/../src/FluxFilesManager.php';
 
 use FluxFiles\Laravel\FluxFilesManager;
@@ -898,6 +899,86 @@ test('A-H3: tokenForUser() applies the configured resolver; explicit overrides w
     }
 });
 
+// ── GHSA regression: implicit tokens with NO resolver must refuse, not mint the defaults ──
+test('implicit token paths refuse without a claims resolver (never the config defaults)', function () {
+    $GLOBALS['LARAVEL_AUTH_USER'] = new StubUser(7);
+    try {
+        $mgr = new FluxFilesManager();
+        assertTrue(!$mgr->hasClaimsResolver(), 'precondition: published default, no resolver');
+        // Each of these minted perms [read,write] / prefix "" (full disk) before the fix.
+        $paths = [
+            'tokenForUser()'                => fn () => $mgr->tokenForUser(),
+            'tokenForUser(overrides)'       => fn () => $mgr->tokenForUser(['claims' => ['allow_zip' => false]]),
+            'tokenForResolvedUser(user)'    => fn () => $mgr->tokenForResolvedUser(new StubUser(7)),
+            'tokenForResolvedUser(user,[])' => fn () => $mgr->tokenForResolvedUser(new StubUser(7), []),
+            'tokenForResolvedUser(locale)'  => fn () => $mgr->tokenForResolvedUser(new StubUser(7), ['locale' => 'vi']),
+            'tokenForResolvedUser(disks)'   => fn () => $mgr->tokenForResolvedUser(new StubUser(7), ['disks' => ['local']]),
+            'tokenForResolvedUser(claims)'  => fn () => $mgr->tokenForResolvedUser(new StubUser(7), ['claims' => ['allow_zip' => false]]),
+        ];
+        foreach ($paths as $what => $fn) {
+            try {
+                $tok = $fn();
+                throw new \LogicException("{$what}: minted a token without a resolver: " . json_encode(decodeJwt($tok)));
+            } catch (\FluxFiles\Laravel\ClaimsResolverRequired $e) {
+                assertTrue(strpos($e->getMessage(), 'claims_resolver') !== false, "{$what}: developer-facing message names claims_resolver");
+            }
+        }
+        // The Blade-facing helper degrades to null (the view renders a safe message).
+        assertEqual(null, $mgr->tokenForUserOrNull(), 'tokenForUserOrNull() is null without a resolver');
+        // Explicit token() with explicit claims keeps working, as documented.
+        $p = decodeJwt($mgr->token(new StubUser(7), ['prefix' => 'users/7', 'perms' => ['read']]));
+        assertEqual('users/7', $p['prefix'], 'explicit token() unchanged');
+        // With a resolver everything works as before.
+        $mgr->resolveClaimsUsing(fn ($u) => ['prefix' => 'rt/' . $u->getAuthIdentifier()]);
+        assertEqual('rt/7', decodeJwt($mgr->tokenForUserOrNull())['prefix'], 'resolver configured → token');
+    } finally {
+        unset($GLOBALS['LARAVEL_AUTH_USER']);
+    }
+});
+
+test('refresh tickets minted before the fix (MAC label v1) no longer verify', function () {
+    $mgr = new FluxFilesManager();
+    $u = new StubUser(3);
+    $key = hash_hmac('sha256', 'fluxfiles/laravel/refresh-ticket/v1', $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'], true);
+    $body = rtrim(strtr(base64_encode(json_encode(['sub' => '3', 'exp' => time() + 3600, 'o' => ['disks' => ['local']]])), '+/', '-_'), '=');
+    $old = $body . '.' . rtrim(strtr(base64_encode(hash_hmac('sha256', $body, $key, true)), '+/', '-_'), '=');
+    try {
+        $mgr->verifyRefreshTicket($u, $old);
+        throw new \LogicException('pre-fix ticket still verifies');
+    } catch (\RuntimeException $e) {
+    }
+});
+
+test('Blade component and @fluxfilesToken go through the refusing helper', function () {
+    $blade = (string) file_get_contents(__DIR__ . '/../src/Views/components/fluxfiles.blade.php');
+    assertTrue(strpos($blade, 'tokenForUserOrNull(') !== false, 'component uses the null-safe implicit helper');
+    assertTrue(strpos($blade, '$token === null') !== false, 'component renders a safe message when refused');
+    assertTrue(strpos($blade, 'tokenForUser(') === false, 'component no longer calls the throwing/raw helper directly');
+    $prov = (string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
+    assertTrue(strpos($prov, 'tokenForUserOrNull(') !== false, '@fluxfilesToken uses the null-safe helper');
+});
+
+test('upload 500 does not leak the exception message (SQLSTATE/host) to the client', function () use ($ffTmp) {
+    $ctrl = freshController();
+    $hdr = bearer(['perms' => ['read', 'write'], 'prefix' => 'leak', 'rate_write' => 50]);
+    $file = new class {
+        public function getClientOriginalName(): string { return 'a.txt'; }
+        public function getMimeType(): string { throw new \RuntimeException('SQLSTATE[HY000] [2002] host=db.internal port=3306 dbname=prod'); }
+        public function getRealPath(): string { return ''; }
+        public function getError(): int { return 0; }
+        public function getSize(): int { return 1; }
+    };
+    $prevLog = ini_set('error_log', $ffTmp . '/php-errors.log');
+    $resp = $ctrl->upload(new Request('POST', ['disk' => 'local', 'path' => ''], $hdr, null, 'https://app.example.com', ['file' => $file], 'api/fm/upload'));
+    ini_set('error_log', (string) $prevLog);
+    $blob = json_encode($resp->getData());
+    assertEqual(500, $resp->getStatusCode(), 'still a 500');
+    foreach (['SQLSTATE', 'db.internal', '3306', 'prod'] as $needle) {
+        assertTrue(strpos($blob, $needle) === false, "leaked {$needle}: {$blob}");
+    }
+    assertTrue(strpos((string) @file_get_contents($ffTmp . '/php-errors.log'), 'db.internal') !== false, 'detail is logged server-side');
+});
+
 test('A-H3: refresh ticket round-trips the rendered overrides and is bound to the user', function () {
     $mgr = new FluxFilesManager();
     $alice = new StubUser(1);
@@ -938,9 +1019,17 @@ test('A-H3/A-N11: GET /token never mints the bare config defaults; no-store; Ori
     assertEqual('token_refresh_unconfigured', $body['error_code'] ?? null, 'error code');
     assertTrue(strpos($h['cache-control'] ?? '', 'no-store') !== false, 'no-store on errors too');
 
-    // With the component's ticket: exactly the rendered overrides.
+    // A ticket does not help without a resolver (pre-fix tickets carry arbitrary overrides).
+    foreach ([['prefix' => 'tag/9', 'perms' => ['read']], ['disks' => ['local']], ['locale' => 'vi'], []] as $o) {
+        [$st, $body] = $call(['X-FluxFiles-Refresh-Ticket' => (new FluxFilesManager())->refreshTicket($user, $o)]);
+        assertEqual(403, $st, 'ticket ' . json_encode($o) . ' + no resolver → refused');
+        assertTrue(!isset($body['data']['token']), 'no token in the body');
+    }
+
+    // With the component's ticket (and a resolver): the rendered overrides on top of it.
+    $rcfg = ['fluxfiles.claims_resolver' => SmokeTenantResolver::class];
     $ticket = (new FluxFilesManager())->refreshTicket($user, ['prefix' => 'tag/9', 'perms' => ['read']]);
-    [$st, $body, $h] = $call(['X-FluxFiles-Refresh-Ticket' => $ticket]);
+    [$st, $body, $h] = $call(['X-FluxFiles-Refresh-Ticket' => $ticket], $rcfg);
     assertEqual(200, $st, 'ticket refresh ok');
     $p = decodeJwt($body['data']['token']);
     assertEqual('tag/9', $p['prefix'], 'same prefix as the page');
@@ -949,7 +1038,7 @@ test('A-H3/A-N11: GET /token never mints the bare config defaults; no-store; Ori
 
     // Someone else's ticket → refused.
     $foreign = (new FluxFilesManager())->refreshTicket(new StubUser(10), ['prefix' => '']);
-    [$st] = $call(['X-FluxFiles-Refresh-Ticket' => $foreign]);
+    [$st] = $call(['X-FluxFiles-Refresh-Ticket' => $foreign], $rcfg);
     assertEqual(403, $st, "another user's ticket is refused");
 
     // Resolver configured: its policy.
@@ -958,7 +1047,7 @@ test('A-H3/A-N11: GET /token never mints the bare config defaults; no-store; Ori
     assertEqual('tenants/9', decodeJwt($body['data']['token'])['prefix'], 'resolver prefix');
 
     // Cross-site caller (cookie-only route) → refused before minting.
-    [$st, $body] = $call(['X-FluxFiles-Refresh-Ticket' => $ticket, 'Origin' => 'https://evil.example']);
+    [$st, $body] = $call(['X-FluxFiles-Refresh-Ticket' => $ticket, 'Origin' => 'https://evil.example'], $rcfg);
     assertEqual(403, $st, 'cross-origin refresh refused');
     assertEqual('origin_denied', $body['error_code'] ?? null, 'origin_denied');
 });

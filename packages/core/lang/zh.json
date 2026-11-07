@@ -275,6 +275,8 @@
     "missing_param": "缺少必要信息",
     "invalid_json": "无效的请求数据",
     "origin_denied": "此来源的访问被拒绝",
+    "token_refresh_unconfigured": "文件管理器登录尚未配置。请重新加载",
+    "token_refresh_failed": "无法刷新会话。请重新加载",
     "ext_changed": "无法更改文件扩展名",
     "load_failed": "无法加载此文件夹",
     "move_into_self": "无法将文件夹移动到其自身内部",

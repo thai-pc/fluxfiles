@@ -275,6 +275,8 @@
     "missing_param": "Informazione richiesta mancante",
     "invalid_json": "Dati richiesta non validi",
     "origin_denied": "Accesso negato da questa origine",
+    "token_refresh_unconfigured": "L'accesso al file manager non è configurato. Ricarica la pagina",
+    "token_refresh_failed": "Impossibile rinnovare la sessione. Ricarica la pagina",
     "ext_changed": "L’estensione del file non può essere modificata",
     "load_failed": "Impossibile caricare questa cartella",
     "move_into_self": "Impossibile spostare una cartella dentro sé stessa",
