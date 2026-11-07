@@ -101,7 +101,19 @@
         btn.style.marginRight = '8px';
         btn.addEventListener('click', function (e) {
             e.preventDefault();
-            openPicker(function (file) { attach(file).then(selectInFrame); });
+            openPicker(function (file) {
+                attach(file).then(function (id) {
+                    if (!id) {
+                        // The bridge refused (e.g. private local storage has no permanent URL):
+                        // say so instead of silently doing nothing. alert() is plain text.
+                        var i18n = window.wp && window.wp.i18n;
+                        var __ = (i18n && i18n.__) || function (t) { return t; };
+                        window.alert(__('This file could not be added to the Media Library. Files on private storage have no permanent link; use a public disk or set a public URL for it.', 'fluxfiles'));
+                        return;
+                    }
+                    selectInFrame(id);
+                }, function () {});
+            });
         });
         var secondary = toolbar.querySelector('.media-toolbar-secondary') || toolbar;
         secondary.insertBefore(btn, secondary.firstChild);

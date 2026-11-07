@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+// phpcs:disable WordPress.DB.RestrictedClasses.mysql__PDO -- opt-in FLUXFILES_STORAGE_BACKEND=db: the operator's own MySQL/PostgreSQL/SQLite connection for FluxFiles' rate limiter, not WordPress's $wpdb (the WordPress plugin uses WpRateLimiterStorage on $wpdb)
+
 namespace FluxFiles\Db;
 
 use FluxFiles\ApiException;

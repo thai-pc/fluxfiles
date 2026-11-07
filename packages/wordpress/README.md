@@ -34,6 +34,15 @@ runs entirely inside your WordPress install — no separate backend to host.
 [fluxfiles disk="s3" mode="picker" height="600px" multiple="1"]
 ```
 
+**One file manager per page.** The browser SDK drives a single iframe, so only the first
+`[fluxfiles]` on a page loads; any further one shows a short notice instead of silently replacing
+the first. Use separate pages, or one shortcode with the disk switcher.
+
+**Private local storage** (Settings → FluxFiles) streams local files through short-lived signed
+links. Such files have no permanent URL, so the block and the editor button refuse to insert
+them into a post (the link would stop working after an hour); use a public disk, or an S3/R2 disk
+with a public URL, for content you embed.
+
 | Attribute  | Default   | Description                                   |
 |------------|-----------|-----------------------------------------------|
 | `disk`     | `local`   | Storage disk to open                          |
@@ -189,9 +198,10 @@ location ^~ /wp-content/uploads/fluxfiles/ {
 
 Deleting the plugin always removes its settings and rate-limit counters. The stored files,
 their metadata/trash/audit/legal-hold tables and the secret key are **kept** unless you tick
-"Delete all FluxFiles data when the plugin is deleted" first. With it on, files FluxFiles
-wrote in its own folder are removed; nothing is deleted at a custom location set via
-`FLUXFILES_STORAGE_DIR` or the `fluxfiles_storage_base` filter.
+"Delete all FluxFiles data when the plugin is deleted" first. With it on, the trash, variants and
+other FluxFiles bookkeeping (`_fluxfiles/`, `_variants/`) in its own folder are removed, but the files in the
+folder are never deleted (the plugin cannot tell which ones it wrote, and some may predate it); at a custom location set via
+`FLUXFILES_STORAGE_DIR` or the `fluxfiles_storage_base` filter only the rate-limit counters are deleted.
 
 ### Multisite layout
 
@@ -273,13 +283,24 @@ Follow these steps in order, from `wp-content/`:
    skipped, so the legacy index is kept and only missing files are added), then
    `wp maintenance-mode deactivate`.
 
-…or enable **private local storage** in the settings, which stops serving the
-directory statically at all (files stream through the signed REST route).
+…or enable **private local storage** in the settings: the file manager stops handing
+out plain URLs (files stream through the signed REST route) and, on Apache, the folder is
+denied by its `.htaccess`. nginx ignores `.htaccess`, so the rule `location ^~ <storage root>/ { deny all; }`
+is still needed there (the admin notice shows it, also while private storage is on). Files written
+before you switched it on keep their old permissions.
 
 On nginx the plugins screen and Settings → FluxFiles show an admin notice with
 these rules (rooted at your real content path) while the local disk is public.
 Once the rules are in place, hide it with
 `add_filter('fluxfiles_nginx_storage_notice', '__return_false');`.
+
+On multisite the setting is per site, so the deny rule shown with private storage on names only
+that site's folder (`<storage root>/sites/<blog id>/`); add one rule per private site.
+
+Network activation sets up the existing sites in the activation request itself, within a budget
+(a large network skips this and every site is then set up on its first request). Tune it with
+`add_filter('fluxfiles_activation_max_sites', fn () => 500);` (default 200) and
+`add_filter('fluxfiles_activation_budget_seconds', fn () => 20);` (default 10).
 
 ## REST API
 
