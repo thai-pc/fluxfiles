@@ -60,6 +60,12 @@ already been decided once for Intake:
   into the stored `_fluxfiles/intakes.json` record** at create time
   (`IntakeModule.php:130-131`) and read back per-request via `getRecord()`.
 
+> **Update (security fix):** the `webhook_secret` *claim* is no longer plaintext either. Builders seal it into
+> `webhook_secret_enc` (AES-256-GCM, like BYOB credentials) and core decrypts it into `Claims::$webhookSecret`;
+> a legacy plaintext claim is refused. The per-portal copy baked into `intakes.json` is likewise stored sealed
+> (`webhook.secret_enc`), because that file lives in the tenant's storage (a BYOB tenant holds the bucket
+> credentials). Where this document says "plaintext" for the claim or the record, read it as the pre-fix state.
+
 Webhook config is neither: `webhook_secret` is a live HMAC signing key. JWTs
 are base64url — signed, not encrypted — so anything in the payload is
 plaintext to whoever holds the token. The portal token is handed to

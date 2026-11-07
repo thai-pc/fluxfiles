@@ -112,7 +112,7 @@ def _sign(payload: dict[str, Any], secret: str) -> str:
     if "webhook_secret" in payload:
         payload = dict(payload)
         wh = payload.pop("webhook_secret")
-        if wh:
+        if wh is not None and str(wh) != "":
             payload["webhook_secret_enc"] = encrypt_secret(str(wh), secret)
     return jwt.encode(payload, secret, algorithm="HS256")
 
@@ -388,7 +388,7 @@ def _apply_tenant_overrides(
     if webhook_events:
         payload["webhook_events"] = list(webhook_events)
     webhook_secret = extras.get("webhook_secret")
-    if webhook_secret:
+    if webhook_secret is not None and str(webhook_secret) != "":
         payload["webhook_secret"] = str(webhook_secret)
     if extras.get("allow_ai_vision") is not None:
         payload["allow_ai_vision"] = bool(extras["allow_ai_vision"])

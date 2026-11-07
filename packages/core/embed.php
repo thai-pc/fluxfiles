@@ -617,7 +617,7 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     }
     // Plaintext here only until sealed into `webhook_secret_enc` just before the token is
     // encoded (sealWebhookSecret) — a JWT is signed, not encrypted.
-    if (!empty($webp['webhook_secret'])) {
+    if (isset($webp['webhook_secret']) && (string) $webp['webhook_secret'] !== '') {
         $payload['webhook_secret'] = (string) $webp['webhook_secret'];
     }
     if (isset($webp['pdf_level'])

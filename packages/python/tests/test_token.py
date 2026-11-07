@@ -431,3 +431,16 @@ def test_verify_token_round_trips_and_rejects_tampering_or_expiry() -> None:
 def test_decode_token_does_not_require_the_secret() -> None:
     token = create_token(secret=SECRET, user_id="u", prefix="users/1")
     assert decode_token(token)["prefix"] == "users/1"
+
+
+def test_webhook_secret_zero_is_sealed_empty_is_unset() -> None:
+    zero = decode_token(create_token(secret=SECRET, user_id="u", webhook_secret="0"))
+    assert "webhook_secret" not in zero and zero["webhook_secret_enc"]
+    assert "webhook_secret_enc" not in decode_token(create_token(secret=SECRET, user_id="u", webhook_secret=""))
+
+
+def test_webhook_secret_matches_committed_cross_language_vector() -> None:
+    from fluxfiles_token.crypto import encrypt_secret
+
+    v = json.loads((VECTORS_PATH.parent / "webhook-secret-vector.json").read_text(encoding="utf-8"))
+    assert encrypt_secret(v["plaintext"], v["secret"], bytes.fromhex(v["nonce_hex"])) == v["blob"]

@@ -85,6 +85,30 @@ test('no secret set: nothing sealed, not flagged', function () use ($server) {
     check($c->webhookSecret === '' && !$c->webhookSecretPlaintext, 'unexpected state');
 });
 
+test('committed cross-language vector (shared with Node and Python): exact blob + decrypt', function () {
+    $v = json_decode((string) file_get_contents(__DIR__ . '/../../../../docs/testdata/webhook-secret-vector.json'), true);
+    $blob = CredentialEncryptor::encryptSecret($v['plaintext'], $v['secret'], hex2bin($v['nonce_hex']));
+    check($blob === $v['blob'], 'PHP blob differs from the committed vector');
+    check(CredentialEncryptor::decryptSecret($v['blob'], $v['secret']) === $v['plaintext'], 'vector does not decrypt');
+});
+
+test('"0" is a valid key: sealed by the minter; empty string is unset', function () use ($server) {
+    $jwt = fluxfiles_token(['user' => 'u', 'claims' => ['allow_webhooks' => true, 'webhook_url' => 'https://h.example.com/', 'webhook_secret' => '0']]);
+    $p = peek($jwt);
+    check(!isset($p['webhook_secret']) && !empty($p['webhook_secret_enc']), '"0" not sealed');
+    check(Claims::fromJwtPayload(JwtCompat::decode($jwt, $server), $server)->webhookSecret === '0', '"0" not recovered');
+    $p2 = peek(fluxfiles_token(['user' => 'u', 'claims' => ['webhook_secret' => '']]));
+    check(!isset($p2['webhook_secret']) && !isset($p2['webhook_secret_enc']), 'empty string should be unset');
+    check(Claims::fromJwtPayload((object) ['sub' => 'u', 'webhook_secret' => '0'], $server)->webhookSecretPlaintext === true, 'plaintext "0" not flagged');
+});
+
+test('malformed webhook_secret_enc -> 401 token_invalid (like any bad token)', function () use ($server) {
+    foreach (['not-base64!!', base64_encode('short'), CredentialEncryptor::encryptSecret('x', str_repeat('z', 40))] as $bad) {
+        try { Claims::fromJwtPayload((object) ['sub' => 'u', 'webhook_secret_enc' => $bad], $server); throw new \RuntimeException('accepted'); }
+        catch (\FluxFiles\ApiException $e) { check($e->getHttpCode() === 401 && $e->getErrorCode() === 'token_invalid', 'wrong status/code'); }
+    }
+});
+
 echo "\n";
 if ($failed > 0) { echo "\033[31m{$failed} failed\033[0m, {$passed} passed\n"; exit(1); }
 echo "\033[32mAll tests passed!\033[0m ({$passed})\n";

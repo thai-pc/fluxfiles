@@ -17,8 +17,17 @@ All notable changes to FluxFiles are documented here. This project adheres to
   Webhooks module sends nothing for it (logged) and `POST /api/fm/webhooks/test` returns `400 webhook_secret_insecure`
   (new i18n key, 16 languages). Upgrade the minter, then **rotate the key**: any existing key has been exposed to
   every holder of a token that carried it. Receivers' verification scheme is unchanged.
-- Adapter note: the Laravel and WordPress adapters call `CredentialEncryptor::sealWebhookSecret()`, so they need the
-  core release that ships it.
+- **Adapters need core >= 1.1.3 for webhook secrets.** Laravel and WordPress seal through
+  `CredentialEncryptor::sealWebhookSecret()` when core has it; on an older core, minting *with* a `webhook_secret`
+  throws a clear error (never plaintext) and minting without one is unaffected. Their composer floors are not bumped
+  here (core 1.1.3 is not tagged yet); bump them when it is.
+- `webhook_secret_enc` with a malformed or tampered blob now answers `401 token_invalid`. An empty-string secret
+  means unset in every builder; `"0"` is a valid key and is sealed.
+- Node and Python builders: `node` 1.0.1, `python` 1.0.1. Committed cross-language vector:
+  `docs/testdata/webhook-secret-vector.json` (PHP, Node and Python tests must reproduce the same blob).
+- **Rotate the key at the receiver after upgrading.** The old key was readable by every holder of a token that
+  carried it, and the attacker posts straight to the receiver, so upgrading FluxFiles alone does not close the hole.
+  Intake portals created before the upgrade keep their old key in `intakes.json`: re-create them after rotating.
 
 ## [1.0.15] — 2026-11-07
 

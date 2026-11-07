@@ -79,10 +79,11 @@ def decrypt_byob(blob: str, secret: str) -> dict[str, Any]:
     return config
 
 
-def encrypt_secret(value: str, secret: str) -> str:
+def encrypt_secret(value: str, secret: str, nonce_for_test: bytes | None = None) -> str:
     """Seal a single secret string (the `webhook_secret_enc` claim). Same blob layout
     as `encrypt_byob`, own HKDF info; matches PHP `CredentialEncryptor::encryptSecret`."""
     key = derive_byob_key(secret, _SECRET_INFO)
-    nonce = os.urandom(_NONCE_LEN)
+    # nonce_for_test is for the committed cross-language vector ONLY; production is random.
+    nonce = nonce_for_test if nonce_for_test is not None else os.urandom(_NONCE_LEN)
     ct_and_tag = AESGCM(key).encrypt(nonce, value.encode("utf-8"), None)
     return base64.b64encode(nonce + ct_and_tag).decode("ascii")

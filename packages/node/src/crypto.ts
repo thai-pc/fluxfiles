@@ -73,9 +73,10 @@ export function decryptByob<T = unknown>(blob: string, secret: string): T {
 // BYOB blob can never be replayed as a secret. The plaintext is the raw string.
 const SECRET_INFO = 'fluxfiles-webhook-secret-enc';
 
-export function encryptSecret(value: string, secret: string): string {
+export function encryptSecret(value: string, secret: string, nonceForTest?: Buffer): string {
   const key = deriveByobKey(secret, SECRET_INFO);
-  const nonce = randomBytes(NONCE_LEN);
+  // nonceForTest is for the committed cross-language vector ONLY; production is random.
+  const nonce = nonceForTest ?? randomBytes(NONCE_LEN);
   const cipher = createCipheriv('aes-256-gcm', key, nonce, { authTagLength: TAG_LEN });
   const ct = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
   return Buffer.concat([nonce, ct, cipher.getAuthTag()]).toString('base64');

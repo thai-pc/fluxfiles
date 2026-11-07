@@ -802,10 +802,10 @@ class Claims
         }
         // Only the encrypted form is honoured. A plaintext `webhook_secret` is readable by
         // whoever holds the token (JWTs are signed, not encrypted), so it is never used.
-        if ($secret !== '' && !empty($payload->webhook_secret_enc) && is_string($payload->webhook_secret_enc)) {
+        if ($secret !== '' && is_string($payload->webhook_secret_enc ?? null) && $payload->webhook_secret_enc !== '') {
             $c->webhookSecret = CredentialEncryptor::decryptSecret($payload->webhook_secret_enc, $secret);
         }
-        $c->webhookSecretPlaintext = !empty($payload->webhook_secret);
+        $c->webhookSecretPlaintext = isset($payload->webhook_secret) && (string) $payload->webhook_secret !== '';
         $c->allowAiVision = (bool) ($payload->allow_ai_vision ?? false);
         $c->allowOcr = (bool) ($payload->allow_ocr ?? false);
         $c->allowVirusScan = (bool) ($payload->allow_virus_scan ?? false);
