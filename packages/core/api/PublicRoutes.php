@@ -65,7 +65,9 @@ final class PublicRoutes
     /**
      * Gate and serve one public request, then return. Any {@see ApiException} (the gate's
      * or the module's) becomes the standard `{data,error,error_code}` envelope; anything
-     * else is a 500 `server_error` with no detail.
+     * else is a 500 `server_error` with no detail. For the HTML page routes (see
+     * {@see isPage()}) the same failures render a minimal HTML error page instead, so a
+     * recipient's browser never shows raw JSON; the API routes keep the envelope.
      */
     public static function dispatch(string $id, string $method, string $uri, PublicContext $ctx): void
     {
@@ -170,7 +172,7 @@ final class PublicRoutes
 
     /**
      * Minimal, self-contained error page for a page route (no scripts, no external
-     * assets, so any CSP passes). Shows a fixed English line per status class plus the
+     * assets, served under a deny-everything CSP). Shows a fixed English line per status class plus the
      * error code; the ApiException message is never echoed (a module could put detail in it).
      */
     private static function emitErrorPage(int $status, string $code): void
@@ -188,10 +190,8 @@ final class PublicRoutes
         header('Referrer-Policy: no-referrer');
         header('Cache-Control: no-store');
         header('X-Content-Type-Options: nosniff');
-        $csp = FrameAncestors::policy();
-        if ($csp !== null) {
-            header('Content-Security-Policy: ' . $csp);
-        }
+        // Nothing to load or embed: the tightest policy (inline style only, no framing).
+        header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
         // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed strings plus a code filtered to [a-z0-9_] and HTML-escaped above
         echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' . $status . '</title>'
             . '<style>body{font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;color:#333}main{text-align:center;padding:2rem}small{color:#888}</style></head>'

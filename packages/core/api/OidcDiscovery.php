@@ -79,8 +79,10 @@ final class OidcDiscovery
             @unlink($this->cacheDir . '/jwks-' . $this->cacheKey($jwksUri) . '.json');
             return;
         }
-        foreach (glob($this->cacheDir . '/jwks-*.json') ?: [] as $file) {
-            @unlink($file);
+        foreach (@scandir($this->cacheDir) ?: [] as $file) {
+            if (str_starts_with($file, 'jwks-') && str_ends_with($file, '.json')) {
+                @unlink($this->cacheDir . '/' . $file);
+            }
         }
     }
 

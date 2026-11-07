@@ -54,6 +54,8 @@ file_put_contents($docroot . '/index.php', <<<'PHP'
 $p = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 if ($p === '/redirect') { header('Location: /echo', true, 302); exit; }
 if ($p === '/chunked') { while (@ob_end_clean()) {} for ($i = 0; $i < 40; $i++) { echo str_repeat('x', 65536); flush(); } exit; }
+if ($p === '/bigerr') { http_response_code(500); header('Content-Length: 3145728'); echo str_repeat('x', 3145728); exit; }
+if ($p === '/bigredir') { header('Location: /echo', true, 302); header('Content-Length: 3145728'); echo str_repeat('x', 3145728); exit; }
 if ($p === '/sized') { header('Content-Length: 3145728'); echo str_repeat('x', 3145728); exit; }
 header('X-Probe: yes');
 header('Content-Type: application/json');
@@ -109,6 +111,22 @@ test('an oversized declared Content-Length is refused before the body is read', 
     $r = (new CurlTransport(5, 1048576))->request('GET', "{$base}/sized", [], null, 10);
     assertEqual(0, $r['status']);
     assertTrue(str_contains($r['error'] ?? '', 'response too large'), 'error: ' . ($r['error'] ?? ''));
+});
+
+test('HEAD with a large Content-Length is not an oversize error', function () use ($base) {
+    $r = (new CurlTransport(5, 1048576))->request('HEAD', "{$base}/sized", [], null, 10);
+    assertEqual(200, $r['status']);
+    assertEqual('3145728', $r['headers']['content-length'] ?? null);
+    assertEqual('', $r['body']);
+});
+
+test('a non-2xx answer with a huge body keeps status + headers (body dropped), redirects stay visible', function () use ($base) {
+    $r = (new CurlTransport(5, 1048576))->request('GET', "{$base}/bigerr", [], null, 10);
+    assertEqual(500, $r['status']);
+    assertEqual('', $r['body']);
+    $r = (new CurlTransport(5, 1048576))->request('GET', "{$base}/bigredir", [], null, 10);
+    assertEqual(302, $r['status']);
+    assertEqual('/echo', $r['headers']['location'] ?? null);
 });
 
 test('a body under the cap passes; the default cap is 8 MB', function () use ($base) {

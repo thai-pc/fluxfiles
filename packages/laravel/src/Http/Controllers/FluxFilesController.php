@@ -358,10 +358,14 @@ class FluxFilesController
      */
     private function serverError(\Throwable $e): JsonResponse
     {
-        if (function_exists('report')) {
-            report($e);
-        } else {
-            error_log('FluxFiles: request failed: ' . get_class($e) . ': ' . $e->getMessage());
+        try {
+            if (function_exists('report')) {
+                report($e);
+            } else {
+                error_log('FluxFiles: request failed: ' . get_class($e) . ': ' . $e->getMessage());
+            }
+        } catch (\Throwable $ignored) {
+            // A broken log channel must not turn the JSON envelope into a Laravel error page.
         }
         $resp = ['data' => null, 'error' => 'Internal server error', 'error_code' => 'server_error'];
         if (config('app.debug') === true) {

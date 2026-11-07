@@ -6,14 +6,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
 ## [Unreleased]
 
 ### Security
-- **Core outbound HTTP is size-capped.** `CurlTransport` buffered the whole response; a hostile or compromised upstream could exhaust memory. It now takes an optional `$maxBytes` (default 8 MB), aborting on an oversized `Content-Length` or as soon as the streamed body crosses the cap, and answers like any transport failure (`status 0`, `error: response too large`). The `HttpTransportInterface` contract is unchanged. `OidcDiscovery` caps at 1 MB, `AiTagger` at 2 MB.
+- **The default `CurlTransport` is size-capped.** It buffered the whole response; a hostile or compromised upstream could exhaust memory. It now takes an optional `$maxBytes` (default 8 MB), aborting on an oversized `Content-Length` (not for HEAD) or as soon as the streamed body crosses the cap, and answers like any transport failure (`status 0`, `error: response too large`). A non-2xx answer with an oversized body keeps its status and headers (redirects stay visible) with the body dropped. The `HttpTransportInterface` contract is unchanged. `OidcDiscovery` caps at 1 MB, `AiTagger` at 2 MB; `BucketDoctor`'s DNS-pinned probe (a tenant-supplied BYOB endpoint) is capped at 1 MB with the same mechanism.
 - **Laravel adapter, non-`ApiException` errors.** The upload route answers an unexpected exception with core's envelope (`500`, `error_code: server_error`, generic message) instead of an ad-hoc `Upload failed`. The exception is reported through Laravel's `report()` (so the app's log channel gets it) and its text (SQLSTATE, host, port, paths) reaches the response only as `detail` when `app.debug` is on. The older `'Upload failed: ' . $e->getMessage()` leak had already been removed in `core-v1.1.3`; every other controller `catch (\Throwable)` answers a fixed string.
 
 ### Added
 - `OidcDiscovery::forgetJwks(?string $jwksUri = null)`: drops the cached JWKS (one URI, or all) so the SSO module no longer recomputes core's cache file names.
 
 ### Changed
-- Public page routes (`/api/fm/share/page`, `/api/fm/intake/page`) show a minimal HTML error page (right status, error code) when the module is missing, unlicensed or too old, instead of a raw JSON envelope. API routes keep JSON.
+- Standalone core: the public page routes (`/api/fm/share/page`, `/api/fm/intake/page`) show a minimal HTML error page (right status, error code, deny-all CSP) when the module is missing, unlicensed or too old, instead of a raw JSON envelope. API routes keep JSON. The Laravel and WordPress adapters' page routes still answer JSON for now.
 
 ### Documentation
 - CONFIG.md: `dlp_entity_types` default is the DLP module's PII set (not Presidio's full set); `allow_dlp_scan` notes zero-width stripping and NFKC normalisation (DLP module >= 1.1.0).

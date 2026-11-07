@@ -188,12 +188,17 @@ try {
         assertTrue(($h['content-disposition'] ?? '') === '', 'no download offered');
     });
 
-    test('GET /share/page → 501 JSON envelope too (the recipient page is gated like the rest), never HTML', function () use ($B1, $fakeShare) {
+    test('GET /share/page → 501 as a minimal HTML error page (gated like the rest), never the JSON envelope or the module page', function () use ($B1, $fakeShare) {
         [$st, $h, $body] = req('GET', "{$B1}/api/fm/share/page?token=" . rawurlencode($fakeShare));
         assertEqual(501, $st);
-        assertEqual('module_not_installed', json_decode($body, true)['error_code'] ?? null);
-        assertTrue(stripos($h['content-type'] ?? '', 'application/json') === 0, 'json, not the page');
-        assertTrue(stripos($body, '<html') === false, 'no HTML served without the module');
+        assertTrue(stripos($h['content-type'] ?? '', 'text/html') === 0, 'html error page');
+        assertTrue(strpos($body, 'module_not_installed') !== false, 'carries the error code');
+        assertTrue(strpos($body, '{"data"') === false, 'no JSON envelope');
+        assertTrue(strpos($body, '<script') === false, 'no script on the error page');
+        assertEqual('no-referrer', $h['referrer-policy'] ?? null);
+        assertTrue(stripos($h['cache-control'] ?? '', 'no-store') !== false, 'no-store');
+        assertEqual('nosniff', strtolower($h['x-content-type-options'] ?? ''));
+        assertTrue(strpos($h['content-security-policy'] ?? '', "default-src 'none'") === 0, 'tight CSP');
     });
 
     test('the public routes are truly pre-auth: a garbage Bearer changes nothing', function () use ($B1, $fakeShare) {
@@ -301,9 +306,10 @@ try {
     });
 
     test('GET /api/fm/share/page with no module installed → 501 module_not_installed (the stub lands on the gate)', function () use ($B1) {
-        [$st, , $j] = reqJson('GET', "{$B1}/api/fm/share/page?token=x");
+        [$st, $h, $body] = req('GET', "{$B1}/api/fm/share/page?token=x");
         assertEqual(501, $st);
-        assertEnvelope($j, 'module_not_installed');
+        assertTrue(stripos($h['content-type'] ?? '', 'text/html') === 0, 'html error page');
+        assertTrue(strpos($body, 'module_not_installed') !== false && strpos($body, '{"data"') === false, 'code shown, no envelope');
     });
 
     stop($srv1);
