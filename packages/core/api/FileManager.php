@@ -2777,7 +2777,13 @@ class FileManager
             $this->meta->save($disk, $scopedDst, ['watermarked' => true]);
             // Bind the backup to the bytes just burned, so it can never be restored
             // onto a different file that later reuses this key.
-            try { $fs->write($this->watermarkSumKey($scopedDst), hash('sha256', (string) $result['data'])); } catch (\Throwable $e) { /* legacy-style backup then */ }
+            // A backup without its sidecar is never trusted, so if the sidecar can't be
+            // written, drop the backup too (the burn stays, "remove watermark" is lost).
+            try {
+                $fs->write($this->watermarkSumKey($scopedDst), hash('sha256', (string) $result['data']));
+            } catch (\Throwable $e) {
+                $this->deleteWatermarkBackup($disk, $scopedDst);
+            }
         } else {
             // "Save as copy" creates a new file — carry over metadata (title/tags/
             // uploaded_by) and register it in the search + folder index, same as copy().
@@ -2833,19 +2839,31 @@ class FileManager
             }
             $sumKey = $this->watermarkSumKey($scopedKey);
             if (!$fs->fileExists($sumKey)) {
-                return true;
+                // Legacy backup (older cores never deleted it with the file and wrote no
+                // sidecar): nothing durable ties it to the file now at this key (the
+                // `watermarked` meta flag is not persisted by get()), so it may belong to
+                // a deleted file of another user. Never trust it: drop it on first touch.
+                $this->deleteWatermarkBackup('', $scopedKey, $fs);
+                return false;
             }
-            return hash_equals(trim((string) $fs->read($sumKey)), hash('sha256', (string) $fs->read($scopedKey)));
+            $stream = $fs->readStream($scopedKey);
+            if (!is_resource($stream)) {
+                return false;
+            }
+            $ctx = hash_init('sha256');
+            hash_update_stream($ctx, $stream);
+            fclose($stream);
+            return hash_equals(trim((string) $fs->read($sumKey)), hash_final($ctx));
         } catch (\Throwable $e) {
             return false;
         }
     }
 
     /** Best-effort: drop the pre-watermark original kept for $scopedKey. */
-    private function deleteWatermarkBackup(string $disk, string $scopedKey): void
+    private function deleteWatermarkBackup(string $disk, string $scopedKey, $fs = null): void
     {
         try {
-            $fs = $this->disks->disk($disk);
+            $fs = $fs ?? $this->disks->disk($disk);
             foreach ([$this->watermarkBackupKey($scopedKey), $this->watermarkSumKey($scopedKey)] as $k) {
                 if ($fs->fileExists($k)) {
                     $fs->delete($k);

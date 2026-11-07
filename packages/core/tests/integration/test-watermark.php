@@ -174,6 +174,24 @@ test('stale backup (planted) never restores onto a different file or user', func
     assertTrue(file_get_contents("$root/_fluxfiles/originals/p.png") !== 'STALE', 'stale backup overwritten');
     expectApi(fn () => $u2->removeWatermark('local', 'p.png'), 'owner_only');
 });
+test('legacy sidecar-less backup of a deleted file is never applied to another user\'s file', function () {
+    foreach (['remove', 'apply'] as $op) {
+        [, $u2, $dm, $root] = wmUsers();
+        wmUpload($u2, 'p.png');
+        $mine = (string) file_get_contents("$root/p.png");
+        @mkdir("$root/_fluxfiles/originals", 0777, true);
+        file_put_contents("$root/_fluxfiles/originals/p.png", pngBytes(60, 60, [255, 0, 0])); // user A's original
+        if ($op === 'remove') {
+            expectApi(fn () => $u2->removeWatermark('local', 'p.png'), 'no_watermark_backup');
+            assertEqual($mine, (string) file_get_contents("$root/p.png"), 'B file untouched');
+        } else {
+            $u2->applyWatermark('local', 'p.png', ['text' => 'X']);
+            // burned from B's own bytes: backup is now B's original, not A's red image
+            assertEqual($mine, (string) file_get_contents("$root/_fluxfiles/originals/p.png"), 'fresh backup of B');
+        }
+        if ($op === 'remove') { assertTrue(!is_file("$root/_fluxfiles/originals/p.png"), 'legacy backup dropped'); }
+    }
+});
 test('rename moves the backup with the file; trash drops it', function () {
     [$u1, , $dm, $root] = wmUsers();
     wmUpload($u1, 'p.png');
