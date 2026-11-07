@@ -204,6 +204,29 @@ describe('TinyMCE FluxFiles plugin', () => {
     expect(editor.insertContent).not.toHaveBeenCalled();
   });
 
+  it('HTML-escapes file names in the refusal notification (TinyMCE 4/5 render text as HTML)', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    open.mock.calls[0][0].onSelect({ url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: '<img src=x onerror="window.__XSS=1">.png', mime: 'image/png' });
+    const text = editor.notificationManager.open.mock.calls[0][0].text;
+    expect(text).not.toContain('<img');
+    expect(text).toContain('&lt;img src=x onerror=');
+  });
+
+  it('reports several refusals of one selection in ONE notification', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect([
+      { url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'one.mp4' },
+      { url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'two.mp4' },
+    ]);
+    expect(editor.notificationManager.open).toHaveBeenCalledTimes(1);
+    const text = editor.notificationManager.open.mock.calls[0][0].text;
+    expect(text).toContain('one.mp4');
+    expect(text).toContain('two.mp4');
+  });
+
   it('skips folders (is_dir)', () => {
     const { editor, buttons, open } = loadPlugin();
     buttons.fluxfiles.onAction();

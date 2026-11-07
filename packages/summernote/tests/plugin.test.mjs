@@ -215,6 +215,21 @@ describe('Summernote FluxFiles plugin', () => {
     expect(pastedHtml(editorInvoke)).toBe('');
   });
 
+  it('reports several refusals of one selection in ONE alert, names as plain text', () => {
+    const { buttonEl, open } = loadPlugin();
+    globalThis.window.alert = vi.fn();
+    buttonEl.__button.click();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect([
+      { url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: '<b>one</b>.mp4' },
+      { url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'two.mp4' },
+    ]);
+    expect(globalThis.window.alert).toHaveBeenCalledTimes(1);
+    const msg = globalThis.window.alert.mock.calls[0][0];
+    expect(msg).toContain('<b>one</b>.mp4'); // alert() is plain text: no escaping needed
+    expect(msg).toContain('two.mp4');
+  });
+
   it('skips folders (is_dir): no insert, no range restore', () => {
     const { buttonEl, editorInvoke, open } = loadPlugin();
     buttonEl.__button.click();   // this saves the range

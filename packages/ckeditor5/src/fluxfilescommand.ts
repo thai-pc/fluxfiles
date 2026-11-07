@@ -56,7 +56,13 @@ export class FluxFilesCommand extends Command {
   }
 
   /** Show a refusal to the editor user (Notification plugin when loaded, else alert). */
-  private _notify(message: string): void {
+  private _notify(messages: string[]): void {
+    if (!messages.length) return;
+    // One combined message per selection (at most 5 lines). The Notification
+    // plugin shows plain text, so file names need no escaping.
+    const lines = messages.slice(0, 5);
+    if (messages.length > 5) lines.push('… and ' + (messages.length - 5) + ' more');
+    const message = lines.join('\n');
     const { plugins } = this.editor;
     if (plugins.has('Notification')) {
       (plugins.get('Notification') as { showWarning(m: string, o?: object): void }).showWarning(message, { namespace: 'fluxfiles' });
@@ -69,9 +75,10 @@ export class FluxFilesCommand extends Command {
     const { editor } = this;
     const schema = editor.model.schema;
     const inserted: FluxFile[] = [];
+    const refused: string[] = [];
 
     for (const file of files) {
-      const info = fileInfo(file, this._cfg.endpoint, (m) => this._notify(m));
+      const info = fileInfo(file, this._cfg.endpoint, (m) => refused.push(m));
       if (!info.embeddable) continue; // preview-only: already warned
 
       if (info.isImage && editor.commands.get('insertImage')) {
@@ -89,6 +96,8 @@ export class FluxFilesCommand extends Command {
       }
       inserted.push(file);
     }
+
+    this._notify(refused);
 
     if (inserted.length) {
       editor.editing.view.focus();

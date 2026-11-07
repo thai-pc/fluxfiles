@@ -112,11 +112,25 @@
         return '"' + name + '" is preview-only (no embeddable URL, e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor, Apply) or issue a downloadable token to embed it.';
     }
     // User-visible refusal (a console.warn alone is invisible to editors).
-    function notifyUser(editor, msg) {
+    // One combined message per selection (at most 5 lines).
+    function joinRefusals(msgs) {
+        var out = msgs.slice(0, 5);
+        if (msgs.length > 5) { out.push('… and ' + (msgs.length - 5) + ' more'); }
+        return out;
+    }
+    // TinyMCE 4 and 5 (< 5.10.8) render a notification's text as raw HTML and the
+    // messages carry file names (which can hold markup): escape them. Newer versions
+    // sanitize/render the same escaped text, so it displays as plain characters.
+    function notifyUser(editor, msgs) {
+        if (!msgs.length) return;
+        var lines = joinRefusals(msgs);
         try {
-            if (editor && editor.notificationManager) { editor.notificationManager.open({ text: msg, type: 'warning', timeout: 8000 }); return; }
+            if (editor && editor.notificationManager) {
+                editor.notificationManager.open({ text: lines.map(escHtml).join('<br>'), type: 'warning', timeout: 8000 });
+                return;
+            }
         } catch (e) { /* fall through */ }
-        if (typeof window.alert === 'function') { try { window.alert(msg); } catch (e) { /* ignore */ } }
+        if (typeof window.alert === 'function') { try { window.alert(lines.join('\n')); } catch (e) { /* ignore */ } }
     }
 
     // Normalize a selected file into the bits both insert paths need.
@@ -177,11 +191,12 @@
     function openPicker(editor) {
         open(editor, cfg(editor).multiple, function (payload) {
             var files = Array.isArray(payload) ? payload : [payload];
+            var refused = [];
             for (var i = 0; i < files.length; i++) {
                 var file = files[i];
                 if (!file || file.is_dir) continue;
-                var info = fileInfo(file, cfg(editor).endpoint, function (m) { notifyUser(editor, m); });
-                if (!info.embeddable) continue; // preview-only → already warned
+                var info = fileInfo(file, cfg(editor).endpoint, function (m) { refused.push(m); });
+                if (!info.embeddable) continue; // refused → reported below
 
                 if (info.isImage) {
                     var dim = '';
@@ -192,6 +207,7 @@
                     editor.insertContent('<a href="' + escHtml(info.url) + '">' + escHtml(info.meta.title || info.name) + '</a>');
                 }
             }
+            notifyUser(editor, refused);
         });
     }
 
@@ -203,8 +219,10 @@
             open(editor, false, function (payload) {
                 var file = Array.isArray(payload) ? payload[0] : payload;
                 if (!file || file.is_dir) return;
-                var info = fileInfo(file, cfg(editor).endpoint, function (m) { notifyUser(editor, m); });
-                if (!info.embeddable) return; // preview-only → already warned
+                var refused = [];
+                var info = fileInfo(file, cfg(editor).endpoint, function (m) { refused.push(m); });
+                notifyUser(editor, refused);
+                if (!info.embeddable) return; // refused → already reported
                 var data = {};
 
                 if (meta && meta.filetype === 'image') {

@@ -90,11 +90,24 @@
         return '"' + name + '" is preview-only (no embeddable URL, e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor, Apply) or issue a downloadable token to embed it.';
     }
     // User-visible refusal (a console.warn alone is invisible to editors).
-    function notifyUser(editor, msg) {
+    // One combined message per selection (at most 5 lines).
+    function joinRefusals(msgs) {
+        var out = msgs.slice(0, 5);
+        if (msgs.length > 5) { out.push('… and ' + (msgs.length - 5) + ' more'); }
+        return out;
+    }
+    // showNotification() renders its argument as HTML and the messages carry file
+    // names (which can hold markup on storage written by other tools): encode them.
+    function notifyUser(editor, msgs) {
+        if (!msgs.length) return;
+        var lines = joinRefusals(msgs);
         try {
-            if (editor && typeof editor.showNotification === 'function') { editor.showNotification(msg, 'warning'); return; }
+            if (editor && typeof editor.showNotification === 'function') {
+                editor.showNotification(lines.map(CKEDITOR.tools.htmlEncode).join('<br>'), 'warning');
+                return;
+            }
         } catch (e) { /* fall through */ }
-        if (typeof window.alert === 'function') { try { window.alert(msg); } catch (e) { /* ignore */ } }
+        if (typeof window.alert === 'function') { try { window.alert(lines.join('\n')); } catch (e) { /* ignore */ } }
     }
 
     // Normalize a selected file into the bits the insert / dialog paths need.
@@ -167,8 +180,10 @@
                     open(cfg, false, function (payload) {
                         var file = firstFile(payload);
                         if (!file) return;
-                        var info = fileInfo(file, cfg.endpoint, function (m) { notifyUser(editor, m); });
-                        if (!info.embeddable) return; // preview-only → already warned
+                        var refused = [];
+                        var info = fileInfo(file, cfg.endpoint, function (m) { refused.push(m); });
+                        notifyUser(editor, refused);
+                        if (!info.embeddable) return; // refused → already reported
                         var set = function (id, val) {
                             var el = dialog.getContentElement('info', id);
                             if (el && val != null && val !== '') el.setValue(String(val));
@@ -200,11 +215,12 @@
                         // quote in e.g. alt_text break out of the attribute (stored XSS).
                         var encAttr = CKEDITOR.tools.htmlEncodeAttr;
                         var enc = CKEDITOR.tools.htmlEncode;
+                        var refused = [];
                         for (var i = 0; i < files.length; i++) {
                             var file = files[i];
                             if (!file || file.is_dir) continue;
-                            var info = fileInfo(file, cfg.endpoint, function (m) { notifyUser(editor, m); });
-                            if (!info.embeddable) continue; // preview-only → already warned
+                            var info = fileInfo(file, cfg.endpoint, function (m) { refused.push(m); });
+                            if (!info.embeddable) continue; // refused → reported below
 
                             if (info.isImage) {
                                 var dim = '';
@@ -215,6 +231,7 @@
                                 editor.insertHtml('<a href="' + encAttr(info.url) + '">' + enc(info.meta.title || info.name) + '</a>');
                             }
                         }
+                        notifyUser(editor, refused);
                     });
                 }
             });

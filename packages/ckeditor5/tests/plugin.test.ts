@@ -26,6 +26,7 @@ async function pick(editor: ClassicEditor, payload: unknown) {
 }
 
 beforeEach(() => {
+  (window as unknown as { alert: unknown }).alert = vi.fn();
   openMock = vi.fn();
   (globalThis as { FluxFiles?: unknown }).FluxFiles = { open: openMock };
   host = document.createElement('div');
@@ -180,6 +181,21 @@ describe('inserting the selection', () => {
     const editor = await make();
     await pick(editor, { name: 'r.pdf', permanent_url: 'https://cdn/r.pdf', meta: { title: 'Annual report' } });
     expect(editor.getData()).toContain('>Annual report</a>');
+  });
+
+  it('reports several refusals of one selection in ONE notification', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const alertSpy = vi.fn();
+    (window as unknown as { alert: unknown }).alert = alertSpy;
+    const editor = await make({ multiple: true });
+    await pick(editor, [
+      { name: 'one.mp4', url: 'https://x/api/fm/stream?token=T' },
+      { name: '<img src=x onerror=1>.mp4', url: 'https://x/api/fm/stream?token=T' },
+    ]);
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy.mock.calls[0][0]).toContain('one.mp4');
+    expect(alertSpy.mock.calls[0][0]).toContain('<img src=x onerror=1>.mp4'); // plain-text channel
+    warn.mockRestore();
   });
 
   it('inserts every file of a multiple selection, skipping folders', async () => {

@@ -97,13 +97,21 @@
         }
         return '"' + name + '" is preview-only (no embeddable URL, e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor, Apply) or issue a downloadable token to embed it.';
     }
-    function notifyUser(msg) {
-        if (typeof window.alert === 'function') { try { window.alert(msg); } catch (e) { /* ignore */ } }
+    // One combined message per selection (at most 5 lines).
+    function joinRefusals(msgs) {
+        var out = msgs.slice(0, 5);
+        if (msgs.length > 5) { out.push('… and ' + (msgs.length - 5) + ' more'); }
+        return out;
+    }
+    // Summernote has no notification API: one alert (plain text, so no HTML escaping needed).
+    function notifyUser(msgs) {
+        if (!msgs.length) return;
+        if (typeof window.alert === 'function') { try { window.alert(joinRefusals(msgs).join('\n')); } catch (e) { /* ignore */ } }
     }
 
     // Build the HTML to insert for one selected file (shared contract with the
     // other editor plugins: <img> for images, <a> otherwise).
-    function fileToHtml(file, endpoint) {
+    function fileToHtml(file, endpoint, refused) {
         var name = file.name || file.basename || file.path || '';
         // Prefer a permanent URL (public disk / public_url) so saved content
         // doesn't embed an expiring presigned URL.
@@ -120,7 +128,7 @@
         if (reason) {
             var msg = refusalMessage(reason, name);
             console.warn('[FluxFiles] ' + msg);
-            notifyUser(msg);
+            refused.push(msg);
             return '';
         }
 
@@ -180,11 +188,13 @@
                 context.invoke('editor.restoreRange');
                 context.invoke('editor.focus');
 
+                var refused = [];
                 for (var i = 0; i < insertable.length; i++) {
-                    var html = fileToHtml(insertable[i], opts.endpoint);
-                    if (html === '') continue; // preview-only → already warned
+                    var html = fileToHtml(insertable[i], opts.endpoint, refused);
+                    if (html === '') continue; // refused → reported below
                     context.invoke('editor.pasteHTML', html);
                 }
+                notifyUser(refused);
             }
         });
     }

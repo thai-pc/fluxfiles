@@ -79,7 +79,12 @@ $('#editor').summernote({
 > **public** disk or a `public_url` so the inserted URL is permanent. The plugin
 > already prefers `permanent_url` automatically when present.
 
-**Files with no permanent URL.** On a private or gated disk (`FLUXFILES_LOCAL_PRIVATE`, SFTP, or a private bucket without `public_url`) `permanent_url` is `null` and the only link is an expiring `/api/fm/img|stream?token=` URL. The plugin never saves those into content: it shows a notification explaining the file was not inserted. Use a public disk or set `public_url`. Only `http(s)` URLs are ever inserted.
+**Files with no permanent URL.** Two cases:
+
+- On a gated local disk (`FLUXFILES_LOCAL_PRIVATE`) or an SFTP disk, `permanent_url` is `null` and the only link is an expiring `/api/fm/img|stream?token=` URL. The plugin never saves that into content: Summernote has no notification API, so it shows one `alert()` listing the refused files. Use a public disk or set `public_url`.
+- A private bucket without `public_url` yields a presigned URL (up to 24h). That one **is** still inserted, with a `console.warn`, and it stops working when it expires.
+
+Only `http(s)` URLs are ever inserted.
 
 ## Configuration
 

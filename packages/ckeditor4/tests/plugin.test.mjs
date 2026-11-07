@@ -192,6 +192,29 @@ describe('CKEditor 4 FluxFiles plugin', () => {
     expect(editor.insertHtml).not.toHaveBeenCalled();
   });
 
+  it('HTML-encodes file names in the refusal notification (showNotification renders HTML)', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    open.mock.calls[0][0].onSelect({ url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: '<img src=x onerror="window.__XSS=1">.png', mime: 'image/png' });
+    const html = editor.showNotification.mock.calls[0][0];
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;img src=x onerror=');
+  });
+
+  it('reports several refusals of one selection in ONE notification', () => {
+    const { editor, open } = loadPlugin({ multiple: true });
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect([
+      { url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'one.mp4' },
+      { url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'two.mp4' },
+    ]);
+    expect(editor.showNotification).toHaveBeenCalledTimes(1);
+    const html = editor.showNotification.mock.calls[0][0];
+    expect(html).toContain('one.mp4');
+    expect(html).toContain('two.mp4');
+  });
+
   it('skips folders (is_dir)', () => {
     const { editor, open } = loadPlugin();
     editor.execCommand('openFluxFiles');
