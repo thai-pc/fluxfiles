@@ -297,6 +297,7 @@
     "chmod_failed": "Không thể đổi quyền.",
     "chmod_forbidden": "Không được phép đổi quyền.",
     "chmod_root_forbidden": "Không thể đổi quyền của thư mục gốc.",
+    "root_forbidden": "Không thể xóa, chuyển vào thùng rác, đổi tên hoặc di chuyển thư mục gốc của ổ đĩa.",
     "disk_not_allowed": "Không được phép truy cập ổ đĩa này.",
     "download_forbidden": "Không được phép tải xuống.",
     "edit_forbidden": "Không được phép chỉnh sửa.",

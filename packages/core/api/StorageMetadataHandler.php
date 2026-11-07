@@ -1628,9 +1628,6 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     private static function matchOverlappingHold(array $holds, string $scopedPath, bool $bidirectional): ?array
     {
         $scopedPath = trim($scopedPath, '/');
-        if ($scopedPath === '') {
-            return null;
-        }
         foreach ($holds as $id => $entry) {
             if (($entry['released_at'] ?? null) !== null) {
                 continue; // released holds never block/cover
@@ -1656,14 +1653,39 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      */
     public static function holdPathOverlaps(string $holdPath, string $scopedPath, bool $bidirectional): bool
     {
-        $holdPath = mb_strtolower(trim($holdPath, '/'), 'UTF-8');
-        $scopedPath = mb_strtolower(trim($scopedPath, '/'), 'UTF-8');
-        if ($holdPath === '' || $scopedPath === '') {
-            return false;
+        $holdPath = self::canonicalHoldPath($holdPath);
+        $scopedPath = self::canonicalHoldPath($scopedPath);
+        // A hold on the disk root (path '', '/', '.', '..', ...) covers everything
+        // beneath it, including the root itself.
+        if ($holdPath === '') {
+            return true;
+        }
+        // The disk root is an ancestor of every held path: a bidirectional check
+        // (an operation that would take the whole tree with it) is blocked by any
+        // active hold; the ancestor-or-self check (badges/status) is not.
+        if ($scopedPath === '') {
+            return $bidirectional;
         }
         return $holdPath === $scopedPath
             || strpos($scopedPath, $holdPath . '/') === 0
             || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
+    }
+
+    /**
+     * Lower-cased path with the same dot-segment handling as Claims::scopePath()
+     * (backslash is a separator, "." / ".." / empty segments dropped), so every
+     * spelling of the root ('', '/', '.', './', '..', '\\') is the same '' and
+     * a hand-edited or migrated hold path cannot dodge the comparison.
+     */
+    public static function canonicalHoldPath(string $path): string
+    {
+        $parts = [];
+        foreach (explode('/', str_replace(["\0", '\\'], ['', '/'], $path)) as $seg) {
+            if ($seg !== '' && $seg !== '.' && $seg !== '..') {
+                $parts[] = $seg;
+            }
+        }
+        return mb_strtolower(implode('/', $parts), 'UTF-8');
     }
 
     private function saveHolds(string $disk, array $all): void

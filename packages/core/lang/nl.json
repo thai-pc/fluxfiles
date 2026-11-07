@@ -297,6 +297,7 @@
     "chmod_failed": "Kan rechten niet wijzigen.",
     "chmod_forbidden": "Rechten wijzigen is niet toegestaan.",
     "chmod_root_forbidden": "De rechten van de hoofdmap kunnen niet worden gewijzigd.",
+    "root_forbidden": "De hoofdmap van de schijf kan niet worden verwijderd, naar de prullenbak verplaatst, hernoemd of verplaatst.",
     "disk_not_allowed": "Toegang tot deze schijf is niet toegestaan.",
     "download_forbidden": "Downloaden is niet toegestaan.",
     "edit_forbidden": "Bewerken is niet toegestaan.",

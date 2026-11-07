@@ -297,6 +297,7 @@
     "chmod_failed": "権限を変更できませんでした。",
     "chmod_forbidden": "権限の変更は許可されていません。",
     "chmod_root_forbidden": "ルートフォルダの権限は変更できません。",
+    "root_forbidden": "ディスクのルートは削除、ゴミ箱への移動、名前変更、移動ができません。",
     "disk_not_allowed": "このディスクへのアクセスは許可されていません。",
     "download_forbidden": "ダウンロードは許可されていません。",
     "edit_forbidden": "編集は許可されていません。",

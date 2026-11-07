@@ -1182,6 +1182,7 @@ class FileManager
         $this->assertScopedKeyInScope($scoped);
         $this->assertNotSystem($scoped, $disk);
         $this->assertOwner($disk, $scoped);
+        $this->assertNotDiskRoot($scoped);
         $this->assertNoActiveHold($disk, $scoped);
         $fs = $this->disks->disk($disk);
 
@@ -1274,6 +1275,7 @@ class FileManager
         $this->assertOwner($disk, $scoped);
         // Covers both the file and directory branches below (trashDirectory() is a
         // private helper only ever reached through here).
+        $this->assertNotDiskRoot($scoped);
         $this->assertNoActiveHold($disk, $scoped);
 
         $fs = $this->disks->disk($disk);
@@ -1768,6 +1770,7 @@ class FileManager
         // Renaming a held path would let it evade holdBlocking()'s path-string
         // match (§6 of the design doc) — blocked as a security requirement, not
         // just a nicety.
+        $this->assertNotDiskRoot($scoped);
         $this->assertNoActiveHold($disk, $scoped);
 
         $newName = trim($newName);
@@ -1869,6 +1872,7 @@ class FileManager
         $this->assertOwner($disk, $scopedFrom);
         // Source-side only — moving a file INTO an existing hold's subtree is
         // fine (§6 of the design doc); only relocating a held path is blocked.
+        $this->assertNotDiskRoot($scopedFrom);
         $this->assertNoActiveHold($disk, $scopedFrom);
         $scopedTo   = $this->scopedPath($to);
         $this->assertNotSystem($scopedTo, $disk);
@@ -2032,6 +2036,7 @@ class FileManager
         $this->assertNotHidden($scopedSrc);
         $this->assertOwner($srcDisk, $scopedSrc);
         // Source-side only, same as move() above.
+        $this->assertNotDiskRoot($scopedSrc);
         $this->assertNoActiveHold($srcDisk, $scopedSrc);
         $scopedDst = $this->scopedPath($dstPath);
         $this->assertNotSystem($scopedDst, $dstDisk);
@@ -4556,6 +4561,20 @@ class FileManager
             if ($failClosed) {
                 throw new ApiException('Folder ownership could not be verified', 403, 'owner_only');
             }
+        }
+    }
+
+    /**
+     * Refuse delete/trash/rename/move of the disk root itself (every spelling of
+     * it normalises to '' in scopedPath()). Taking the root would sweep up
+     * `_fluxfiles/` — the audit chain, the holds manifest, the trash — and every
+     * legal hold with it. A prefix-scoped token's own tenant root is a different
+     * (non-empty) key and stays a legitimate target; holds still apply to it.
+     */
+    private function assertNotDiskRoot(string $scopedKey): void
+    {
+        if (trim($scopedKey, '/') === '') {
+            throw new ApiException('The disk root cannot be deleted, trashed, renamed or moved', 403, 'root_forbidden');
         }
     }
 

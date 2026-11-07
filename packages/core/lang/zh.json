@@ -297,6 +297,7 @@
     "chmod_failed": "无法更改权限。",
     "chmod_forbidden": "不允许更改权限。",
     "chmod_root_forbidden": "无法更改根文件夹的权限。",
+    "root_forbidden": "磁盘根目录不能被删除、移入回收站、重命名或移动。",
     "disk_not_allowed": "不允许访问此磁盘。",
     "download_forbidden": "不允许下载。",
     "edit_forbidden": "不允许编辑。",

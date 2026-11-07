@@ -106,7 +106,7 @@ Soft-delete is move-based into `_fluxfiles/trash/<id>/` with a `_fluxfiles/trash
 manifest (storage-resident, scoped by prefix/owner). Files **and folders** are
 supported; folders move the whole subtree incl. variants. All gated by the
 `delete` permission. Trash ids are validated `[A-Za-z0-9_-]`. Held paths
-(legal hold) can't be trashed/purged; `trash/empty` skips held entries and reports `{purged, held}`.
+(legal hold) can't be trashed/purged; `trash/empty` skips held entries and reports `{purged, held}`. `delete`/`trash`/`rename`/`move`/`cross-move` of the disk root (path `""`, `/`, `.`, `..`) → `403 root_forbidden`.
 
 - `POST /api/fm/trash` — JSON body: `disk`, `path`. Soft-delete to trash.
 - `POST /api/fm/trash/restore` — JSON body: `disk`, `trash_id`, optional `path`.

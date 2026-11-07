@@ -297,6 +297,7 @@
     "chmod_failed": "İzinler değiştirilemedi.",
     "chmod_forbidden": "İzinleri değiştirmeye izin verilmiyor.",
     "chmod_root_forbidden": "Kök klasörün izinleri değiştirilemez.",
+    "root_forbidden": "Disk kökü silinemez, çöp kutusuna taşınamaz, yeniden adlandırılamaz veya taşınamaz.",
     "disk_not_allowed": "Bu diske erişime izin verilmiyor.",
     "download_forbidden": "İndirmeye izin verilmiyor.",
     "edit_forbidden": "Düzenlemeye izin verilmiyor.",
