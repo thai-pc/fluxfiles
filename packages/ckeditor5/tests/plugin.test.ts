@@ -144,13 +144,30 @@ describe('inserting the selection', () => {
     expect(editor.getData()).toContain('alt="dog.JPG"');
   });
 
-  it('adds srcset when the payload carries img_srcset', async () => {
+  it('never saves the expiring img_srcset (token URLs) into content', async () => {
     const editor = await make();
     await pick(editor, {
       name: 'a.png', mime: 'image/png', permanent_url: 'https://cdn/a.png',
-      img_srcset: 'https://cdn/a-480.webp 480w, https://cdn/a-960.webp 960w', img_sizes: '100vw',
+      img_srcset: 'https://cdn/api/fm/img?token=T&width=480 480w', img_sizes: '100vw',
     });
-    expect(editor.getData()).toContain('srcset="https://cdn/a-480.webp 480w, https://cdn/a-960.webp 960w"');
+    const html = editor.getData();
+    expect(html).toContain('src="https://cdn/a.png"');
+    expect(html).not.toContain('srcset');
+    expect(html).not.toContain('token=');
+  });
+
+  it('refuses a selection whose only url is an expiring /img or /stream token URL', async () => {
+    const editor = await make();
+    await pick(editor, { name: 'a.png', mime: 'image/png', url: 'https://cdn/api/fm/img?token=T' });
+    await pick(editor, { name: 'b.mp4', url: 'https://cdn/api/fm/stream?x=1&token=T' });
+    expect(editor.getData()).not.toContain('token=');
+    expect(editor.getData()).not.toContain('<img');
+  });
+
+  it('absolutizes a root-relative url against the endpoint origin', async () => {
+    const editor = await make({ endpoint: 'https://fm.example.com/sub' });
+    await pick(editor, { name: 'a.png', mime: 'image/png', permanent_url: '/storage/uploads/a.png' });
+    expect(editor.getData()).toContain('src="https://fm.example.com/storage/uploads/a.png"');
   });
 
   it('inserts a non-image file as a link with the file name as text', async () => {
@@ -219,7 +236,7 @@ describe('convert helpers', () => {
     const i = fileInfo({ path: 'p', basename: 'b', url: 'https://s3/x?X-Amz-Signature=1', permanent_url: '' });
     expect(i.url).toContain('X-Amz-');
     expect(warn).toHaveBeenCalled();
-    expect(fileInfo({ path: 'p', basename: 'b', url: 'u', permanent_url: 'perm' }).url).toBe('perm');
+    expect(fileInfo({ path: 'p', basename: 'b', url: 'u', permanent_url: 'https://cdn/perm' }).url).toBe('https://cdn/perm');
   });
 
   it('selectedFiles normalises single, array and empty payloads', () => {

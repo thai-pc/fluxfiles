@@ -173,7 +173,25 @@ describe('Summernote FluxFiles plugin', () => {
     open.mock.calls[0][0].onSelect({ url: '/x" onerror="window.__XSS=1" y="', name: 'report.pdf', mime: 'application/pdf' });
     const html = pastedHtml(editorInvoke);
     expect(html).not.toContain('onerror="window.__XSS=1"');
-    expect(html).toContain('href="/x&quot; onerror=&quot;window.__XSS=1&quot; y=&quot;"');
+    // The URL is parsed (absolutized), so the quotes arrive percent-encoded, still inert.
+    expect(html).toMatch(/href="https?:\/\/[^"]*\/x%22%20onerror=%22window\.__XSS=1%22%20y=%22"/);
+  });
+
+  it('absolutizes a root-relative url against the endpoint and never inserts an expiring token url', () => {
+    const { buttonEl, editorInvoke, open } = loadPlugin();
+    buttonEl.__button.click();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: '/storage/uploads/a.pdf', name: 'a.pdf', mime: 'application/pdf' });
+    expect(pastedHtml(editorInvoke)).toContain('href="http://localhost/storage/uploads/a.pdf"');
+  });
+
+  it('refuses a selection whose only url is an expiring /img or /stream token url', () => {
+    const { buttonEl, editorInvoke, open } = loadPlugin();
+    buttonEl.__button.click();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: 'http://localhost/api/fm/img?token=T', name: 'a.png', mime: 'image/png' });
+    cfg.onSelect({ url: 'http://localhost/api/fm/stream?x=1&token=T', name: 'a.mp4' });
+    expect(editorInvoke.mock.calls.filter(c => c[0] === 'editor.pasteHTML')).toHaveLength(0);
   });
 
   it('skips folders (is_dir): no insert, no range restore', () => {

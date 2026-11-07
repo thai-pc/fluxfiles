@@ -61,12 +61,25 @@
         return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
+    // Selected URLs must be absolute and permanent. Older cores return a
+    // root-relative url ('/storage/uploads/x') that would resolve against the HOST
+    // page; resolve it against the FluxFiles endpoint's origin. And never let an
+    // expiring .../img|stream ?token= URL reach saved content.
+    function absUrl(u, endpoint) {
+        if (typeof u !== 'string' || u === '' || /^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
+        try { return new URL(u, endpoint || window.location.href).href; } catch (e) { return u; }
+    }
+    function isTokenUrl(u) {
+        return /\/(img|stream)(\.php)?\?([^#]*&)?token=/.test(u);
+    }
+
     // Build the HTML to insert for one selected file (shared contract with the
     // other editor plugins: <img> for images, <a> otherwise).
-    function fileToHtml(file) {
+    function fileToHtml(file, endpoint) {
         // Prefer a permanent URL (public disk / public_url) so saved content
         // doesn't embed an expiring presigned URL.
-        var url = file.permanent_url || file.url || '';
+        var url = absUrl(file.permanent_url || file.url || '', endpoint);
+        if (isTokenUrl(url)) { url = ''; } // expiring token URL: never save it
         var name = file.name || file.basename || file.path || '';
         var meta = file.meta || {};
 
@@ -137,7 +150,7 @@
                 context.invoke('editor.focus');
 
                 for (var i = 0; i < insertable.length; i++) {
-                    var html = fileToHtml(insertable[i]);
+                    var html = fileToHtml(insertable[i], opts.endpoint);
                     if (html === '') continue; // preview-only → already warned
                     context.invoke('editor.pasteHTML', html);
                 }

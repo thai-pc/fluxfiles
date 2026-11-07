@@ -248,6 +248,7 @@
     "upload_too_large": "文件太大（最大 {max}）",
     "too_many_files": "已达到文件数量上限（最多 {max}）",
     "ext_not_allowed": "不允许 .{ext} 文件类型",
+    "type_not_allowed": "此处不允许使用 {name} 的文件类型",
     "generic": "出了点问题，请重试。",
     "system_path": "无法操作此文件",
     "git_internal_path": "无法写入 git 内部路径",

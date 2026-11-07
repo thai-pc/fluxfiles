@@ -53,9 +53,22 @@
         );
     }
 
+    // Selected URLs must be absolute and permanent. Older cores return a
+    // root-relative url ('/storage/uploads/x') that would resolve against the HOST
+    // page; resolve it against the FluxFiles endpoint's origin. And never let an
+    // expiring .../img|stream ?token= URL reach saved content.
+    function absUrl(u, endpoint) {
+        if (typeof u !== 'string' || u === '' || /^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
+        try { return new URL(u, endpoint || window.location.href).href; } catch (e) { return u; }
+    }
+    function isTokenUrl(u) {
+        return /\/(img|stream)(\.php)?\?([^#]*&)?token=/.test(u);
+    }
+
     // Normalize a selected file into the bits the insert / dialog paths need.
-    function fileInfo(file) {
-        var url = file.permanent_url || file.url || '';
+    function fileInfo(file, endpoint) {
+        var url = absUrl(file.permanent_url || file.url || '', endpoint);
+        if (isTokenUrl(url)) { url = ''; } // expiring token URL: never save it
         var name = file.name || file.basename || file.path || '';
         var meta = file.meta || {};
         // Preview-only selection (no permanent_url/url) — e.g. a watermark OVERLAY
@@ -118,7 +131,7 @@
                     open(cfg, false, function (payload) {
                         var file = firstFile(payload);
                         if (!file) return;
-                        var info = fileInfo(file);
+                        var info = fileInfo(file, cfg.endpoint);
                         if (!info.embeddable) return; // preview-only → already warned
                         var set = function (id, val) {
                             var el = dialog.getContentElement('info', id);
@@ -154,7 +167,7 @@
                         for (var i = 0; i < files.length; i++) {
                             var file = files[i];
                             if (!file || file.is_dir) continue;
-                            var info = fileInfo(file);
+                            var info = fileInfo(file, cfg.endpoint);
                             if (!info.embeddable) continue; // preview-only → already warned
 
                             if (info.isImage) {

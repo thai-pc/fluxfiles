@@ -1352,10 +1352,86 @@ function fluxFilesApp() {
             this.sidebarOpen = false;
         },
 
+        // Make a root-relative / protocol-relative URL absolute against the origin
+        // that serves this iframe (core, or the Laravel/WordPress app that proxies
+        // it and serves the same storage). A relative '/storage/...' inserted into a
+        // host page would resolve against the HOST's origin and 404. Absolute URLs
+        // (S3/R2/CDN presigned) and non-strings pass through untouched.
+        _absUrl(u) {
+            if (typeof u !== 'string' || u === '' || /^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
+            try { return new URL(u, window.location.origin + '/').href; } catch (e) { return u; }
+        },
+        // img_srcset is "url 320w, url 640w": absolutize each candidate URL.
+        _absSrcset(v) {
+            if (typeof v !== 'string' || v === '') return v;
+            return v.split(',').map(c => {
+                const t = c.trim();
+                const i = t.search(/\s/);
+                return i < 0 ? this._absUrl(t) : this._absUrl(t.slice(0, i)) + t.slice(i);
+            }).join(', ');
+        },
+        _absVariants(vs) {
+            if (!vs || typeof vs !== 'object') return vs || null;
+            const out = {};
+            for (const k of Object.keys(vs)) {
+                const v = vs[k];
+                out[k] = (v && typeof v === 'object') ? Object.assign({}, v, { url: this._absUrl(v.url) }) : v;
+            }
+            return out;
+        },
+
+        // allowedTypes (SDK option): UI convenience only, NOT a security boundary —
+        // the server enforces the JWT allowed_ext claim. Entries are extensions
+        // ('.pdf', 'pdf') or MIME types / patterns ('image/*', 'application/pdf').
+        _allowedTypeList() {
+            const a = this.config && this.config.allowedTypes;
+            if (!Array.isArray(a)) return [];
+            return a.map(x => String(x || '').trim().toLowerCase()).filter(Boolean);
+        },
+        _typeExt(name) {
+            const n = String(name || '');
+            const i = n.lastIndexOf('.');
+            return i >= 0 ? n.slice(i + 1).toLowerCase() : '';
+        },
+        _fileMime(file) {
+            const m = file && (file.mime || (file.meta && file.meta.mime) || file.type);
+            if (typeof m === 'string' && m.indexOf('/') > 0) return m.toLowerCase();
+            const map = {
+                jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+                avif: 'image/avif', svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon',
+                mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+                mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac',
+                pdf: 'application/pdf', zip: 'application/zip', json: 'application/json',
+                txt: 'text/plain', csv: 'text/csv', html: 'text/html', md: 'text/markdown'
+            };
+            return map[this._typeExt(file && file.name)] || '';
+        },
+        // Folders always pass (navigation); files must match one entry when set.
+        _typeAllowed(file) {
+            const list = this._allowedTypeList();
+            if (!list.length || !file || file.type === 'dir') return true;
+            const ext = this._typeExt(file.name);
+            const mime = this._fileMime(file);
+            return list.some(t => {
+                if (t.indexOf('/') >= 0) {
+                    if (!mime) return false;
+                    return t.slice(-2) === '/*' ? mime.indexOf(t.slice(0, -1)) === 0 : mime === t;
+                }
+                return ext !== '' && ext === t.replace(/^\*?\./, '');
+            });
+        },
+        // Value for <input type=file accept>.
+        get uploadAccept() {
+            return this._allowedTypeList().map(t => t.indexOf('/') >= 0 || t.charAt(0) === '.' ? t : '.' + t.replace(/^\*\./, '')).join(',');
+        },
+        _refuseType(file) {
+            this.showToast(this.t('error.type_not_allowed', { name: (file && file.name) || '' }), 'error', 4000);
+        },
+
         // Build FM_SELECT payload from file/folder
         _toSelectPayload(item) {
             return {
-                url: item.url,
+                url: this._absUrl(item.url),
                 key: item.key,
                 name: item.name,
                 path: item.key,      // backward compat
@@ -1364,17 +1440,17 @@ function fluxFilesApp() {
                 disk: this.currentDisk,
                 created: item.created || null,   // unix seconds (stable upload/mkdir time)
                 modified: item.modified || null, // unix seconds (live storage mtime)
-                permanent_url: item.permanent_url || null,
+                permanent_url: this._absUrl(item.permanent_url) || null,
                 mime: item.mime || (item.meta && item.meta.mime) || null,
                 width: item.width || (item.meta && item.meta.width) || null,
                 height: item.height || (item.meta && item.meta.height) || null,
                 meta: item.meta || null,
-                variants: item.variants || null,
+                variants: this._absVariants(item.variants),
                 // On-demand WebP: img_base lets the host build any size via
                 // FluxFiles.imgUrl(file, {width, quality}); img_srcset/img_sizes are
                 // a ready responsive set. Present only for images when WebP is on.
-                img_base: item.img_base || null,
-                img_srcset: item.img_srcset || null,
+                img_base: this._absUrl(item.img_base) || null,
+                img_srcset: this._absSrcset(item.img_srcset) || null,
                 img_sizes: item.img_sizes || null,
                 type: item.type || 'file',
                 is_dir: item.type === 'dir'
@@ -1383,6 +1459,7 @@ function fluxFilesApp() {
 
         // File selection (single — from detail panel)
         selectFile(file) {
+            if (!this._typeAllowed(file)) { this._refuseType(file); return; }
             this.detailFile = file;
             this.selectedVariant = 'original';
             this.activeTab = 'info';
@@ -1454,10 +1531,11 @@ function fluxFilesApp() {
 
         // Select a specific variant (thumb/medium/large) or 'original'
         selectVariant(file, size) {
+            if (!this._typeAllowed(file)) { this._refuseType(file); return; }
             this.selectedVariant = size;
             var payload = this._toSelectPayload(file);
             if (size !== 'original' && file.variants && file.variants[size]) {
-                payload.url = file.variants[size].url;
+                payload.url = this._absUrl(file.variants[size].url);
                 payload.key = file.variants[size].key;
                 payload.variant = size;
             } else {
@@ -1470,6 +1548,8 @@ function fluxFilesApp() {
         // Multi-select: send selected items as array (when config.multiple)
         selectMultiple() {
             if (this.selected.length === 0) return;
+            const bad = this.selected.find(f => !this._typeAllowed(f));
+            if (bad) { this._refuseType(bad); return; }
             const payload = this.selected.map(item => this._toSelectPayload(item));
             this.postMessage('FM_SELECT', payload);
         },
@@ -1682,6 +1762,14 @@ function fluxFilesApp() {
         async uploadFiles(fileList) {
             if (!fileList || fileList.length === 0) return;
             let files = Array.from(fileList);
+
+            // allowedTypes (UI convenience; dropped files bypass the input's accept).
+            const typeBad = files.filter(f => !this._typeAllowed({ name: f.name, mime: f.type, type: 'file' }));
+            if (typeBad.length) {
+                this.showToast(this.t('error.ext_not_allowed', { ext: this._typeExt(typeBad[0].name) || typeBad[0].name }), 'error', 4000);
+                files = files.filter(f => !typeBad.includes(f));
+                if (files.length === 0) return;
+            }
 
             // Client-side size guard (MB). The server also enforces max_upload, but
             // checking here avoids uploading bytes that will be rejected with 413.
@@ -3622,6 +3710,8 @@ function fluxFilesApp() {
             const q = (this.searchQuery || '').toLowerCase();
             const arr = this.files.filter(f => {
                 if (!this._matchTypeFilter(f)) return false;
+                // Picker with allowedTypes: hide what could not be selected anyway.
+                if (this.config.mode === 'picker' && !this._typeAllowed(f)) return false;
                 if (!q) return true;
                 const name = (f.name != null && f.name !== '') ? String(f.name) : '';
                 if (name.toLowerCase().includes(q)) return true;

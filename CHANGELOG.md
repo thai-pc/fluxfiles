@@ -5,6 +5,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- **Picker URLs are absolute.** `FM_SELECT` (`url`, `permanent_url`, `variants[*].url`, `img_base`, `img_srcset`) used to carry the local disk's root-relative `/storage/uploads/x`, which resolved against the HOST page (404, or rewritten to a relative path by TinyMCE) in every wrapper and editor. The UI now resolves them against the origin that serves it (core, or the Laravel/WordPress app proxying it and serving the same storage); absolute S3/R2/CDN URLs are untouched. The CKEditor 4/5, TinyMCE and Summernote plugins also absolutize against `endpoint` (older cores) and refuse a selection whose only URL is an expiring `/img?token=` or `/stream?token=`.
+- **CKEditor 5 no longer saves expiring token URLs.** The plugin inserted `img_srcset` (`/api/fm/img?token=...`), which broke after about an hour and persisted a short-lived token into content. Only the permanent URL is inserted now.
+
+### Added
+- **`allowedTypes` is enforced by the UI.** Extensions (`.pdf`) and MIME patterns (`image/*`) hide non-matching files in picker mode, refuse selecting one (new `error.type_not_allowed`, all 16 languages), refuse non-matching uploads and set `accept` on the upload input. UI convenience, not a security boundary: the `allowed_ext` claim stays the server-side check.
+- Package patch bumps: `@fluxfiles/ckeditor4`, `ckeditor5`, `tinymce`, `summernote`.
+
 ## [1.0.18] — 2026-11-07
 
 > Released: `core-v1.1.5`.

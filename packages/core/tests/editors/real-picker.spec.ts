@@ -84,12 +84,21 @@ const FILE_URL = new RegExp(`/storage/uploads/`);
 
 // What the adapters must produce: an <img> whose src is the file's URL and whose alt is
 // the file name; a link whose href is the file's URL for a non-image.
+// The URL must be ABSOLUTE on the core origin (a relative one would resolve against
+// the host page and 404) and the saved HTML must never carry an expiring
+// /img|/stream ?token= URL.
+const ORIGIN_RE = `http://127\\.0\\.0\\.1:${CORE_PORT}`;
+function expectNoTokenUrl(html: string) {
+  expect(html).not.toMatch(/\/(img|stream)(\.php)?\?([^"#]*&)?token=/);
+}
 function expectImage(html: string, name: string) {
-  expect(html).toMatch(new RegExp(`<img[^>]*src="[^"]*/storage/uploads/${name}"`));
+  expect(html).toMatch(new RegExp(`<img[^>]*src="${ORIGIN_RE}/storage/uploads/${name}"`));
+  expectNoTokenUrl(html);
   expect(html).toContain(`alt="${name}"`);
 }
 function expectLink(html: string, name: string) {
-  expect(html).toMatch(new RegExp(`<a[^>]*href="[^"]*/storage/uploads/${name}"[^>]*>${name}</a>`));
+  expect(html).toMatch(new RegExp(`<a[^>]*href="${ORIGIN_RE}/storage/uploads/${name}"[^>]*>${name}</a>`));
+  expectNoTokenUrl(html);
 }
 
 // ── CKEditor 5 (bundled adapter source + real ckeditor5, licenseKey 'GPL') ──────────

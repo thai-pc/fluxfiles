@@ -351,7 +351,7 @@ function openFilePicker() {
         multiple: false,              // true = multi-select returns array
         locale: 'en',                 // default 'en' if omitted
         theme: 'auto',                // 'light', 'dark', or 'auto'
-        allowedTypes: ['image/*', '.pdf'],
+        allowedTypes: ['image/*', '.pdf'], // UI filter: extensions or MIME patterns (not a security boundary, see below)
         maxUploadMb: 10,              // MB — max size per file (deprecated alias: `maxSize` in bytes)
         maxFiles: 20,                 // max files per upload batch (0/omit = unlimited)
         container: '#my-div',         // CSS selector — omit for modal overlay
@@ -360,6 +360,8 @@ function openFilePicker() {
             // file = { url, permanent_url, key, name, path, size, disk,
             //          mime, width, height, created, modified, meta, variants }
             // created = stable upload time (folders carry it too); modified = live mtime.
+            // url / permanent_url / variants[*].url / img_base are ABSOLUTE (resolved against
+            // the origin serving the UI), so they work when inserted into your page.
             // For embedding in SAVED content, prefer permanent_url — `url` is a
             // short-lived presigned URL on private disks and will expire.
             const src = file.permanent_url || file.url;
@@ -383,6 +385,8 @@ function openFilePicker() {
 }
 </script>
 ```
+
+**`allowedTypes`** narrows what the picker lets a user pick and upload: entries are extensions (`'.pdf'`, `'pdf'`) or MIME types / patterns (`'image/*'`, `'application/pdf'`). Non-matching files are hidden in picker mode, refused at selection with a message, and the upload input gets a matching `accept`. It is a **UI convenience, not a security boundary**: enforce what may actually be stored with the token's `allowed_ext` claim (see [docs/reference/CONFIG.md](docs/reference/CONFIG.md)).
 
 #### Embedding selected files (`permanent_url` vs `url`)
 

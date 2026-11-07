@@ -248,6 +248,7 @@
     "upload_too_large": "Datei ist zu groß (max. {max})",
     "too_many_files": "Dateilimit erreicht (max. {max})",
     "ext_not_allowed": "Dateityp .{ext} ist nicht erlaubt",
+    "type_not_allowed": "{name} ist hier kein zulässiger Dateityp",
     "generic": "Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
     "system_path": "Diese Datei kann nicht bearbeitet werden",
     "git_internal_path": "In einen internen git-Pfad kann nicht geschrieben werden",

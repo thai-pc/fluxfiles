@@ -248,6 +248,7 @@
     "upload_too_large": "File quá lớn (tối đa {max})",
     "too_many_files": "Đã đạt giới hạn số tệp (tối đa {max})",
     "ext_not_allowed": "Loại file .{ext} không được phép",
+    "type_not_allowed": "{name} không phải là loại tệp được phép ở đây",
     "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
     "system_path": "Không thể thao tác trên file này",
     "git_internal_path": "Không thể viết vào đường dẫn nội bộ của git",

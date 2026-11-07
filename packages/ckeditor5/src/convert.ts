@@ -11,19 +11,31 @@ export interface FileInfo {
   title: string;
   width: number | null;
   height: number | null;
-  srcset: string;
-  sizes: string;
 }
 
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|svg|bmp|ico|avif)$/i;
+const TOKEN_URL = /\/(img|stream)(\.php)?\?([^#]*&)?token=/;
+
+function absUrl(u: string, endpoint: string): string {
+  if (u === '' || /^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
+  try {
+    return new URL(u, endpoint || window.location.href).href;
+  } catch {
+    return u;
+  }
+}
 
 /**
  * Normalise a FluxFiles `onSelect` entry. Same rules as the CKEditor 4 / TinyMCE
  * plugins: prefer `permanent_url`, refuse a preview-only selection (its only view
- * is a short-lived token URL), warn about presigned (expiring) URLs.
+ * is a short-lived token URL, so `img_srcset` is never inserted either), warn about presigned (expiring) URLs.
  */
-export function fileInfo(file: FluxFile): FileInfo {
-  const url = file.permanent_url || file.url || '';
+export function fileInfo(file: FluxFile, endpoint = ''): FileInfo {
+  // Absolute and permanent only: an older core returns a root-relative url that
+  // would resolve against the HOST page, and an /img|stream ?token= URL expires
+  // (and would persist a short-lived token into saved content).
+  let url = absUrl(file.permanent_url || file.url || '', endpoint);
+  if (TOKEN_URL.test(url)) url = '';
   const name = file.name || file.basename || file.path || '';
   const meta = file.meta || {};
   const embeddable = url !== '';
@@ -44,9 +56,6 @@ export function fileInfo(file: FluxFile): FileInfo {
     title: meta.title || name,
     width: file.width || null,
     height: file.height || null,
-    // Only a permanent URL set can carry a srcset; img_srcset is built from img_base.
-    srcset: isImage ? file.img_srcset || '' : '',
-    sizes: isImage ? file.img_sizes || '' : '',
   };
 }
 

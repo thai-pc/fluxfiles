@@ -78,7 +78,7 @@ and checks the iframe's origin on every message.
 | `locale` | string | | UI language code |
 | `theme` | string | | `light` / `dark` / `auto` |
 | `multiple` | boolean | `false` | Allow multi-file selection |
-| `allowedTypes` | string[] | | Restrict selectable types |
+| `allowedTypes` | string[] | | Restrict selectable/uploadable types: extensions (`.pdf`) or MIME patterns (`image/*`). UI convenience only; the token's `allowed_ext` claim is the server-side boundary |
 | `maxUploadMb` | number | | Max size per uploaded file, MB |
 | `maxFiles` | number | | Max files per upload batch |
 | `onTokenRefresh` | (ctx) => Promise\<string \| null\> | | Called when the picker gets a 401; return a fresh JWT |
