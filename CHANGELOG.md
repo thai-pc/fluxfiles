@@ -6,7 +6,17 @@ All notable changes to FluxFiles are documented here. This project adheres to
 ## [Unreleased]
 
 ### Security
+- **Core outbound HTTP is size-capped.** `CurlTransport` buffered the whole response; a hostile or compromised upstream could exhaust memory. It now takes an optional `$maxBytes` (default 8 MB), aborting on an oversized `Content-Length` or as soon as the streamed body crosses the cap, and answers like any transport failure (`status 0`, `error: response too large`). The `HttpTransportInterface` contract is unchanged. `OidcDiscovery` caps at 1 MB, `AiTagger` at 2 MB.
 - **Laravel adapter, non-`ApiException` errors.** The upload route answers an unexpected exception with core's envelope (`500`, `error_code: server_error`, generic message) instead of an ad-hoc `Upload failed`. The exception is reported through Laravel's `report()` (so the app's log channel gets it) and its text (SQLSTATE, host, port, paths) reaches the response only as `detail` when `app.debug` is on. The older `'Upload failed: ' . $e->getMessage()` leak had already been removed in `core-v1.1.3`; every other controller `catch (\Throwable)` answers a fixed string.
+
+### Added
+- `OidcDiscovery::forgetJwks(?string $jwksUri = null)`: drops the cached JWKS (one URI, or all) so the SSO module no longer recomputes core's cache file names.
+
+### Changed
+- Public page routes (`/api/fm/share/page`, `/api/fm/intake/page`) show a minimal HTML error page (right status, error code) when the module is missing, unlicensed or too old, instead of a raw JSON envelope. API routes keep JSON.
+
+### Documentation
+- CONFIG.md: `dlp_entity_types` default is the DLP module's PII set (not Presidio's full set); `allow_dlp_scan` notes zero-width stripping and NFKC normalisation (DLP module >= 1.1.0).
 
 ## [1.0.21] — 2026-11-08
 
