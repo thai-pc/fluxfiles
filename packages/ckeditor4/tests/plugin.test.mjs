@@ -32,6 +32,7 @@ function loadPlugin(fluxfilesConfig) {
     addCommand: (name, def) => { commands[name] = def; },
     ui: { addButton: (name, def) => { buttons[name] = def; } },
     insertHtml: vi.fn(),
+    showNotification: vi.fn(),
     execCommand: (name) => commands[name].exec(),
   };
   globalThis.__pluginDef.init(editor);
@@ -150,7 +151,68 @@ describe('CKEditor 4 FluxFiles plugin', () => {
     cfg.onSelect({ url: '/x" onerror="window.__XSS=1" y="', name: 'report.pdf', mime: 'application/pdf' });
     const html = editor.insertHtml.mock.calls[0][0];
     expect(html).not.toContain('onerror="window.__XSS=1"');
-    expect(html).toContain('href="/x&quot; onerror=&quot;window.__XSS=1&quot; y=&quot;"');
+    // The URL is parsed (absolutized), so the quotes arrive percent-encoded, still inert.
+    expect(html).toMatch(/href="https?:\/\/[^"]*\/x%22%20onerror=%22window\.__XSS=1%22%20y=%22"/);
+  });
+
+  it('absolutizes a root-relative url against the endpoint and never inserts an expiring token url', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: '/storage/uploads/a.pdf', name: 'a.pdf', mime: 'application/pdf' });
+    expect(editor.insertHtml.mock.calls[0][0]).toContain('href="http://localhost/storage/uploads/a.pdf"');
+  });
+
+  it('refuses a selection whose only url is an expiring /img or /stream token url', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: 'http://localhost/api/fm/img?token=T', name: 'a.png', mime: 'image/png' });
+    cfg.onSelect({ url: 'http://localhost/api/fm/stream?x=1&token=T', name: 'a.mp4' });
+    expect(editor.insertHtml.mock.calls).toHaveLength(0);
+  });
+
+  it('tells the user (notification) when a tokenized-only file is refused', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    open.mock.calls[0][0].onSelect({ url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'a.mp4' });
+    expect(editor.insertHtml).not.toHaveBeenCalled();
+    expect(editor.showNotification).toHaveBeenCalledTimes(1);
+    expect(editor.showNotification.mock.calls[0][0]).toMatch(/expiring link/);
+    expect(editor.showNotification.mock.calls[0][0]).not.toMatch(/watermark/);
+  });
+
+  it('never inserts a non-http(s) url (javascript:, data:, leading whitespace, mixed case)', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    for (const u of ['javascript:alert(1)', ' \tjava\nscript:alert(1)', '\u0001JaVaScRiPt:alert(1)', 'data:text/html,x', 'vbscript:x']) {
+      cfg.onSelect({ url: u, name: 'a.png', mime: 'image/png' });
+    }
+    expect(editor.insertHtml).not.toHaveBeenCalled();
+  });
+
+  it('HTML-encodes file names in the refusal notification (showNotification renders HTML)', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    open.mock.calls[0][0].onSelect({ url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: '<img src=x onerror="window.__XSS=1">.png', mime: 'image/png' });
+    const html = editor.showNotification.mock.calls[0][0];
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;img src=x onerror=');
+  });
+
+  it('reports several refusals of one selection in ONE notification', () => {
+    const { editor, open } = loadPlugin({ multiple: true });
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect([
+      { url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'one.mp4' },
+      { url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'two.mp4' },
+    ]);
+    expect(editor.showNotification).toHaveBeenCalledTimes(1);
+    const html = editor.showNotification.mock.calls[0][0];
+    expect(html).toContain('one.mp4');
+    expect(html).toContain('two.mp4');
   });
 
   it('skips folders (is_dir)', () => {

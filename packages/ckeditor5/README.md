@@ -78,12 +78,19 @@ and checks the iframe's origin on every message.
 | `locale` | string | | UI language code |
 | `theme` | string | | `light` / `dark` / `auto` |
 | `multiple` | boolean | `false` | Allow multi-file selection |
-| `allowedTypes` | string[] | | Restrict selectable types |
+| `allowedTypes` | string[] | | Extensions (`.pdf` or `pdf`) or MIME types / patterns (`image/*`). Picker mode only: non-matching files are hidden and cannot be selected. UI convenience, not a security boundary (the token's `allowed_ext` claim is the server-side check) |
 | `maxUploadMb` | number | | Max size per uploaded file, MB |
 | `maxFiles` | number | | Max files per upload batch |
 | `onTokenRefresh` | (ctx) => Promise\<string \| null\> | | Called when the picker gets a 401; return a fresh JWT |
 | `imageInsert` | boolean | `true` | Offer FluxFiles in the image insert dropdown |
 | `onInsert` | (files) => void | | Called after files were inserted |
+
+**Files with no permanent URL.** Two cases:
+
+- On a gated local disk (`FLUXFILES_LOCAL_PRIVATE`) or an SFTP disk without `public_url`, `permanent_url` is `null` and the only link is an expiring `/api/fm/img|stream?token=` URL. The plugin never saves that into content: it shows one notification (the Notification plugin, else `alert`) listing the refused files. Use a public disk or set `public_url`.
+- A private bucket without `public_url` yields a presigned URL (up to 24h). That one **is** still inserted, with a `console.warn`, and it stops working when it expires.
+
+Only `http(s)` URLs are ever inserted.
 
 ## API
 

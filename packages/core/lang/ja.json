@@ -248,6 +248,8 @@
     "upload_too_large": "ファイルが大きすぎます（最大 {max}）",
     "too_many_files": "ファイル数の上限に達しました（最大 {max}）",
     "ext_not_allowed": ".{ext} ファイル形式は許可されていません",
+    "type_not_allowed": "{name} はここでは許可されていないファイル形式です",
+    "type_not_allowed_many": "ここでは許可されていない形式のファイルをスキップしました: {names}",
     "generic": "問題が発生しました。もう一度お試しください。",
     "system_path": "このファイルは操作できません",
     "git_internal_path": "git の内部パスには書き込めません",

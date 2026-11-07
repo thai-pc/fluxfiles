@@ -31,6 +31,7 @@ function loadPlugin() {
       addMenuItem: (name, def) => { menuitems[name] = def; },
     } },
     insertContent: vi.fn(),
+    notificationManager: { open: vi.fn() },
   };
   globalThis.__tmceCb(editor);
   return { editor, settings, buttons, menuitems, open: globalThis.FluxFiles.open };
@@ -161,7 +162,69 @@ describe('TinyMCE FluxFiles plugin', () => {
     cfg.onSelect({ url: '/x" onerror="window.__XSS=1" y="', name: 'report.pdf', mime: 'application/pdf' });
     const html = editor.insertContent.mock.calls[0][0];
     expect(html).not.toContain('onerror="window.__XSS=1"');
-    expect(html).toContain('href="/x&quot; onerror=&quot;window.__XSS=1&quot; y=&quot;"');
+    // The URL is parsed (absolutized), so the quotes arrive percent-encoded, still inert.
+    expect(html).toMatch(/href="https?:\/\/[^"]*\/x%22%20onerror=%22window\.__XSS=1%22%20y=%22"/);
+  });
+
+  it('absolutizes a root-relative url against the endpoint and never inserts an expiring token url', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: '/storage/uploads/a.pdf', name: 'a.pdf', mime: 'application/pdf' });
+    expect(editor.insertContent.mock.calls[0][0]).toContain('href="http://localhost/storage/uploads/a.pdf"');
+  });
+
+  it('refuses a selection whose only url is an expiring /img or /stream token url', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: 'http://localhost/api/fm/img?token=T', name: 'a.png', mime: 'image/png' });
+    cfg.onSelect({ url: 'http://localhost/api/fm/stream?x=1&token=T', name: 'a.mp4' });
+    expect(editor.insertContent.mock.calls).toHaveLength(0);
+  });
+
+  it('tells the user (notification) when a tokenized-only file is refused', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    open.mock.calls[0][0].onSelect({ url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'a.mp4' });
+    expect(editor.insertContent).not.toHaveBeenCalled();
+    expect(editor.notificationManager.open).toHaveBeenCalledTimes(1);
+    const text = editor.notificationManager.open.mock.calls[0][0].text;
+    expect(text).toMatch(/expiring link/);
+    expect(text).not.toMatch(/watermark/);
+  });
+
+  it('never inserts a non-http(s) url (javascript:, data:, leading whitespace, mixed case)', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    for (const u of ['javascript:alert(1)', ' \tjava\nscript:alert(1)', '\u0001JaVaScRiPt:alert(1)', 'data:text/html,x', 'vbscript:x']) {
+      cfg.onSelect({ url: u, name: 'a.png', mime: 'image/png' });
+    }
+    expect(editor.insertContent).not.toHaveBeenCalled();
+  });
+
+  it('HTML-escapes file names in the refusal notification (TinyMCE 4/5 render text as HTML)', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    open.mock.calls[0][0].onSelect({ url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: '<img src=x onerror="window.__XSS=1">.png', mime: 'image/png' });
+    const text = editor.notificationManager.open.mock.calls[0][0].text;
+    expect(text).not.toContain('<img');
+    expect(text).toContain('&lt;img src=x onerror=');
+  });
+
+  it('reports several refusals of one selection in ONE notification', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect([
+      { url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'one.mp4' },
+      { url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'two.mp4' },
+    ]);
+    expect(editor.notificationManager.open).toHaveBeenCalledTimes(1);
+    const text = editor.notificationManager.open.mock.calls[0][0].text;
+    expect(text).toContain('one.mp4');
+    expect(text).toContain('two.mp4');
   });
 
   it('skips folders (is_dir)', () => {

@@ -26,6 +26,7 @@ async function pick(editor: ClassicEditor, payload: unknown) {
 }
 
 beforeEach(() => {
+  (window as unknown as { alert: unknown }).alert = vi.fn();
   openMock = vi.fn();
   (globalThis as { FluxFiles?: unknown }).FluxFiles = { open: openMock };
   host = document.createElement('div');
@@ -144,13 +145,30 @@ describe('inserting the selection', () => {
     expect(editor.getData()).toContain('alt="dog.JPG"');
   });
 
-  it('adds srcset when the payload carries img_srcset', async () => {
+  it('never saves the expiring img_srcset (token URLs) into content', async () => {
     const editor = await make();
     await pick(editor, {
       name: 'a.png', mime: 'image/png', permanent_url: 'https://cdn/a.png',
-      img_srcset: 'https://cdn/a-480.webp 480w, https://cdn/a-960.webp 960w', img_sizes: '100vw',
+      img_srcset: 'https://cdn/api/fm/img?token=T&width=480 480w', img_sizes: '100vw',
     });
-    expect(editor.getData()).toContain('srcset="https://cdn/a-480.webp 480w, https://cdn/a-960.webp 960w"');
+    const html = editor.getData();
+    expect(html).toContain('src="https://cdn/a.png"');
+    expect(html).not.toContain('srcset');
+    expect(html).not.toContain('token=');
+  });
+
+  it('refuses a selection whose only url is an expiring /img or /stream token URL', async () => {
+    const editor = await make();
+    await pick(editor, { name: 'a.png', mime: 'image/png', url: 'https://cdn/api/fm/img?token=T' });
+    await pick(editor, { name: 'b.mp4', url: 'https://cdn/api/fm/stream?x=1&token=T' });
+    expect(editor.getData()).not.toContain('token=');
+    expect(editor.getData()).not.toContain('<img');
+  });
+
+  it('absolutizes a root-relative url against the endpoint origin', async () => {
+    const editor = await make({ endpoint: 'https://fm.example.com/sub' });
+    await pick(editor, { name: 'a.png', mime: 'image/png', permanent_url: '/storage/uploads/a.png' });
+    expect(editor.getData()).toContain('src="https://fm.example.com/storage/uploads/a.png"');
   });
 
   it('inserts a non-image file as a link with the file name as text', async () => {
@@ -163,6 +181,21 @@ describe('inserting the selection', () => {
     const editor = await make();
     await pick(editor, { name: 'r.pdf', permanent_url: 'https://cdn/r.pdf', meta: { title: 'Annual report' } });
     expect(editor.getData()).toContain('>Annual report</a>');
+  });
+
+  it('reports several refusals of one selection in ONE notification', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const alertSpy = vi.fn();
+    (window as unknown as { alert: unknown }).alert = alertSpy;
+    const editor = await make({ multiple: true });
+    await pick(editor, [
+      { name: 'one.mp4', url: 'https://x/api/fm/stream?token=T' },
+      { name: '<img src=x onerror=1>.mp4', url: 'https://x/api/fm/stream?token=T' },
+    ]);
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy.mock.calls[0][0]).toContain('one.mp4');
+    expect(alertSpy.mock.calls[0][0]).toContain('<img src=x onerror=1>.mp4'); // plain-text channel
+    warn.mockRestore();
   });
 
   it('inserts every file of a multiple selection, skipping folders', async () => {
@@ -219,7 +252,21 @@ describe('convert helpers', () => {
     const i = fileInfo({ path: 'p', basename: 'b', url: 'https://s3/x?X-Amz-Signature=1', permanent_url: '' });
     expect(i.url).toContain('X-Amz-');
     expect(warn).toHaveBeenCalled();
-    expect(fileInfo({ path: 'p', basename: 'b', url: 'u', permanent_url: 'perm' }).url).toBe('perm');
+    expect(fileInfo({ path: 'p', basename: 'b', url: 'u', permanent_url: 'https://cdn/perm' }).url).toBe('https://cdn/perm');
+  });
+
+  it('refuses non-http(s) urls and reports every refusal through notify', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const notify = vi.fn();
+    for (const u of ['javascript:alert(1)', ' \tjava\nscript:alert(1)', '\u0001JaVaScRiPt:alert(1)', 'data:text/html,x', 'vbscript:x']) {
+      expect(fileInfo({ path: 'p', basename: 'b', url: u } as never, 'https://fm.example.com', notify).embeddable).toBe(false);
+    }
+    expect(notify).toHaveBeenCalledTimes(5);
+    const tok = fileInfo({ path: 'p', basename: 'b', name: 'a.mp4', url: 'https://x/api/fm/stream?token=T' } as never, '', notify);
+    expect(tok.embeddable).toBe(false);
+    expect(notify.mock.calls[5][0]).toMatch(/expiring link/);
+    expect(notify.mock.calls[5][0]).not.toMatch(/watermark/);
+    warn.mockRestore();
   });
 
   it('selectedFiles normalises single, array and empty payloads', () => {

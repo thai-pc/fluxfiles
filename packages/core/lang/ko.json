@@ -248,6 +248,8 @@
     "upload_too_large": "파일이 너무 큽니다 (최대 {max})",
     "too_many_files": "파일 개수 제한에 도달했습니다 (최대 {max})",
     "ext_not_allowed": ".{ext} 파일 유형은 허용되지 않습니다",
+    "type_not_allowed": "{name} 파일 형식은 여기서 허용되지 않습니다",
+    "type_not_allowed_many": "여기서 허용되지 않는 형식의 파일을 건너뛰었습니다: {names}",
     "generic": "문제가 발생했습니다. 다시 시도해 주세요.",
     "system_path": "이 파일은 작업할 수 없습니다",
     "git_internal_path": "git 내부 경로에는 쓸 수 없습니다",
