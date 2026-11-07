@@ -96,7 +96,7 @@ Keep the release signing key **offline and separate from the licence signing key
 sign different things: one says "this build is ours", the other says "this customer
 bought it".
 
-Point `FLUXFILES_UPDATE_URL` at it (default `https://updates.fluxfiles.dev`).
+Point `FLUXFILES_UPDATE_URL` at it (default `https://fluxfiles-updates.thai-pc.com`).
 
 ### Core-version compatibility
 
@@ -157,7 +157,7 @@ FLUXFILES_RESEND_API_KEY=re_…               # resend.com → API Keys
 # FLUXFILES_SMTP_HOST=…  FLUXFILES_SMTP_PORT=587
 # FLUXFILES_SMTP_USER=…  FLUXFILES_SMTP_PASS=…
 
-FLUXFILES_LANDING_ORIGIN=https://fluxfiles.dev   # the ONLY origin /claim answers
+FLUXFILES_LANDING_ORIGIN=https://fluxfiles.thai-pc.com   # the ONLY origin /claim answers
 ```
 
 Two things worth knowing before the first sale:

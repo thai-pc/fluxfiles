@@ -24,7 +24,7 @@ namespace FluxFiles;
  */
 final class ComplianceScorecard
 {
-    private const PRICING_URL = 'https://fluxfiles.dev/pricing';
+    private const PRICING_URL = 'https://fluxfiles.thai-pc.com/pricing/';
 
     /**
      * The static capability table — id/label/category/module/claim, in the
