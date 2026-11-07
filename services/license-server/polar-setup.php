@@ -68,13 +68,13 @@ const CATALOGUE = [
     'studio' => [
         'name' => 'FluxFiles Studio',
         'description' => 'Perpetual use of everything in Pro plus file versioning, webhooks and AI/OCR modules (bring your own API key), with one year of updates and priority support.',
-        'amount' => 29900,          // $299 / year — matches the landing's Pricing.astro
+        'amount' => 19900,          // $199 / year — matches the landing's Pricing.astro
         'recurring' => 'year',
     ],
     'studio-monthly' => [
         'name' => 'FluxFiles Studio (monthly)',
         'description' => 'Everything in Pro plus file versioning, webhooks and AI/OCR modules (bring your own API key). Billed monthly; a seven-day payment-recovery grace applies.',
-        'amount' => 2900,           // $29 / month — matches the landing
+        'amount' => 1900,           // $19 / month — matches the landing
         'recurring' => 'month',
     ],
     // Support = a standalone service subscription, no module unlock — for
