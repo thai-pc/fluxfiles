@@ -21,6 +21,7 @@ require_once __DIR__ . '/../../embed.php';
 use FluxFiles\Db\Connection;
 use FluxFiles\Db\DbMetadataHandler;
 use FluxFiles\Db\MigrationRunner;
+use FluxFiles\Db\RateLimiterDbStorage;
 use FluxFiles\DiskManager;
 
 $green  = "\033[32m";
@@ -447,6 +448,63 @@ test('allHolds() returns every hold on the disk, keyed by id', function () use (
     $all = $repo->allHolds($disk);
     assertTrue(isset($all['h1']), 'h1 should be present');
     assertTrue(isset($all['h4']), 'h4 should be present');
+});
+
+// ═══════════════════════════════════════════════════════════════
+echo "{$yellow}► RateLimiterDbStorage{$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+// Regression: on PostgreSQL the limiter's `SELECT COUNT(*) … FOR UPDATE` was
+// rejected ("FOR UPDATE is not allowed with aggregate functions"), 500-ing
+// every authenticated request in db mode.
+test('rate limiter: N hits allowed, N+1 refused with 429, per-key and per-bucket independent', function () use ($conn) {
+    $conn->pdo()->exec('DELETE FROM rate_limits');
+    $limiter = new RateLimiterDbStorage($conn, readLimit: 3, writeLimit: 2, windowSeconds: 60);
+    for ($i = 0; $i < 3; $i++) {
+        $limiter->check('rl-user', 'read');
+    }
+    $code = null;
+    try {
+        $limiter->check('rl-user', 'read');
+    } catch (\FluxFiles\ApiException $e) {
+        $code = $e->getHttpCode();
+    }
+    assertEqual(429, $code, 'the 4th read must be refused');
+    $limiter->check('rl-user', 'write');
+    $limiter->check('other-user', 'read');
+    assertEqual(3, (int) $conn->pdo()->query("SELECT COUNT(*) FROM rate_limits WHERE identifier = 'rl-user' AND bucket = 'read'")->fetchColumn(), 'refused hit is not recorded');
+});
+
+test('rate limiter: concurrent checks on a warm key never exceed the limit', function () use ($conn, $dsn, $user, $pass) {
+    $conn->pdo()->exec('DELETE FROM rate_limits');
+    $limit = 5;
+    $autoload = realpath(__DIR__ . '/../../vendor/autoload.php');
+    $embed = realpath(__DIR__ . '/../../embed.php');
+    // Warm the key with one hit so the row lock has something to serialise on.
+    (new RateLimiterDbStorage($conn, readLimit: $limit, writeLimit: $limit, windowSeconds: 60))->check('rl-conc', 'read');
+    $script = tempnam(sys_get_temp_dir(), 'ff_rl_worker_') . '.php';
+    file_put_contents($script, '<?php require ' . var_export($autoload, true) . '; require ' . var_export($embed, true) . ';'
+        . '$c = new \\FluxFiles\\Db\\Connection(' . var_export($dsn, true) . ', ' . var_export($user, true) . ', ' . var_export($pass, true) . ');'
+        . '$l = new \\FluxFiles\\Db\\RateLimiterDbStorage($c, readLimit: ' . $limit . ', writeLimit: ' . $limit . ', windowSeconds: 60);'
+        . 'try { $l->check("rl-conc", "read"); echo "OK"; } catch (\\FluxFiles\\ApiException $e) { echo "LIMITED"; }');
+    $procs = [];
+    $pipes = [];
+    for ($i = 0; $i < 12; $i++) {
+        $procs[$i] = proc_open(['php', $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes[$i]);
+    }
+    $ok = 0;
+    foreach ($pipes as $i => $p) {
+        $out = stream_get_contents($p[1]);
+        stream_get_contents($p[2]);
+        proc_close($procs[$i]);
+        if ($out === 'OK') {
+            $ok++;
+        } elseif ($out !== 'LIMITED') {
+            throw new \RuntimeException('worker produced unexpected output: ' . $out);
+        }
+    }
+    @unlink($script);
+    assertEqual($limit - 1, $ok, 'exactly the remaining slots must be accepted');
 });
 
 // ═══════════════════════════════════════════════════════════════

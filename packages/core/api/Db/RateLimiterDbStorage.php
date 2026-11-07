@@ -47,14 +47,22 @@ final class RateLimiterDbStorage implements RateLimiterStorageInterface
         $this->db->beginExclusive();
         $limited = false;
         try {
+            if ($this->db->driver() === 'pgsql') {
+                // READ COMMITTED + FOR UPDATE would not see a row a concurrent hit committed
+                // while we waited, so serialise per key on a transaction-scoped advisory lock.
+                $pdo->prepare('SELECT pg_advisory_xact_lock(hashtext(?))')
+                    ->execute([$this->table . "\0" . $identifier . "\0" . $actionType]);
+            }
             $del = $pdo->prepare("DELETE FROM {$this->table} WHERE identifier = ? AND bucket = ? AND ts <= ?");
             $del->execute([$identifier, $actionType, $windowStart]);
 
             $forUpdate = $this->db->dialect()->forUpdateSuffix();
-            $cnt = $pdo->prepare("SELECT COUNT(*) FROM {$this->table} WHERE identifier = ? AND bucket = ?{$forUpdate}");
+            // Lock the key's hit rows and count them in PHP: PostgreSQL rejects
+            // FOR UPDATE combined with an aggregate (COUNT(*)).
+            $cnt = $pdo->prepare("SELECT id FROM {$this->table} WHERE identifier = ? AND bucket = ?{$forUpdate}");
             $cnt->execute([$identifier, $actionType]);
 
-            if ((int) $cnt->fetchColumn() >= $limit) {
+            if (count($cnt->fetchAll(\PDO::FETCH_COLUMN)) >= $limit) {
                 $limited = true;
             } else {
                 $ins = $pdo->prepare("INSERT INTO {$this->table} (identifier, bucket, ts) VALUES (?, ?, ?)");

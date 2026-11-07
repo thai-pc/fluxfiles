@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- DB storage backend on PostgreSQL: every authenticated request returned 500. The rate limiter ran `SELECT COUNT(*) … FOR UPDATE`, which PostgreSQL rejects ("FOR UPDATE is not allowed with aggregate functions"). It now locks the key's hit rows (`SELECT id … FOR UPDATE`) and counts in PHP, and on PostgreSQL also takes a per-key transaction advisory lock, because READ COMMITTED would not see a hit committed by a concurrent request while waiting. The env-gated MySQL/PostgreSQL DB tests now exercise the limiter (N allowed, N+1 refused, concurrent hits never overshoot).
+
 ## [1.0.18] — 2026-11-07
 
 > Released: `core-v1.1.5`.
