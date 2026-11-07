@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.17] — 2026-11-07
+
+> Released: `core-v1.1.4`, `laravel-v1.0.5` (security). Advisories: GHSA-vvvg-2h5f-m3jh (virus/DLP scan skipped on copy / cross-disk copy / move), GHSA-3p3g-64qj-r33x (watermark removal recreates a deleted file, owner_only bypass). Modules: `intake` v1.5.2, `legal-hold` v1.2.2, `audit-export` v1.2.0 (needs core ^1.1.4).
+
 ### Security
 - **Virus/DLP scanning now covers copy and cross-disk copy/move.** `copy()`, `crossCopy()` and `crossMove()` never ran the scanners, so a stored EICAR could be duplicated under a scanning token and content from an unscanned disk could enter a scanned one. The stored source is now streamed to a temp file and scanned (fail-closed, same `virus_detected` / `pii_detected` / engine-down errors as upload) before anything is written. The destination is written from the scanned temp file, never from a second read of the source, which closes a mid-scan swap of the source bytes. With a scanner wired, cross-disk copy/move skip `_variants/` (a regenerable cache) so unscanned variant bytes cannot ride along, and a same-disk S3 copy downloads the object instead of using a server-side CopyObject. Same-disk move, rename, folder move, trash restore and `removeWatermark` stay unscanned by design (no new object).
 - **`removeWatermark` could resurrect a deleted file (owner_only bypass).** A user deleting a watermarked image left its pre-watermark original under `_fluxfiles/originals/`; another `owner_only` user calling remove-watermark on that path recreated the file from it, with no ownership, quota or scan check. `removeWatermark` now 404s when the file does not exist, and a kept original is only used while a sha256 sidecar (`_fluxfiles/originals.sum/`) matches the file's current bytes (a stale one is overwritten on the next burn). A backup without a sidecar (left by older cores, which never deleted it with the file) is never trusted: it is dropped on first touch, so "remove watermark" is no longer available for images burned in before this release (the next burn takes a fresh backup of the current bytes). The original is dropped on delete, trash and cross-disk move, and follows the file on rename and move (folders included). A trashed-then-restored image therefore keeps its burned-in mark and cannot be un-watermarked.
@@ -18,6 +22,11 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 - `POST /api/fm/fixity/check` logs a `fixity_check` audit entry per run with `file_key` = the token's scope root (never the request body's `path`) and detail `mac=<baseline_mac>`; audit-export compares the manifest with the latest anchor, so a deleted (`missing`) or replayed (`stale`) `fixity.json` is reported. The Laravel and WordPress proxies log the same entry (Laravel did not log one before).
 - Optional `{"rebaseline": true}` body flag, passed as a 5th positional argument to `runFixityCheck` (the interface keeps its 4-argument shape); a module whose method takes fewer than 5 parameters answers `501 module_update_required`. Honoured only over an invalid baseline; core and both proxies log `fixity_rebaseline` (new action label in all 16 languages).
+
+### Laravel adapter (`laravel-v1.0.5`)
+
+- Requires `fluxfiles/fluxfiles` `^1.1.4`, so a Laravel install can no longer resolve a core without the fixes above (and those in 1.0.16).
+- Proxies the safe `dry_run` parsing and the fixity `rebaseline` flag / `fixity_check` audit anchor, same as core.
 
 ## [1.0.16] — 2026-11-07
 
