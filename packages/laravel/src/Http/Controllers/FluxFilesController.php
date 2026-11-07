@@ -1588,7 +1588,8 @@ class FluxFilesController
             }
             $fm = $this->fileManager($claims);
             $m = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\ModuleRegistry::license(), $claims);
-            $dryRun = filter_var($request->input('dry_run', true), FILTER_VALIDATE_BOOLEAN);
+            // Fail safe: only an explicit false (false, int 0, or the string 0/false/no/off) runs live; anything else is a dry run.
+            $dryRun = !(($raw = $request->json('dry_run', true)) === false || $raw === 0 || (is_string($raw) && in_array(strtolower(trim($raw, " \t\n\r")), ['0', 'false', 'no', 'off'], true)));
             if ($m instanceof \FluxFiles\RetentionProviderInterface) {
                 $report = $m->runRetention($fm, $disk, $dryRun);
             } elseif (method_exists($fm, 'runRetention')) {

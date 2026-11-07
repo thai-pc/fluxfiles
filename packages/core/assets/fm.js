@@ -3931,11 +3931,16 @@ function fluxFilesApp() {
             this.showRetention = true;
         },
         closeRetention() { this.showRetention = false; },
+        // Items the sweep would act on: held files are listed but never touched.
+        get retentionActionable() {
+            const items = this.retentionResult && this.retentionResult.items;
+            return items ? items.filter(it => it.result !== 'held').length : 0;
+        },
 
         // Apply only after a preview, and confirm — it trashes/deletes in bulk.
         async runRetention(dryRun) {
             if (this.retentionBusy) return;
-            if (!dryRun && !window.confirm(this.t('retention.confirm', { count: this.retentionResult ? this.retentionResult.items.length : 0 }))) return;
+            if (!dryRun && !window.confirm(this.t('retention.confirm', { count: this.retentionActionable }))) return;
             this.retentionBusy = true;
             this.retentionMode = dryRun ? 'preview' : 'apply';
             this.retentionError = '';
