@@ -99,6 +99,9 @@ If you cannot use WP-CLI, trigger the same indexing by re-uploading files throug
 
 == Frequently Asked Questions ==
 
+= Can I put two [fluxfiles] shortcodes on one page? =
+No: the file manager runs in a single frame per page, so only the first one loads and later ones show a notice.
+
 = What storage backends are supported? =
 
 Local disk, AWS S3, and Cloudflare R2, configured in Settings. You can configure multiple disks and allow users to switch between them. SFTP has no Settings screen: a developer mints a BYOB token that carries the server details.
@@ -121,7 +124,7 @@ live on S3/R2 or in FluxFiles' own local storage folder, not in WordPress's date
 New installs use the "fluxfiles" folder inside your WordPress uploads folder (usually wp-content/uploads/fluxfiles/), which most hosts back up and keep across deployments. Sites that already had wp-content/fluxfiles/ keep it; nothing is moved when you update. You can choose another location with the FLUXFILES_STORAGE_DIR constant in wp-config.php or the fluxfiles_storage_base filter. Because FluxFiles stores the location, not a full path, a moved or cloned site follows its own folders. Some media-cleaner plugins may list the files under uploads/fluxfiles as unused media; exclude that folder from them.
 
 = What happens to my data when I delete the plugin? =
-By default deleting FluxFiles removes only its settings and rate-limit counters. Your files, their metadata, trash, audit log and legal-hold tables, and the secret key (it signs the audit log) are kept, so reinstalling picks everything up again. To remove everything, tick "Delete all FluxFiles data when the plugin is deleted" in Settings > FluxFiles before deleting the plugin. Then the database tables, the secret and the files FluxFiles wrote in its own storage folder are permanently removed. Nothing is deleted at a custom location set with FLUXFILES_STORAGE_DIR or the fluxfiles_storage_base filter, and files on S3, R2 or SFTP are never touched.
+By default deleting FluxFiles removes only its settings and rate-limit counters. Your files, their metadata, trash, audit log and legal-hold tables, and the secret key (it signs the audit log) are kept, so reinstalling picks everything up again. To remove everything, tick "Delete all FluxFiles data when the plugin is deleted" in Settings > FluxFiles before deleting the plugin. Then the database tables, the secret, the trash, the generated variants and the other FluxFiles bookkeeping in its storage folder (the `_fluxfiles/` and `_variants/` directories) are permanently removed. The files in the storage folder are never deleted, whoever put them there; remove the folder by hand if you no longer need them. At a custom location set with FLUXFILES_STORAGE_DIR or the fluxfiles_storage_base filter only the rate-limit counters are deleted, and files on S3, R2 or SFTP are never touched.
 
 = Where are warnings logged? =
 
@@ -129,7 +132,7 @@ Operational warnings are written to the PHP error log only when `WP_DEBUG` / `WP
 
 = My site runs on nginx. Is the uploads folder protected? =
 
-Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The storage folder is `/wp-content/uploads/fluxfiles/` on new installs and `/wp-content/fluxfiles/` on older ones. While the local disk is public, the Plugins screen and Settings → FluxFiles show the nginx rules to add (no PHP execution, HTML/SVG/XML served inert, `_fluxfiles/` denied) — or turn on private local storage. Independently of the server, users without the `unfiltered_html` capability can never upload HTML, SVG, XML, JavaScript or PHP files through FluxFiles.
+Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The storage folder is `/wp-content/uploads/fluxfiles/` on new installs and `/wp-content/fluxfiles/` on older ones. While the local disk is public, the Plugins screen and Settings → FluxFiles show the nginx rules to add (no PHP execution, HTML/SVG/XML served inert, `_fluxfiles/` denied) — or turn on private local storage (Settings > FluxFiles) and deny the folder; the notice then shows the one-line rule. Independently of the server, users without the `unfiltered_html` capability can never upload HTML, SVG, XML, JavaScript or PHP files through FluxFiles.
 
 == Screenshots ==
 
@@ -141,6 +144,13 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 == Changelog ==
 
 = 1.1.0 =
+* Fix: on a multisite network, activating FluxFiles network-wide set up only the main site; every other site failed with "Unable to generate token". Network activation now initialises every existing site, new sites are set up when they are created, and a site that was missed is set up on its first request. Deleting the plugin cleans every site.
+* Fix: "Delete all FluxFiles data" no longer deletes your files. It removes FluxFiles' own bookkeeping (trash, audit log, index, generated variants, protection files) and never the files in the storage folder, including files that were there before FluxFiles.
+* Fix: on private local storage the block and the classic editor button no longer save a link that stops working after an hour. They explain that private files have no permanent link and insert nothing.
+* New: Settings has a "Private local storage" switch. On Apache the folder is then denied; on nginx a notice shows the rule to add.
+* The JWT secret and the S3/R2 secret keys are no longer written into the Settings page; leave the field empty to keep the stored value.
+* Fix: two `[fluxfiles]` shortcodes on one page no longer silently replace each other; the second shows a notice (one file manager per page).
+* Fix: file rate-limit counters are removed on uninstall; the block uses block API version 3 and no longer logs a React key warning; Contributors get a message that fits their role instead of "not configured"; Settings and shortcode messages are translatable.
 * FluxFiles is now listed on WordPress.org. The plugin no longer checks for updates itself: WordPress.org delivers them.
 * The paid modules (Share, Intake, versioning, webhooks, compliance tools) moved to the separate FluxFiles Pro add-on. This plugin keeps every free feature and provides hooks for the add-on.
 * Share and Intake links now use the site's REST URL (the old `public-link.php` entry point is gone).
@@ -195,7 +205,7 @@ First public release. WordPress adapter for the FluxFiles file manager:
 == Upgrade Notice ==
 
 = 1.1.0 =
-Share, Intake and the compliance tools now come from the separate FluxFiles Pro add-on. The free file manager is unchanged.
+Share, Intake and the compliance tools now come from the separate FluxFiles Pro add-on. The free file manager is unchanged. Multisite network activation now sets up every site, and deleting data leaves your files alone.
 
 = 1.0.4 =
 Share and Intake links now open the site that created them on multisite, and work with plain permalinks. No action needed.

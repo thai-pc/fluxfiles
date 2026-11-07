@@ -269,3 +269,55 @@ test('wordpress free build: opening a .js file mounts a CodeMirror editor', asyn
   }, name);
   await expect(fm.locator('.ff-editor-modal .CodeMirror')).toBeVisible({ timeout: 15_000 });
 });
+
+// Settings page: the stored secret is never written into the page source, and the
+// private-local switch (the one the readme and the nginx notice point at) is a real field.
+test('wordpress settings: the secret is not echoed, private local storage is a setting', async ({ page }) => {
+  await loginAdmin(page);
+  const res = await page.request.get(`${BASE}/wp-admin/options-general.php?page=fluxfiles`);
+  expect(res.ok()).toBeTruthy();
+  const html = await res.text();
+  expect(html).not.toContain('wp-e2e-secret-0123456789abcdefgh');           // setup.sh's JWT secret
+  expect(html).toMatch(/name="fluxfiles_secret"[^>]*value=""/);
+  expect(html).toMatch(/name="fluxfiles_local_private"[^>]*value="1"[^>]*checked/); // setup.sh turned it on
+});
+
+// The SDK drives one iframe per page: a second [fluxfiles] must say so, not replace the first.
+test('wordpress shortcode: a second [fluxfiles] on a page shows a notice, the first stays', async ({ page }) => {
+  await loginAdmin(page);
+  const out = execFileSync('npx', ['--yes', '@wordpress/env', 'run', 'cli', 'wp', 'post', 'create', '--post_type=page',
+    '--post_status=publish', '--post_title=Two', '--post_name=two-managers', '--porcelain',
+    '--post_content=[fluxfiles disk="local" mode="browser" height="300px"] [fluxfiles disk="local" mode="browser" height="300px"]'],
+    { cwd: dirname(fileURLToPath(import.meta.url)) });
+  try {
+    await page.goto(`${BASE}/two-managers/`);
+    await expect(page.frameLocator('iframe').first().locator('.ff-app')).toBeVisible({ timeout: 25_000 });
+    expect(await page.locator('iframe').count()).toBe(1);
+    await expect(page.locator('.fluxfiles-error')).toContainText('only one file manager');
+  } finally {
+    wpCli('post', 'delete', out.toString().trim(), '--force');
+  }
+});
+
+// Block editor: API v3, no React "key" warning, and the URL helper that keeps expiring
+// /stream?token= links out of saved posts is loaded in a real editor.
+test('wordpress block: API v3, no key warning, token URLs refused by the helper', async ({ page }) => {
+  await loginAdmin(page);
+  const warnings: string[] = [];
+  page.on('console', (m) => { if (/unique "key" prop/.test(m.text())) warnings.push(m.text()); });
+  await page.goto(`${BASE}/wp-admin/post-new.php`, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => !!(window as any).wp?.blocks?.getBlockType('fluxfiles/image'), null, { timeout: 25_000 });
+  const r = await page.evaluate(() => {
+    const w = window as any;
+    const t = w.wp.blocks.getBlockType('fluxfiles/image');
+    const gated = w.FluxFilesPickerUrl.resolve({ url: 'http://localhost:8888/wp-json/fluxfiles/v1/api/fm/stream?disk=local&path=a.png&token=T', permanent_url: null }, 'http://localhost:8888');
+    const ok = w.FluxFilesPickerUrl.resolve({ url: '/wp-content/uploads/fluxfiles/uploads/a.png' }, 'http://localhost:8888');
+    w.wp.data.dispatch('core/block-editor').insertBlock(w.wp.blocks.createBlock('fluxfiles/image', { url: 'http://localhost:8888/a.png', id: 5 }));
+    return { api: t.apiVersion, gated, ok };
+  });
+  expect(r.api).toBe(3);
+  expect(r.gated).toEqual({ url: '', reason: 'token' });
+  expect(r.ok.url).toBe('http://localhost:8888/wp-content/uploads/fluxfiles/uploads/a.png');
+  await page.waitForTimeout(1000);
+  expect(warnings).toEqual([]);
+});

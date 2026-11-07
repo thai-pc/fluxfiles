@@ -22,7 +22,7 @@ class FluxFilesShortcode
     public function render($atts = []): string
     {
         if (!is_user_logged_in()) {
-            return '<p class="fluxfiles-login-required">Please log in to use the file manager.</p>';
+            return '<p class="fluxfiles-login-required">' . esc_html__('Please log in to use the file manager.', 'fluxfiles') . '</p>';
         }
 
         $atts = shortcode_atts([
@@ -36,7 +36,7 @@ class FluxFilesShortcode
         try {
             $token = FluxFilesPlugin::tokenForCurrentUser();
         } catch (\Throwable $e) {
-            return '<p class="fluxfiles-error">FluxFiles: Unable to generate token.</p>';
+            return '<p class="fluxfiles-error">' . esc_html(self::tokenFailureMessage()) . '</p>';
         }
 
         $endpoint    = FluxFilesPlugin::apiEndpoint();
@@ -53,6 +53,11 @@ class FluxFilesShortcode
         $height = esc_attr($atts['height']);
 
         $locale = substr(get_locale(), 0, 2);
+
+        // The SDK drives ONE iframe per page (a module-level singleton: open() closes
+        // the previous one), so a second [fluxfiles] would silently replace the first.
+        // The first container to load wins; later ones show this notice instead.
+        $dupJson = wp_json_encode(__('FluxFiles: only one file manager can be embedded per page, so this one was not loaded.', 'fluxfiles'));
 
         $configJson = wp_json_encode([
             'endpoint'  => $endpoint,
@@ -77,6 +82,12 @@ class FluxFilesShortcode
         // it no-ops unless its container is really in the page, else it would tear down the real embed.
         $js = "document.addEventListener('DOMContentLoaded', function () {\n"
             . '    if (!document.querySelector(' . wp_json_encode("#{$containerId}") . ") || typeof FluxFiles === 'undefined') { return; }\n"
+            . '    var box = document.querySelector(' . wp_json_encode("#{$containerId}") . ");\n"
+            . "    if (window.fluxfilesShortcodeOpen) {\n"
+            . '        box.className = \'fluxfiles-error\'; box.style.height = \'auto\'; box.textContent = ' . $dupJson . ";\n"
+            . "        return;\n"
+            . "    }\n"
+            . "    window.fluxfilesShortcodeOpen = true;\n"
             . '    FluxFiles.open(Object.assign(' . $configJson . ", {\n"
             . "        onTokenRefresh: function () {\n"
             . '            return fetch(' . $tokenUrlJs . ", {\n"
@@ -97,5 +108,22 @@ class FluxFilesShortcode
             $width,
             $height
         );
+    }
+
+    /**
+     * Why no token could be minted, worded for who is looking: a visitor who may
+     * not use the file manager, an admin who has to fix the setup, or an editor who
+     * has to ask one.
+     */
+    private static function tokenFailureMessage(): string
+    {
+        $cap = class_exists('FluxFilesApi') ? FluxFilesApi::requiredCapability() : 'upload_files';
+        if (!current_user_can($cap)) {
+            return __('FluxFiles: your account is not allowed to use the file manager.', 'fluxfiles');
+        }
+        if (current_user_can('manage_options')) {
+            return __('FluxFiles: unable to generate a token. Check the secret key in Settings → FluxFiles.', 'fluxfiles');
+        }
+        return __('FluxFiles: the file manager is not available right now. Please contact the site administrator.', 'fluxfiles');
     }
 }

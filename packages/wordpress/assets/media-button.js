@@ -8,6 +8,8 @@
     var closeBtn = modal.querySelector('.fluxfiles-modal-close');
     var body = document.getElementById('fluxfiles-modal-body');
     var config = boot.config;
+    var PU = window.FluxFilesPickerUrl;
+    var refused = [];
 
     function openModal() {
         modal.style.display = 'flex';
@@ -22,11 +24,8 @@
                 .catch(function () { return null; });
         };
         config.onSelect = function(file) {
-            if (Array.isArray(file)) {
-                file.forEach(function(f) { insertFile(f); });
-            } else {
-                insertFile(file);
-            }
+            var picks = Array.isArray(file) ? file : [file];
+            Promise.all(picks.map(insertFile)).then(flushRefused);
             closeModal();
         };
         FluxFiles.open(config);
@@ -40,8 +39,16 @@
 
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-    function emit(file, attachId) {
-        var url = file.url || '';
+    // `permanentUrl` is the attachment's own (stable) URL when the bridge made one.
+    function emit(file, attachId, permanentUrl) {
+        // Never save an expiring /img|/stream ?token= link (private local / SFTP): it
+        // 403s after an hour. Only http(s) URLs; otherwise refuse, visibly.
+        var r = PU.resolve(permanentUrl ? { url: permanentUrl } : file, config.endpoint);
+        var url = r.url;
+        if (url === '') {
+            refused.push(PU.refusalMessage(r.reason, file.basename || file.name || file.path || file.key || '', window.wp && window.wp.i18n));
+            return;
+        }
         var name = file.basename || file.name || file.path || file.key || '';
         var alt = (file.meta && (file.meta.alt || file.meta.title)) || name;
         var isImg = /\.(jpe?g|png|gif|webp|avif|svg)$/i.test(name);
@@ -59,10 +66,19 @@
         }
     }
 
+    // One plain-text alert per selection (alert() never renders HTML, so file names are safe).
+    function flushRefused() {
+        if (!refused.length) return;
+        var lines = refused.slice(0, 5);
+        if (refused.length > 5) lines.push('… +' + (refused.length - 5));
+        refused = [];
+        window.alert(lines.join('\n'));
+    }
+
     function insertFile(file) {
         // Register the pick as a WP attachment (served from your bucket), then
         // insert it. If the bridge fails/returns nothing, still insert the URL.
-        fetch(boot.attachUrl, {
+        return fetch(boot.attachUrl, {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': boot.nonce },
@@ -77,7 +93,7 @@
             })
         })
             .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (j) { emit(file, j && j.data && j.data.id); })
+            .then(function (j) { emit(file, j && j.data && j.data.id, j && j.data && j.data.id && j.data.url); })
             .catch(function () { emit(file, 0); });
     }
 

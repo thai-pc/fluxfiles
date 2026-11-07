@@ -46,6 +46,7 @@ class FluxFilesMediaIntegration
             FLUXFILES_VERSION,
             true
         );
+        wp_set_script_translations('fluxfiles-media-integration', 'fluxfiles');
         wp_enqueue_style('fluxfiles-admin', FLUXFILES_PLUGIN_URL . 'assets/admin.css', [], FLUXFILES_VERSION);
 
         $token = '';

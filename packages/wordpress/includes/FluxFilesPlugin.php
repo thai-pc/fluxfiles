@@ -34,6 +34,12 @@ class FluxFilesPlugin
         }
 
         register_activation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'activate']);
+        add_action('wp_initialize_site', [self::class, 'onNewSite'], 900);
+        add_action('init', [self::class, 'ensureSiteReady'], 1);
+        // Flipping private local storage rewrites the uploads .htaccess on save, not on the
+        // next API call (extra hook arguments are ignored by protectStorage()).
+        add_action('add_option_fluxfiles_local_private', [self::class, 'protectStorage']);
+        add_action('update_option_fluxfiles_local_private', [self::class, 'protectStorage']);
         register_deactivation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'deactivate']);
         add_action('admin_init', [FluxFilesDbSchema::class, 'maybeUpgrade']);
 
@@ -97,7 +103,91 @@ class FluxFilesPlugin
     /**
      * Plugin activation — create storage directory and set default options.
      */
-    public function activate(): void
+    public function activate(bool $networkWide = false): void
+    {
+        if ($networkWide && self::isMultisite() && function_exists('get_sites')) {
+            // Network activation runs this once, on the main site only: every other
+            // sub-site would be left without a secret ("Unable to generate token").
+            // WordPress records the plugin as active only AFTER this hook returns, so the
+            // loop has a budget (sites and seconds) and is skipped on a large network; the
+            // sites it does not reach are set up by ensureSiteReady() on their first request.
+            $network = function_exists('get_current_network_id') ? (int) get_current_network_id() : 1;
+            if (!(function_exists('wp_is_large_network') && wp_is_large_network('sites'))) {
+                $maxSites = max(0, (int) apply_filters('fluxfiles_activation_max_sites', 200));
+                $deadline = microtime(true) + (float) apply_filters('fluxfiles_activation_budget_seconds', 10);
+                $done = 0;
+                $offset = 0;
+                $batch = 100;
+                do {
+                    $ids = (array) get_sites(['fields' => 'ids', 'number' => $batch, 'offset' => $offset, 'network_id' => $network]);
+                    foreach ($ids as $id) {
+                        if ($done >= $maxSites || microtime(true) >= $deadline) {
+                            break 2;
+                        }
+                        switch_to_blog((int) $id);
+                        try {
+                            self::initSite();
+                        } finally {
+                            restore_current_blog();
+                        }
+                        $done++;
+                    }
+                    $offset += $batch;
+                } while (count($ids) === $batch);
+            }
+        } else {
+            self::initSite();
+        }
+
+        flush_rewrite_rules();
+    }
+
+    /**
+     * A site created while FluxFiles is network-active gets its own defaults + storage
+     * root (priority > 100 so core has populated the new site's options first).
+     *
+     * @param mixed $site WP_Site
+     */
+    public static function onNewSite($site): void
+    {
+        if (!is_object($site) || empty($site->blog_id) || !self::networkActive()) {
+            return;
+        }
+        switch_to_blog((int) $site->blog_id);
+        try {
+            self::initSite();
+        } finally {
+            restore_current_blog();
+        }
+    }
+
+    private static function networkActive(): bool
+    {
+        if (!function_exists('is_plugin_active_for_network') && defined('ABSPATH') && is_file(ABSPATH . 'wp-admin/includes/plugin.php')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        return function_exists('is_plugin_active_for_network')
+            && is_plugin_active_for_network(plugin_basename(FLUXFILES_PLUGIN_FILE));
+    }
+
+    /**
+     * Safety net behind activation: a site that never ran initSite() (added before
+     * this was network-aware, imported, cloned, or activated by a deploy tool that
+     * skips the hook) gets its defaults on its first request instead of failing
+     * every token with "secret is not configured". One cheap option read once set.
+     */
+    public static function ensureSiteReady(): void
+    {
+        if (get_option('fluxfiles_secret', false) === false) {
+            self::initSite();
+        }
+    }
+
+    /**
+     * Per-site setup: storage directory + protection files, default options and the
+     * DB tables, for the CURRENT blog (the caller switches blogs on multisite).
+     */
+    public static function initSite(): void
     {
         // Decide the storage base before anything creates a directory, so an
         // existing wp-content/fluxfiles is kept and a fresh install lands in uploads/.
@@ -135,8 +225,6 @@ class FluxFilesPlugin
         }
 
         FluxFilesDbSchema::install();
-
-        flush_rewrite_rules();
     }
 
     /**
@@ -217,7 +305,13 @@ class FluxFilesPlugin
             return;
         }
         self::writeProtectFile($root . '/.htaccess', self::rootHtaccess());
-        self::writeProtectFile($uploads . '/.htaccess', self::uploadsHtaccess());
+        // Private local storage: nothing under uploads/ may be fetched by its plain URL
+        // (files stream through the signed REST route), so the folder is denied too.
+        if ((bool) get_option('fluxfiles_local_private', false)) {
+            self::writeProtectFile($uploads . '/.htaccess', self::privateUploadsHtaccess(), '-private');
+        } else {
+            self::writeProtectFile($uploads . '/.htaccess', self::uploadsHtaccess());
+        }
         foreach ([$root, $uploads] as $dir) {
             if (!file_exists($dir . '/index.php')) {
                 @file_put_contents($dir . '/index.php', FluxFilesStorage::INDEX_STUB);
@@ -225,13 +319,13 @@ class FluxFilesPlugin
         }
     }
 
-    private static function writeProtectFile(string $path, string $body): void
+    private static function writeProtectFile(string $path, string $body, string $variant = ''): void
     {
-        $header = self::PROTECT_MARKER . self::PROTECT_VERSION;
+        $header = self::PROTECT_MARKER . self::PROTECT_VERSION . $variant;
         if (is_file($path)) {
             $current = (string) @file_get_contents($path, false, null, 0, 256);
-            if (strpos($current, $header) !== false) {
-                return; // already current
+            if (strtok($current, "\r\n") === $header) {
+                return; // already current (this mode)
             }
             if (strpos($current, self::PROTECT_MARKER) === false) {
                 return; // operator-authored — leave it alone
@@ -245,6 +339,21 @@ class FluxFilesPlugin
     {
         return <<<'HTACCESS'
 # Rate-limit state, demo/ssh runtime files: never web-served.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>
+HTACCESS;
+    }
+
+    /** Private local storage: the whole uploads folder is denied; files are only served through the signed REST route. */
+    private static function privateUploadsHtaccess(): string
+    {
+        return <<<'HTACCESS'
+# Private local storage: uploads are never fetched by their plain URL.
 <IfModule mod_authz_core.c>
     Require all denied
 </IfModule>
