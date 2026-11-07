@@ -9,9 +9,6 @@
 // fm.js is served from an absolute route, where a '../' relative to the *page*
 // resolves somewhere else entirely. `document.currentScript` is evaluated while
 // this file is being parsed, so it is still the <script> tag that loaded us.
-// CodeMirror instances, keyed by the raw Alpine component (see _cmGet()).
-const _cmStore = new WeakMap();
-
 const FM_ASSETS_BASE = (function () {
     try {
         const src = document.currentScript && document.currentScript.src;
@@ -22,6 +19,9 @@ const FM_ASSETS_BASE = (function () {
     } catch (e) { /* fall through */ }
     return '../assets';
 })();
+
+// CodeMirror instances, keyed by the raw Alpine component (see _cmGet()).
+const _cmStore = new WeakMap();
 
 // Content hashes of the lazily loaded vendor trees (assets/vendor/<name>/). They are
 // the ?v= of those files, so a vendor-only update changes the URL even when this
