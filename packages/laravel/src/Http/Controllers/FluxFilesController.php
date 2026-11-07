@@ -350,6 +350,26 @@ class FluxFilesController
         return response()->json($resp, $status);
     }
 
+    /**
+     * The non-ApiException answer, same envelope as core's index.php
+     * (`500 server_error`): the exception text can carry SQLSTATE/host/port/paths,
+     * so it is logged server-side (Laravel's report(), else error_log) and only
+     * echoed in `detail` when the host app runs with app.debug on.
+     */
+    private function serverError(\Throwable $e): JsonResponse
+    {
+        if (function_exists('report')) {
+            report($e);
+        } else {
+            error_log('FluxFiles: request failed: ' . get_class($e) . ': ' . $e->getMessage());
+        }
+        $resp = ['data' => null, 'error' => 'Internal server error', 'error_code' => 'server_error'];
+        if (config('app.debug') === true) {
+            $resp['detail'] = get_class($e) . ': ' . $e->getMessage();
+        }
+        return response()->json($resp, 500);
+    }
+
     // -------------------------------------------------------------------------
     // Route handlers
     // -------------------------------------------------------------------------
@@ -420,10 +440,7 @@ class FluxFilesController
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         } catch (\Throwable $e) {
-            // Never leak a TypeError/HTML error page from the API surface, nor the
-            // exception text (SQLSTATE, host, port, paths): log it, answer generically.
-            error_log('FluxFiles: upload failed: ' . get_class($e) . ': ' . $e->getMessage());
-            return $this->error('Upload failed', 500);
+            return $this->serverError($e);
         }
     }
 

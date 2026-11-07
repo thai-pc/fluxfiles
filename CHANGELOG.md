@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Security
+- **Laravel adapter, non-`ApiException` errors.** The upload route answers an unexpected exception with core's envelope (`500`, `error_code: server_error`, generic message) instead of an ad-hoc `Upload failed`. The exception is reported through Laravel's `report()` (so the app's log channel gets it) and its text (SQLSTATE, host, port, paths) reaches the response only as `detail` when `app.debug` is on. The older `'Upload failed: ' . $e->getMessage()` leak had already been removed in `core-v1.1.3`; every other controller `catch (\Throwable)` answers a fixed string.
+
 ## [1.0.21] — 2026-11-08
 
 > Released: `core-v1.1.8`, `wordpress-v1.1.1` (the WordPress.org submission build; bundles core 1.1.8).
