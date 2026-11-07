@@ -399,8 +399,8 @@ foreach (['', '/', '.', './', '..', '\\'] as $rootPath) {
 test('no hold: delete/trash/rename/move of the disk root are refused with root_forbidden, _fluxfiles intact', function () {
     [$fm, $fs, , $meta] = makeFM();
     upload($fm, 'docs', 'a.txt');
-    placeHold($meta, 'local', 'docs', true);
-    $meta->releaseHold('local', array_key_first($meta->allHolds('local')), ['released_at' => time(), 'released_by' => 'x', 'release_reason' => 'x']);
+    $holdId = placeHold($meta, 'local', 'docs', true);
+    $meta->releaseHold('local', $holdId, ['released_at' => time(), 'released_by' => 'x', 'release_reason' => 'x']);
     $code = function (callable $fn) {
         try { $fn(); return null; } catch (ApiException $e) { return $e->getErrorCode(); }
     };
