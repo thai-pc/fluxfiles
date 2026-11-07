@@ -46,20 +46,89 @@ final class DemoMode
         return max(1, (int) self::env('FLUXFILES_DEMO_TTL_HOURS', '6'));
     }
 
-    /** This visitor's existing sandbox id from the cookie, or '' if none/invalid. */
-    public static function existingSandbox(): string
+    /**
+     * Extensions the demo can never allow, whatever FLUXFILES_DEMO_ALLOWED_EXT says: active
+     * content that executes in the demo origin when a stranger's upload is opened (SVG/HTML/
+     * XML/JS are stored-XSS vectors on a public stranger-upload instance) plus the
+     * server-side types core refuses anyway. Defense in depth: core's own blocklist is
+     * private to FileManager and does not cover the client-side active types.
+     */
+    private const FORBIDDEN_EXT = [
+        'svg', 'svgz', 'html', 'htm', 'xhtml', 'shtml', 'xml', 'xsl', 'xslt', 'js', 'mjs',
+        'swf', 'hta',
+        'php', 'phtml', 'phar', 'php3', 'php4', 'php5', 'php7', 'php8', 'phps', 'pht', 'phtm',
+        'cgi', 'pl', 'py', 'rb', 'sh', 'bash', 'bat', 'cmd', 'com', 'exe', 'dll', 'msi', 'scr',
+        'vbs', 'wsf', 'jsp', 'jspx', 'asp', 'aspx', 'htaccess', 'htpasswd',
+    ];
+
+    private const DEFAULT_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'];
+
+    /**
+     * Extensions a demo visitor may upload: FLUXFILES_DEMO_ALLOWED_EXT (comma list) when
+     * set, else images only. Entries are lowercased, stripped to [a-z0-9] (max 10 chars) and
+     * anything in FORBIDDEN_EXT is dropped; an empty result falls back to the default.
+     *
+     * @return list<string>
+     */
+    public static function allowedExtensions(): array
     {
-        $raw = $_COOKIE[self::COOKIE] ?? '';
-        return preg_match('/^[a-z0-9]{16}$/', (string) $raw) ? (string) $raw : '';
+        $raw = self::env('FLUXFILES_DEMO_ALLOWED_EXT');
+        if ($raw === '') {
+            return self::DEFAULT_EXT;
+        }
+        $out = [];
+        foreach (explode(',', $raw) as $e) {
+            $e = strtolower(trim($e));
+            $e = ltrim($e, '.');
+            if (!preg_match('/^[a-z0-9]{1,10}$/', $e) || in_array($e, self::FORBIDDEN_EXT, true)) {
+                continue;
+            }
+            $out[$e] = $e;
+        }
+        return $out ? array_values($out) : self::DEFAULT_EXT;
     }
 
-    /** Assign a fresh sandbox id + set the cookie. Ids are `[a-z0-9]{16}`. */
+    /** HMAC over "<id>.<issued-at>" keyed from FLUXFILES_SECRET ('' when no secret). */
+    private static function sign(string $id, int $ts): string
+    {
+        $secret = self::env('FLUXFILES_SECRET');
+        if ($secret === '') {
+            return '';
+        }
+        $key = hash_hmac('sha256', 'fluxfiles-demo-sandbox-cookie', $secret, true);
+        return substr(hash_hmac('sha256', $id . '.' . $ts, $key), 0, 32);
+    }
+
+    /**
+     * This visitor's existing sandbox id from the cookie, or '' if none/invalid. The
+     * cookie is `<id>.<issued-at>.<hmac>`: only a value this server signed (and that is
+     * still inside the TTL) is accepted, so a client cannot invent sandbox ids by sending
+     * random cookies to dodge the per-IP mint limit. (Pre-signature plain-id cookies are
+     * rejected: a one-time reset of live demo sandboxes on upgrade, which are ephemeral.)
+     */
+    public static function existingSandbox(): string
+    {
+        $raw = (string) ($_COOKIE[self::COOKIE] ?? '');
+        if (!preg_match('/^([a-z0-9]{16})\.(\d{1,12})\.([a-f0-9]{32})$/', $raw, $m)) {
+            return '';
+        }
+        $ts = (int) $m[2];
+        $now = time();
+        if ($ts > $now + 60 || $ts < $now - self::ttlHours() * 3600) {
+            return '';
+        }
+        $expected = self::sign($m[1], $ts);
+        return ($expected !== '' && hash_equals($expected, $m[3])) ? $m[1] : '';
+    }
+
+    /** Assign a fresh sandbox id + set the signed cookie. Ids are `[a-z0-9]{16}`. */
     public static function newSandbox(): string
     {
         $id = bin2hex(random_bytes(8));
         if (!headers_sent()) {
-            setcookie(self::COOKIE, $id, [
-                'expires'  => time() + self::ttlHours() * 3600,
+            $ts = time();
+            setcookie(self::COOKIE, $id . '.' . $ts . '.' . self::sign($id, $ts), [
+                'expires'  => $ts + self::ttlHours() * 3600,
                 'path'     => '/',
                 'secure'   => (($_SERVER['HTTPS'] ?? '') !== '' || ($_SERVER['SERVER_PORT'] ?? '') === '443'),
                 'httponly' => true,
@@ -85,7 +154,7 @@ final class DemoMode
             'maxUploadMb'  => (int) (self::env('FLUXFILES_DEMO_MAX_MB', '5')),
             'maxStorageMb' => (int) (self::env('FLUXFILES_DEMO_QUOTA_MB', '50')),
             'maxFiles'     => (int) (self::env('FLUXFILES_DEMO_MAX_FILES', '30')),
-            'allowedExt'   => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg'],
+            'allowedExt'   => self::allowedExtensions(),
             'ttl'          => self::ttlHours() * 3600,
             'rateRead'     => 120,
             'rateWrite'    => 20,
@@ -104,7 +173,7 @@ final class DemoMode
 
     /**
      * The window.__FM_BOOT__ config the UI consumes (token + sandbox path + caps).
-     * A returning visitor (valid cookie) reuses their sandbox; a NEW visitor is only
+     * A returning visitor (valid server-signed cookie) reuses their sandbox; a NEW visitor is only
      * given a fresh sandbox if their IP is under the hourly mint budget — otherwise
      * `{ throttled: true }` (no token) so the UI shows the auth-required state instead
      * of letting one abuser spin up unlimited sandboxes. $stateDir holds the IP counter.

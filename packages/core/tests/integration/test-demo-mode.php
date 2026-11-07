@@ -127,5 +127,62 @@ t('bootConfig throttles a NEW visitor over budget (no token)', function () {
     array_map('unlink', glob("$dir/*") ?: []); @rmdir($dir);
 });
 
+t('default allowedExt is images only: no svg / html / xml / js', function () {
+    putenv('FLUXFILES_DEMO_ALLOWED_EXT');
+    $c = claimsFor('abcdef0123456789');
+    foreach (['svg', 'html', 'htm', 'xml', 'js'] as $bad) {
+        truthy(!in_array($bad, $c->allowedExt, true), "$bad must not be allowed");
+    }
+    eq(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'], $c->allowedExt, 'default list');
+});
+
+t('FLUXFILES_DEMO_ALLOWED_EXT overrides, sanitized, never re-adds dangerous types', function () {
+    putenv('FLUXFILES_DEMO_ALLOWED_EXT= PDF, .txt,svg,HTML,php,js,xml,m d,toolongextension1,docx,pdf');
+    eq(['pdf', 'txt', 'docx'], DemoMode::allowedExtensions(), 'sanitized + deduped + forbidden dropped');
+    $c = claimsFor('abcdef0123456789');
+    truthy(in_array('pdf', $c->allowedExt, true) && !in_array('svg', $c->allowedExt, true), 'token carries override');
+    putenv('FLUXFILES_DEMO_ALLOWED_EXT=svg,html');
+    eq(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'], DemoMode::allowedExtensions(), 'all-forbidden falls back to default');
+    putenv('FLUXFILES_DEMO_ALLOWED_EXT');
+});
+
+t('sandbox cookie: forged/random ids are rejected, server-signed ones accepted', function () {
+    $_COOKIE['ff_demo'] = bin2hex(random_bytes(8));
+    eq('', DemoMode::existingSandbox(), 'bare random id rejected');
+    $_COOKIE['ff_demo'] = bin2hex(random_bytes(8)) . '.' . time() . '.' . str_repeat('a', 32);
+    eq('', DemoMode::existingSandbox(), 'forged signature rejected');
+    $ref = new ReflectionMethod(DemoMode::class, 'sign');
+    $ref->setAccessible(true);
+    $id = 'abcdef0123456789'; $ts = time();
+    $_COOKIE['ff_demo'] = "$id.$ts." . $ref->invoke(null, $id, $ts);
+    eq($id, DemoMode::existingSandbox(), 'valid signed cookie accepted');
+    $_COOKIE['ff_demo'] = "ffffffffffffffff.$ts." . $ref->invoke(null, $id, $ts);
+    eq('', DemoMode::existingSandbox(), 'signature bound to the id');
+    $old = $ts - (DemoMode::ttlHours() * 3600 + 10);
+    $_COOKIE['ff_demo'] = "$id.$old." . $ref->invoke(null, $id, $old);
+    eq('', DemoMode::existingSandbox(), 'expired cookie rejected');
+    $_ENV['FLUXFILES_SECRET'] = 'another-secret-key-at-least-32-bytes-yy';
+    $_COOKIE['ff_demo'] = "$id.$ts." . $ref->invoke(null, $id, $ts);
+    $_ENV['FLUXFILES_SECRET'] = 'demo-test-secret-key-at-least-32-bytes-xx';
+    eq('', DemoMode::existingSandbox(), 'cookie signed under another secret rejected');
+    unset($_COOKIE['ff_demo']);
+});
+
+t('random cookies do NOT dodge the per-IP mint limit', function () {
+    $dir = sys_get_temp_dir() . '/ff-demo-cookie-' . uniqid();
+    @mkdir($dir, 0777, true);
+    $_SERVER['REMOTE_ADDR'] = '203.0.113.31';
+    putenv('FLUXFILES_DEMO_IP_MINTS=2');
+    $tokens = 0;
+    for ($i = 0; $i < 10; $i++) {
+        $_COOKIE['ff_demo'] = bin2hex(random_bytes(8));
+        if (!empty(DemoMode::bootConfig($dir)['token'])) { $tokens++; }
+    }
+    putenv('FLUXFILES_DEMO_IP_MINTS');
+    unset($_COOKIE['ff_demo']);
+    eq(2, $tokens, 'only the budget got tokens');
+    array_map('unlink', glob("$dir/*") ?: []); @rmdir($dir);
+});
+
 echo "\n  Total: " . ($p + $f) . "  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f > 0 ? 1 : 0);
