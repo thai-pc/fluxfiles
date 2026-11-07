@@ -294,6 +294,14 @@ these rules (rooted at your real content path) while the local disk is public.
 Once the rules are in place, hide it with
 `add_filter('fluxfiles_nginx_storage_notice', '__return_false');`.
 
+On multisite the setting is per site, so the deny rule shown with private storage on names only
+that site's folder (`<storage root>/sites/<blog id>/`); add one rule per private site.
+
+Network activation sets up the existing sites in the activation request itself, within a budget
+(a large network skips this and every site is then set up on its first request). Tune it with
+`add_filter('fluxfiles_activation_max_sites', fn () => 500);` (default 200) and
+`add_filter('fluxfiles_activation_budget_seconds', fn () => 20);` (default 10).
+
 ## REST API
 
 A proxy is exposed at `/wp-json/fluxfiles/v1/api/fm/*` — `list`, `upload`,

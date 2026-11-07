@@ -36,6 +36,10 @@ class FluxFilesPlugin
         register_activation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'activate']);
         add_action('wp_initialize_site', [self::class, 'onNewSite'], 900);
         add_action('init', [self::class, 'ensureSiteReady'], 1);
+        // Flipping private local storage rewrites the uploads .htaccess on save, not on the
+        // next API call (extra hook arguments are ignored by protectStorage()).
+        add_action('add_option_fluxfiles_local_private', [self::class, 'protectStorage']);
+        add_action('update_option_fluxfiles_local_private', [self::class, 'protectStorage']);
         register_deactivation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'deactivate']);
         add_action('admin_init', [FluxFilesDbSchema::class, 'maybeUpgrade']);
 
@@ -304,7 +308,7 @@ class FluxFilesPlugin
         // Private local storage: nothing under uploads/ may be fetched by its plain URL
         // (files stream through the signed REST route), so the folder is denied too.
         if ((bool) get_option('fluxfiles_local_private', false)) {
-            self::writeProtectFile($uploads . '/.htaccess', self::rootHtaccess(), '-private');
+            self::writeProtectFile($uploads . '/.htaccess', self::privateUploadsHtaccess(), '-private');
         } else {
             self::writeProtectFile($uploads . '/.htaccess', self::uploadsHtaccess());
         }
@@ -335,6 +339,21 @@ class FluxFilesPlugin
     {
         return <<<'HTACCESS'
 # Rate-limit state, demo/ssh runtime files: never web-served.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>
+HTACCESS;
+    }
+
+    /** Private local storage: the whole uploads folder is denied; files are only served through the signed REST route. */
+    private static function privateUploadsHtaccess(): string
+    {
+        return <<<'HTACCESS'
+# Private local storage: uploads are never fetched by their plain URL.
 <IfModule mod_authz_core.c>
     Require all denied
 </IfModule>

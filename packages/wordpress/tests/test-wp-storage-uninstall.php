@@ -721,6 +721,9 @@ test('private local storage: the uploads folder is denied (Apache), the rule fli
     assertEqual($r['b'], $r['b2'], 'idempotent');
     assertTrue(strpos($r['c'], 'Require all granted') !== false, 'switching back restores the public rules');
     assertEqual("my rules\n", $r['d'], 'an operator-authored .htaccess is never overwritten');
+    $src = (string) file_get_contents($GLOBALS['pluginDir'] . '/includes/FluxFilesPlugin.php');
+    assertTrue(strpos($src, "add_action('update_option_fluxfiles_local_private', [self::class, 'protectStorage'])") !== false
+        && strpos($src, "add_action('add_option_fluxfiles_local_private', [self::class, 'protectStorage'])") !== false, 'saving the setting rewrites the .htaccess at once');
     rrm($t);
 });
 

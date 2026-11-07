@@ -288,8 +288,8 @@ class FluxFilesAdmin
      * nginx raw, in the SAME origin as wp-admin, with none of the .htaccess rules
      * (no PHP execution, HTML/SVG served inert, `_fluxfiles/` denied). The plugin
      * cannot write nginx config, so the operator has to — say so on the screens
-     * where they manage plugins / FluxFiles. Hidden once local storage is private,
-     * or via `add_filter('fluxfiles_nginx_storage_notice', '__return_false')` after
+     * where they manage plugins / FluxFiles. Private local storage does not hide it
+     * (it only stops plain URLs; the notice then shows a plain deny rule). Hidden via `add_filter('fluxfiles_nginx_storage_notice', '__return_false')` after
      * adding the rules.
      */
     public function renderNginxStorageNotice(): void
@@ -328,8 +328,12 @@ class FluxFilesAdmin
         $multisite = function_exists('is_multisite') && is_multisite();
         $dir = $multisite ? $root . 'sites/[0-9]+/uploads/' : $root . 'uploads/';
         $private = (bool) get_option('fluxfiles_local_private', false);
+        // `fluxfiles_local_private` is per site, but on multisite the storage base is
+        // shared by the whole network: deny only THIS site's folder (sites/<blog_id>/),
+        // or the rule would 403 the files of every public site.
+        $denyRoot = $multisite ? $root . 'sites/' . (int) get_current_blog_id() . '/' : $root;
         $snippet = $private
-            ? "location ^~ {$root} {\n    deny all;\n}"
+            ? "location ^~ {$denyRoot} {\n    deny all;\n}"
             : "location ^~ {$root} {\n"
             . '    location ' . ($multisite ? '~ ^' : '^~ ') . $dir . " {\n"
             . "        allow all;\n"
@@ -520,7 +524,7 @@ class FluxFilesAdmin
             . '<p class="description">%s</p>',
             $on ? 'checked' : '',
             esc_html__('Serve local files only through signed links', 'fluxfiles'),
-            esc_html__('The file manager stops handing out plain URLs and streams files through FluxFiles on short-lived links, so a link saved in a post stops working. On Apache the uploads folder is then denied by its .htaccess. On nginx you must deny the folder yourself (a notice shows the rule). Files written before you switched this on keep their old permissions. Use an S3/R2 disk with a public URL for permanent links.', 'fluxfiles')
+            esc_html__('The file manager stops handing out plain URLs and streams files through FluxFiles on short-lived links, so a link saved in a post stops working. On Apache the uploads folder is then denied by its .htaccess. On nginx you must deny the folder yourself (a notice shows the rule). Files written before you switched this on keep their old permissions, and links to attachments created while the folder was public stop working too. Use an S3/R2 disk with a public URL for permanent links.', 'fluxfiles')
         );
     }
 

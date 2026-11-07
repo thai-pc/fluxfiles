@@ -2756,6 +2756,25 @@ test('private local storage keeps the nginx warning (it only stops plain URLs; t
     }
 });
 
+test('multisite + private local storage: the nginx deny rule names only THIS site\'s folder', function () {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $keep = [$_SERVER['SERVER_SOFTWARE'] ?? null, $GLOBALS['pagenow'] ?? null, $GLOBALS['WP_OPTIONS']['fluxfiles_local_private'] ?? null, $GLOBALS['WP_MULTISITE'] ?? null];
+    try {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_disks'] = ['local'];
+        $_SERVER['SERVER_SOFTWARE'] = 'nginx/1.25.3';
+        $GLOBALS['pagenow'] = 'plugins.php';
+        $GLOBALS['WP_OPTIONS']['fluxfiles_local_private'] = '1';
+        $GLOBALS['WP_MULTISITE'] = true;
+        if (!function_exists('get_current_blog_id')) { function get_current_blog_id() { return 4; } }
+        $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+        ob_start(); $admin->renderNginxStorageNotice(); $out = (string) ob_get_clean();
+        assertTrue(preg_match('#location \^~ /wp-content/uploads/fluxfiles/sites/\d+/ \{#', $out) === 1, 'per-site path: ' . substr($out, 0, 600));
+        assertTrue(strpos($out, 'location ^~ /wp-content/uploads/fluxfiles/ {') === false, 'never the network-wide folder');
+    } finally {
+        [$_SERVER['SERVER_SOFTWARE'], $GLOBALS['pagenow'], $GLOBALS['WP_OPTIONS']['fluxfiles_local_private'], $GLOBALS['WP_MULTISITE']] = $keep;
+    }
+});
+
 test('WordPress.org polish: translatable strings, block API v3, keyed toolbar buttons, shortcode instance guard', function () {
     $dir = __DIR__ . '/../';
     $sc = (string) file_get_contents($dir . 'includes/FluxFilesShortcode.php');
