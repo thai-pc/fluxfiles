@@ -106,6 +106,10 @@ $supersedeStep = static function () use ($store, $apply): void {
     $sids = $store->subscriptionsNeedingRepair();
     $n = 0;
     foreach ($sids as $sid) {
+        $revive = $store->repairableHead($sid);
+        if ($revive !== null) {
+            echo "[backfill] subscription={$sid}: " . ($apply ? 'reviving' : 'would revive') . " wrongly superseded jti={$revive} (newest row, still in term)\n";
+        }
         if ($apply) { $n += $store->supersedeOlderInSubscription($sid); }
     }
     echo '[backfill] ' . count($sids) . ' subscription(s) to repair (several active rows, or a wrongly superseded head)' . ($apply ? ": {$n} row(s) changed\n" : " (dry run — no changes)\n");

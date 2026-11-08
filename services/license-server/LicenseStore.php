@@ -651,36 +651,70 @@ final class LicenseStore
     }
 
     /**
-     * Keep only the newest-issued live row of a subscription `active` (reviving it if it was
-     * wrongly superseded): the rest of its `active` rows become `superseded`. Idempotent; used by the backfill once ids are known.
+     * Keep only the newest-issued live row of a subscription `active`: the rest of its
+     * `active` rows become `superseded`. A head that is itself `superseded` is revived only
+     * when repairableHead() says it was wrongly retired; otherwise nothing changes.
+     * Idempotent; used by the backfill once ids are known.
      */
-    public function supersedeOlderInSubscription(string $subscriptionId): int
+    public function supersedeOlderInSubscription(string $subscriptionId, ?int $now = null): int
     {
         $s = $this->db->prepare(
-            "SELECT jti FROM licenses WHERE subscription_id = ? AND status IN ('active','superseded') ORDER BY issued DESC, id DESC LIMIT 1"
+            "SELECT jti, status FROM licenses WHERE subscription_id = ? AND status IN ('active','superseded') ORDER BY issued DESC, id DESC LIMIT 1"
         );
         $s->execute([$subscriptionId]);
-        $head = $s->fetchColumn();
+        $head = $s->fetch();
         if ($head === false) {
             return 0;
         }
-        // A head that was wrongly superseded (no `active` row left) is brought back first.
-        $this->db->prepare("UPDATE licenses SET status = 'active' WHERE jti = ? AND status = 'superseded'")->execute([$head]);
-        return $this->supersedeActiveForSubscription($subscriptionId, (string) $head);
+        $n = 0;
+        if ($head['status'] === 'superseded') {
+            if ($this->repairableHead($subscriptionId, $now) !== $head['jti']) {
+                return 0;
+            }
+            $this->db->prepare("UPDATE licenses SET status = 'active' WHERE jti = ? AND status = 'superseded'")->execute([$head['jti']]);
+            $n++;
+        }
+        return $n + $this->supersedeActiveForSubscription($subscriptionId, (string) $head['jti']);
     }
 
     /**
-     * Subscriptions the backfill must repair: more than one `active` row, or none while a
-     * live (`superseded`) row exists, i.e. a head that was wrongly superseded.
+     * The jti of a wrongly superseded head, or null. Revive only when BOTH hold: the
+     * subscription's newest row of ANY status is that (superseded) head (so a newer
+     * refunded/revoked row rules it out), and it is still in term (now <= expires + grace).
+     * A wrongly retired concurrent subscription is paid and in term; a replaced or cancelled
+     * one has lapsed.
+     */
+    public function repairableHead(string $subscriptionId, ?int $now = null): ?string
+    {
+        $now ??= time();
+        $h = $this->newestForSubscription($subscriptionId);
+        if ($h === null || (string) $h['status'] !== 'superseded' || $h['expires'] === null) {
+            return null;
+        }
+        $grace = ($h['grace_days'] ?? null) !== null ? (int) $h['grace_days'] : 14;
+        return $now <= (int) $h['expires'] + $grace * 86400 ? (string) $h['jti'] : null;
+    }
+
+    /**
+     * Subscriptions the backfill must repair: more than one `active` row, or none while
+     * repairableHead() finds a wrongly superseded head.
      *
      * @return string[]
      */
-    public function subscriptionsNeedingRepair(): array
+    public function subscriptionsNeedingRepair(?int $now = null): array
     {
-        return $this->db->query(
-            "SELECT subscription_id FROM licenses WHERE subscription_id IS NOT NULL GROUP BY subscription_id
-             HAVING SUM(status = 'active') > 1 OR (SUM(status = 'active') = 0 AND SUM(status = 'superseded') > 0)"
-        )->fetchAll(\PDO::FETCH_COLUMN) ?: [];
+        $rows = $this->db->query(
+            "SELECT subscription_id, SUM(status = 'active') AS act, SUM(status = 'superseded') AS sup FROM licenses
+             WHERE subscription_id IS NOT NULL GROUP BY subscription_id"
+        )->fetchAll();
+        $out = [];
+        foreach ($rows as $r) {
+            $sid = (string) $r['subscription_id'];
+            if ((int) $r['act'] > 1 || ((int) $r['act'] === 0 && (int) $r['sup'] > 0 && $this->repairableHead($sid, $now) !== null)) {
+                $out[] = $sid;
+            }
+        }
+        return $out;
     }
 
     /** The newest-issued row of a subscription, whatever its status. @return array<string,mixed>|null */

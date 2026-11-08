@@ -199,7 +199,8 @@ php backfill-subscription-ids.php --apply
 
 Idempotent; a one-time order is marked via `billing_reason` so it is not asked twice;
 exit 2 means some orders could not be read (re-run). Run it before the next billing cycle
-and before enabling `/refresh`. A legacy row whose email+plan spans two subscriptions
+and before enabling `/refresh`.
+**Refresh is not fully available to legacy customers until the backfill has run** (ambiguous legacy chains are refused): run the backfill before enabling the nginx `/refresh` location. A legacy row whose email+plan spans two subscriptions
 stays refused (ambiguous) until you resolve it by hand.
 
 ## Notes

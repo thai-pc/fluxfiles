@@ -1527,10 +1527,11 @@ test('backfill repair: a wrongly superseded head is set back to active; revoked 
     $a = putRow($st, ['subscription_id'=>'H','issued'=>1000,'status'=>'superseded']);
     $b = putRow($st, ['subscription_id'=>'H','issued'=>1100,'status'=>'superseded']);
     $r = putRow($st, ['subscription_id'=>'RV','issued'=>1000,'status'=>'revoked']);
-    assertEqual(['H'], $st->subscriptionsNeedingRepair());
-    $st->supersedeOlderInSubscription('H');
+    assertEqual(['H'], $st->subscriptionsNeedingRepair(1700000000));
+    assertEqual($b['jti'], $st->repairableHead('H', 1700000000));
+    $st->supersedeOlderInSubscription('H', 1700000000);
     assertEqual(['superseded','active'], [$st->findByJti($a['jti'])['status'], $st->findByJti($b['jti'])['status']]);
-    assertEqual([], $st->subscriptionsNeedingRepair(), 'idempotent');
+    assertEqual([], $st->subscriptionsNeedingRepair(1700000000), 'idempotent');
 });
 
 test('rateHit refuses a period longer than the 2 h sweep horizon (N-e)', function () {
@@ -1545,6 +1546,43 @@ test('ipBucket unwraps NAT64 64:ff9b::/96 like ::ffff: (N-f)', function () {
     $b = fn ($ip) => \FluxFiles\LicenseServer\ProDownload::ipBucket($ip);
     assertEqual('203.0.113.7', $b('64:ff9b::203.0.113.7'));
     assertTrue($b('64:ff9b::203.0.113.7') !== $b('64:ff9b::203.0.113.8'));
+});
+
+
+test('B5: a replaced/cancelled subscription (lapsed head) and a refunded head are NOT revived', function () {
+    $st = new LicenseStore(':memory:');
+    $now = 1800000000;
+    // replaced: A (a1,a2) cancelled long ago, B bought later retired a2; a2 is out of term
+    $a1 = putRow($st, ['subscription_id'=>'A','issued'=>1000,'expires'=>$now - 90 * 86400,'status'=>'superseded']);
+    $a2 = putRow($st, ['subscription_id'=>'A','issued'=>1100,'expires'=>$now - 60 * 86400,'status'=>'superseded']);
+    putRow($st, ['subscription_id'=>'B','issued'=>1200,'expires'=>$now + 20 * 86400]);
+    assertEqual(null, $st->repairableHead('A', $now));
+    assertEqual([], $st->subscriptionsNeedingRepair($now), 'nothing to repair');
+    assertEqual(0, $st->supersedeOlderInSubscription('A', $now));
+    assertEqual(['superseded','superseded'], [$st->findByJti($a1['jti'])['status'], $st->findByJti($a2['jti'])['status']]);
+    $due = array_column($st->needingReminder([30,14,7,1], $now), 'jti');
+    assertTrue(!in_array($a2['jti'], $due, true), 'no wrong "expired" mail for the replaced subscription');
+    // refunded head: m3 refunded, m2 still in term must stay superseded
+    putRow($st, ['subscription_id'=>'R','issued'=>1000,'expires'=>$now + 5 * 86400,'status'=>'superseded']);
+    $m2 = putRow($st, ['subscription_id'=>'R','issued'=>1100,'expires'=>$now + 6 * 86400,'status'=>'superseded']);
+    putRow($st, ['subscription_id'=>'R','issued'=>1200,'expires'=>$now + 7 * 86400,'status'=>'refunded']);
+    assertEqual(null, $st->repairableHead('R', $now), 'a newer refunded row rules revival out');
+    $st->supersedeOlderInSubscription('R', $now);
+    assertEqual('superseded', $st->findByJti($m2['jti'])['status']);
+});
+
+test('B5: the A/B concurrent wrong retirement (both in term) is still repaired', function () {
+    $st = new LicenseStore(':memory:');
+    $now = 1800000000;
+    $a = putRow($st, ['subscription_id'=>'A','issued'=>1000,'expires'=>$now + 10 * 86400,'status'=>'superseded']);   // wrongly retired by B's order
+    putRow($st, ['subscription_id'=>'B','issued'=>1100,'expires'=>$now + 20 * 86400]);
+    assertEqual($a['jti'], $st->repairableHead('A', $now));
+    assertEqual(['A'], $st->subscriptionsNeedingRepair($now));
+    $st->supersedeOlderInSubscription('A', $now);
+    assertEqual('active', $st->findByJti($a['jti'])['status']);
+    // grace still counts as in term
+    $g = putRow($st, ['subscription_id'=>'G','issued'=>1000,'expires'=>$now - 3 * 86400,'status'=>'superseded','grace_days'=>7]);
+    assertEqual($g['jti'], $st->repairableHead('G', $now));
 });
 
 
