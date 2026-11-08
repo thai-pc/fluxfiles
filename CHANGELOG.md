@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- CLI (`bin/fluxfiles`): in a Composer install it never read the host project's `.env`. It looked in the package root and in `<project>/vendor`, not `<project>`, so `php vendor/bin/fluxfiles update <module>` answered "No FLUXFILES_LICENSE_KEY set" for a key kept in `.env`. The search order is now (first `.env` wins, real env vars still win over it): the current directory when it holds `composer.json` or `.env`, the host project root, the package root, then the old three-levels-up directory. `api/index.php` has the same blind spot, but a web request has no meaningful cwd, so set real env vars (or put `.env` in the package root) there.
+
 ## [1.0.22] — 2026-11-08
 
 > Released: `core-v1.1.9`, `laravel-v1.0.6` (security hardening + demo mode). Ships with paid modules `dlp` v1.1.0, `ai` v1.2.5, `sso` v2.1.4, `share` v1.4.1. **Breaking for dev SSO:** a non-loopback `http://` OIDC issuer now fails (`500 sso_misconfigured`).
