@@ -1015,5 +1015,184 @@ test('pro download: secondsLeft reads the URL expiry; no expiry -> fallback', fu
     assertEqual(7, ProDownload::secondsLeft('https://cdn.example/y.zip', 7, 1000));
 });
 
+// ── HTML + text customer mail ────────────────────────────────────────────────
+// Every customer mail is one content model rendered twice (text part + HTML template).
+
+/** Call a private LicenseMailer method. */
+function mailerCall(string $method, ...$args) {
+    $r = new ReflectionMethod(LicenseMailer::class, $method); $r->setAccessible(true);
+    return $r->invoke(new LicenseMailer('log'), ...$args);
+}
+/** @return array{text:string,html:string} for a licence record, as sendLicense would build it */
+function licenseParts(array $rec): array {
+    $content = (trim((string) ($rec['modules'] ?? '')) === '') ? mailerCall('supportContent', $rec) : mailerCall('licenseContent', $rec);
+    $content['to'] = (string) $rec['email']; $content['subject'] = 'Test subject';
+    return mailerCall('build', $content);
+}
+function withWp(callable $fn) {
+    putenv('FLUXFILES_LANDING_ORIGIN=https://fluxfiles.example'); putenv('FLUXFILES_PRO_UPDATE_URL=https://updates.example');
+    try { return $fn(); } finally { putenv('FLUXFILES_LANDING_ORIGIN'); putenv('FLUXFILES_PRO_UPDATE_URL'); }
+}
+/** Split a MIME message into [headers, [part => decoded body]]. */
+function parseMultipart(string $headers, string $body): array {
+    assertTrue((bool) preg_match('/^Content-Type: multipart\/alternative; boundary="(ff_[0-9a-f]{32})"\r?$/m', $headers, $m), 'multipart/alternative with a random boundary');
+    $b = $m[1];
+    assertTrue(str_ends_with($body, "--{$b}--\r\n"), 'closing boundary');
+    $parts = [];
+    foreach (array_slice(explode("--{$b}\r\n", $body), 1) as $chunk) {
+        $chunk = preg_replace('/--' . preg_quote($b, '/') . '--\r\n$/', '', $chunk);
+        [$ph, $pb] = explode("\r\n\r\n", $chunk, 2);
+        assertTrue(str_contains($ph, 'Content-Transfer-Encoding: quoted-printable'), 'part is QP');
+        assertTrue((bool) preg_match('/^Content-Type: (text\/(?:plain|html)); charset=UTF-8/m', $ph, $t), 'part content type');
+        foreach (explode("\r\n", $pb) as $line) { assertTrue(strlen($line) <= 76, 'QP line within 76 octets: ' . substr($line, 0, 90)); }
+        $parts[$t[1]] = quoted_printable_decode($pb);
+    }
+    return $parts;
+}
+
+test('html mail: licence mail has a text AND an html part, key exactly once in each', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'buyer@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-1'])['record'];
+    $p = licenseParts($rec); $key = (string) $rec['license_key'];
+    assertEqual(1, substr_count($p['text'], $key), 'key once in text');
+    assertEqual(1, substr_count($p['html'], $key), 'key once in html');
+    assertTrue(str_contains($p['html'], 'word-break:break-all'), 'key box wraps anywhere');
+    assertTrue(str_contains($p['html'], 'color-scheme') && str_contains($p['html'], '#8957e5'), 'dark-mode meta + accent');
+    assertTrue(str_contains($p['html'], '>Flux</span>') && str_contains($p['html'], '>Files</span>'), 'wordmark');
+    assertTrue(!preg_match('/<img|<link|url\(|src=/i', $p['html']), 'no external images/fonts/tracking');
+    assertTrue(!preg_match('/(?<![-a-z])color:\s*(#fff(?:fff)?|white)\b/i', $p['html']), 'no pure-white text');
+    assertTrue(str_contains($p['html'], 'fluxfiles@thai-pc.com') && str_contains($p['text'], 'fluxfiles@thai-pc.com'), 'support contact in both');
+    assertTrue(str_contains($p['html'], 'href="https://fluxfiles.thai-pc.com/docs"') && str_contains($p['text'], 'https://fluxfiles.thai-pc.com/docs'), 'docs button in both');
+    assertTrue(str_contains($p['text'], 'Plan: Pro') && strpos($p['text'], 'Plan: Pro') < strpos($p['text'], $key), 'plan above the key (text)');
+    assertTrue(strpos($p['html'], '>Pro</div>') < strpos($p['html'], $key), 'plan above the key (html)');
+});
+
+test('html mail: next steps are in the right order (key, update <module>, claim) in both parts', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'s@acme.com','plan'=>'studio','gateway'=>'polar','order_id'=>'H-2'])['record'];
+    $p = licenseParts($rec);
+    foreach (['text', 'html'] as $kind) {
+        $s = $p[$kind];
+        $a = strpos($s, 'FLUXFILES_LICENSE_KEY='); $b = strpos($s, 'php vendor/bin/fluxfiles update share'); $c = strpos($s, 'allow_share');
+        assertTrue($a !== false && $b !== false && $c !== false && $a < $b && $b < $c, "$kind: env key, then update, then claim");
+        foreach (['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr'] as $m) {
+            assertTrue(str_contains($s, 'php vendor/bin/fluxfiles update ' . $m), "$kind: update $m (Plans.php module)");
+        }
+        assertTrue(str_contains($s, 'allow_ai_vision') && !str_contains($s, 'allow_ai' . "\n"), "$kind: real claim names");
+    }
+    assertTrue(str_contains($p['text'], "1. ") && strpos($p['text'], '1. ') < strpos($p['text'], '2. ') && strpos($p['text'], '2. ') < strpos($p['text'], '3. '), 'numbered 1-2-3');
+});
+
+test('html mail: the WordPress block shows only when configured and eligible (both parts)', function () use ($secretB64) {
+    $iss = issuer($secretB64);
+    $rec = $iss->issue(['email'=>'w@acme.com','plan'=>'studio','gateway'=>'polar','order_id'=>'H-3'])['record'];
+    putenv('FLUXFILES_LANDING_ORIGIN'); putenv('FLUXFILES_PRO_UPDATE_URL');
+    $off = licenseParts($rec);
+    assertTrue(!str_contains($off['text'], 'WordPress:') && !str_contains($off['html'], 'WordPress:') && !str_contains($off['html'], '/download'), 'off by default');
+    $on = withWp(fn () => licenseParts($rec));
+    assertTrue(str_contains($on['text'], 'https://fluxfiles.example/download') && str_contains($on['html'], 'href="https://fluxfiles.example/download"') && str_contains($on['html'], 'WordPress:'), 'on when configured');
+    $sup = $iss->issue(['email'=>'w@acme.com','plan'=>'support','gateway'=>'polar','order_id'=>'H-3s'])['record'];
+    $s = withWp(fn () => licenseParts($sup));
+    assertTrue(!str_contains($s['html'], '/download') && !str_contains($s['text'], '/download'), 'never for support');
+    putenv('FLUXFILES_LANDING_ORIGIN=http://fluxfiles.example'); putenv('FLUXFILES_PRO_UPDATE_URL=https://updates.example');
+    try { $plain = licenseParts($rec); } finally { putenv('FLUXFILES_LANDING_ORIGIN'); putenv('FLUXFILES_PRO_UPDATE_URL'); }
+    assertTrue(!str_contains($plain['html'], 'http://') && !str_contains($plain['text'], '/download'), 'http origin is not linked');
+});
+
+test('html mail: hostile email / plan / edition / key are escaped, never raw markup or javascript: links', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'a@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-4'])['record'];
+    $evil = '<script>alert(1)</script>';
+    $rec['email'] = 'x"' . $evil . '@acme.com'; $rec['plan'] = $evil; $rec['edition'] = $evil; $rec['license_key'] = $evil . '"onmouseover="x';
+    $rec['modules'] = 'share,' . $evil;
+    $h = licenseParts($rec)['html'];
+    assertTrue(!str_contains($h, '<script') && !str_contains($h, 'onmouseover="x'), 'no raw script / attribute break-out');
+    assertTrue(str_contains($h, '&lt;script&gt;alert(1)&lt;/script&gt;'), 'shown escaped instead');
+    $r = licenseParts(['email'=>'q@acme.com','modules'=>'','plan'=>$evil,'edition'=>$evil,'expires'=>time()+86400]);
+    assertTrue(!str_contains($r['html'], '<script'), 'support mail clean');
+    // sendRenewalUnmatched: plan / order id are interpolated into prose.
+    $content = ['heading'=>'h','intro'=>["Plan {$evil}"],'to'=>$rec['email'],'subject'=>'s'];
+    $h2 = mailerCall('build', $content)['html'];
+    assertTrue(!str_contains($h2, '<script') && !str_contains($h2, 'x"<'), 'prose + footer address escaped');
+    // href: https only.
+    putenv('FLUXFILES_LANDING_ORIGIN=javascript:alert(1)');
+    try { $j = licenseParts($rec)['html']; } finally { putenv('FLUXFILES_LANDING_ORIGIN'); }
+    assertTrue(!str_contains($j, 'javascript:'), 'non-https origin never reaches an href');
+});
+
+test('html mail: every reminder + unmatched-renewal mail has both parts and the footer', function () use ($secretB64) {
+    $iss = issuer($secretB64);
+    $mod = $iss->issue(['email'=>'r@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-5'])['record'];
+    $sup = $iss->issue(['email'=>'r@acme.com','plan'=>'support','gateway'=>'polar','order_id'=>'H-5s'])['record'];
+    $contents = [
+        mailerCall('renewalContent', $mod, '7'), mailerCall('renewalSupportContent', $sup, '7'),
+        mailerCall('expiryContent', $mod, 'grace'), mailerCall('expirySupportContent', $sup, 'expired'),
+    ];
+    foreach ($contents as $c) {
+        $c['to'] = 'r@acme.com'; $c['subject'] = 's';
+        $m = mailerCall('build', $c);
+        assertTrue(str_contains($m['html'], '<html') && str_contains($m['html'], 'Replies reach a real person') && str_contains($m['text'], 'Replies reach a real person'), 'both parts + footer');
+        assertTrue(!str_contains($m['text'], '<') && trim($m['text']) !== '', 'text part has no markup');
+    }
+});
+
+test('html mail: resend payload carries both html and text; ops notices stay text-only', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'a@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-6'])['record'];
+    $p = licenseParts($rec);
+    $pl = mailerCall('resendPayload', 'a@acme.com', 'Subj', $p['text'], $p['html'], '');
+    assertEqual($p['text'], $pl['text']); assertEqual($p['html'], $pl['html']);
+    assertTrue(!isset(mailerCall('resendPayload', 'a@acme.com', 'S', 'ops text', null, '')['html']), 'no html key for plain notices');
+});
+
+test('html mail: SMTP/sendmail body is valid multipart/alternative (QP, CRLF, random boundary)', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'a@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-7'])['record'];
+    $p = licenseParts($rec);
+    $m1 = mailerCall('mime', $p['text'], $p['html']); $m2 = mailerCall('mime', $p['text'], $p['html']);
+    $hdr = implode("\r\n", $m1['headers']);
+    assertTrue(str_contains($hdr, 'MIME-Version: 1.0') && !str_contains($hdr, "\r\n\r\n"), 'headers well-formed');
+    $parts = parseMultipart($hdr, $m1['body']);
+    assertEqual($p['text'], rtrim(str_replace("\r\n", "\n", $parts['text/plain']), "\n"), 'text part round-trips');
+    assertEqual(rtrim($p['html'], "\n"), rtrim(str_replace("\r\n", "\n", $parts['text/html']), "\n"), 'html part round-trips');
+    assertTrue(array_key_first($parts) === 'text/plain' && array_key_last($parts) === 'text/html', 'html last = preferred');
+    assertTrue(!str_contains(str_replace("\r\n", '', $m1['body']), "\n"), 'CRLF only');
+    assertTrue(preg_match('/boundary="([^"]+)"/', $hdr, $b1) && preg_match('/boundary="([^"]+)"/', implode("\r\n", $m2['headers']), $b2) && $b1[1] !== $b2[1], 'boundary is random per message');
+    $plain = mailerCall('mime', 'ops text', null);
+    assertTrue(in_array('Content-Type: text/plain; charset=UTF-8', $plain['headers'], true) && $plain['body'] === 'ops text', 'no html: unchanged single-part message');
+});
+
+test('html mail: real SMTP conversation delivers the multipart message intact', function () use ($secretB64) {
+    $dir = sys_get_temp_dir() . '/ffsmtp' . bin2hex(random_bytes(4)); mkdir($dir);
+    $script = $dir . '/srv.php'; $out = $dir . '/data.txt';
+    file_put_contents($script, '<?php $s=stream_socket_server("tcp://127.0.0.1:0",$en,$es); echo substr(stream_socket_get_name($s,false),strrpos(stream_socket_get_name($s,false),":")+1),"\n"; fflush(STDOUT);
+$c=stream_socket_accept($s,15); fwrite($c,"220 hi\r\n"); $data=false; $buf="";
+while(($l=fgets($c))!==false){ if($data){ $buf.=$l; if(substr($buf,-5)==="\r\n.\r\n"){ file_put_contents($argv[1],$buf); fwrite($c,"250 ok\r\n"); $data=false; } continue; }
+ $u=strtoupper(substr($l,0,4)); if($u==="DATA"){ fwrite($c,"354 go\r\n"); $data=true; } elseif($u==="QUIT"){ fwrite($c,"221 bye\r\n"); break; } else { fwrite($c,"250 ok\r\n"); } }');
+    $proc = proc_open([PHP_BINARY, $script, $out], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    $port = (int) trim((string) fgets($pipes[1]));
+    assertTrue($port > 0, 'fake SMTP server up');
+    foreach (['HOST' => '127.0.0.1', 'PORT' => (string) $port, 'TLS' => 'none'] as $k => $v) { putenv("FLUXFILES_SMTP_{$k}={$v}"); }
+    try {
+        $rec = issuer($secretB64)->issue(['email'=>'smtp@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-8'])['record'];
+        assertTrue((new LicenseMailer('smtp', 'licenses@fluxfiles.example', 'FluxFiles'))->sendLicense($rec), 'sendLicense over SMTP');
+    } finally {
+        foreach (['HOST', 'PORT', 'TLS'] as $k) { putenv("FLUXFILES_SMTP_{$k}"); }
+        proc_close($proc);
+    }
+    $raw = (string) file_get_contents($out);
+    assertTrue($raw !== '', 'server received DATA');
+    [$h, $body] = explode("\r\n\r\n", substr($raw, 0, -5), 2);
+    assertTrue(str_contains($h, 'To: <smtp@acme.com>') && str_contains($h, 'Subject: Your FluxFiles licence key'), 'To/Subject headers');
+    assertTrue(!str_contains(str_replace("\r\n", '', $raw), "\n"), 'CRLF only on the wire');
+    $parts = parseMultipart($h, preg_replace('/^\.\./m', '.', $body));   // undo SMTP dot-stuffing
+    $key = (string) $rec['license_key'];
+    assertEqual(1, substr_count($parts['text/plain'], $key), 'key once (text, over the wire)');
+    assertEqual(1, substr_count($parts['text/html'], $key), 'key once (html, over the wire)');
+    array_map('unlink', glob($dir . '/*')); rmdir($dir);
+});
+
+test('html mail: the log transport shows the text part with the key redacted', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'log@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-9'])['record'];
+    $out = captureMail(fn () => (new LicenseMailer('log'))->sendLicense($rec));
+    assertTrue(!str_contains($out, (string) $rec['license_key']) && str_contains($out, '[redacted]') && !str_contains($out, '<html'), 'redacted text only');
+});
+
+
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f>0?1:0);
