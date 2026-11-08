@@ -355,9 +355,24 @@ test('generateToken forwards ai-vision gate', function () use ($secret) {
     assertEqual(true, ($p->allow_ai_vision ?? false), 'ai-vision gate forwarded');
 });
 
-test('terminal_pty_url still forwards (the UI embeds the operator\'s own ttyd)', function () use ($secret) {
-    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(61, ['terminal_pty_url' => 'https://ttyd.example.com/']), $secret);
-    assertEqual('https://ttyd.example.com/', $p->terminal_pty_url ?? '', 'terminal_pty_url forwarded');
+test('terminal_pty_url is never minted (no terminal in the WordPress plugin), whatever override, claims hatch or filter says', function () use ($secret) {
+    $keepFilters = $GLOBALS['WP_FILTERS'];
+    $url = 'https://ttyd.example.com/';
+    try {
+        foreach ([
+            FluxFilesPlugin::generateToken(61, ['terminal_pty_url' => $url]),
+            FluxFilesPlugin::generateToken(61, ['claims' => ['terminal_pty_url' => $url]]),
+            FluxFilesPlugin::generateToken(61, ['role' => 'admin', 'terminal_pty_url' => $url, 'claims' => ['terminal_pty_url' => $url]]),
+            FluxFilesPlugin::generateByobToken(61, [], ['terminal_pty_url' => $url, 'claims' => ['terminal_pty_url' => $url]]),
+        ] as $i => $t) {
+            assertTrue(!property_exists(\FluxFiles\JwtCompat::decode($t, $secret), 'terminal_pty_url'), "token #{$i} has no terminal_pty_url");
+        }
+        $GLOBALS['WP_FILTERS']['fluxfiles_token_overrides'][] = fn ($o) => array_merge((array) $o, ['terminal_pty_url' => $url, 'claims' => ['terminal_pty_url' => $url]]);
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+        assertTrue(!property_exists($p, 'terminal_pty_url'), 'filter cannot re-add it');
+    } finally {
+        $GLOBALS['WP_FILTERS'] = $keepFilters;
+    }
 });
 
 test('about / brand_name / brand_logo_url / accent_color are forwarded in the raw payload', function () use ($secret) {

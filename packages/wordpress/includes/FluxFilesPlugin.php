@@ -835,12 +835,16 @@ HTACCESS;
      *    through a developer-minted BYOB token. Forced false everywhere rather than
      *    per disk type: simpler, and nothing in the UI depends on it.
      *
+     *  - `terminal_pty_url`: no terminal or shell entry in the WordPress plugin; the
+     *    claim is removed so the UI toolbar never shows one.
+     *
      * @param array<string,mixed> $payload
      */
     private static function disableFileEditing(array &$payload): void
     {
         $payload['allow_code_edit'] = false;
         $payload['allow_chmod']     = false;
+        unset($payload['terminal_pty_url']);
     }
 
     /**
@@ -1114,12 +1118,8 @@ HTACCESS;
         }
         // `allow_chmod` / `allow_code_edit` are deliberately not overridable here:
         // disableFileEditing() forces both off on every token (see below).
-        // Optional self-hosted PTY terminal URL (ttyd/gotty/wetty) — pure UI config:
-        // the UI embeds the operator's own instance, works in any mode like
-        // pdf_tools_url/office_url/esign_url below.
-        if (!empty($overrides['terminal_pty_url'])) {
-            $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
-        }
+        // `terminal_pty_url` is not forwarded either: the WordPress plugin has no
+        // terminal entry (disableFileEditing() strips it from every token).
         // PDF-tools + office embeds are pure UI (no core endpoint) → work in any mode.
         if (!empty($overrides['pdf_tools_url'])) {
             $payload['pdf_tools_url'] = (string) $overrides['pdf_tools_url'];

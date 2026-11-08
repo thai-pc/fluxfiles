@@ -36,6 +36,7 @@ FluxFiles manages the files in its **own storage area**. It is not a tool for br
 * **No server-side code can be uploaded.** PHP and every other server-executed type (`php`, `phtml`, `phar`, `php3`, `php4`, `php5`, `php7`, `php8`, `pht`, `cgi`, `pl`, `py`, `rb`, `sh`, `asp`, `aspx`, `jsp`, and more), plus the files `.htaccess`, `.htpasswd`, `.user.ini` and `web.config`, are always refused, including as a middle extension such as `shell.php.jpg`. This built-in list applies to uploads, renames, moves, copies and archive extraction, and no setting can turn it off.
 * **Archives are checked entry by entry.** Extracting a ZIP applies the same list, and the upload extension rules, to every file inside it before anything is written. An archive that contains a refused file is rejected as a whole, and hidden dot-files are skipped.
 * **No active content for untrusted roles.** A user without the `unfiltered_html` capability can never upload HTML, SVG, XML, XSL, JavaScript or Flash files, the same rule WordPress applies to its own Media Library. On Apache, the plugin also writes a `.htaccess` into the storage folder that turns the PHP engine off there and serves stored HTML, SVG and XML as plain downloads. On nginx, the settings page shows the equivalent rules to add.
+* **There is no terminal or shell access.**
 * **There is no code or file-content editor in the WordPress plugin; stored files can be previewed and downloaded, never edited in place or executed.** Changing file permissions (`chmod`) is also disabled.
 * **Nothing it stores is ever executed.** FluxFiles never includes, requires or evaluates a file from its storage area, and it contains no `eval`.
 * **No code is downloaded.** The plugin never downloads or installs plugins, themes or executable code, and it has no updater of its own. Updates come from WordPress.org.
@@ -79,7 +80,7 @@ Only when an administrator selects a provider and enters its API key, and the to
 Only when the token allows it: FluxFiles makes an HTTP GET to the URL a user asks it to import. Requests to private and reserved addresses are refused.
 
 = Operator-run embeds =
-Only when a developer sets `terminal_pty_url`, `pdf_tools_url`, `office_url` or `esign_url`: the UI loads your own instance (ttyd, Stirling-PDF, Collabora/OnlyOffice, DocuSeal) in an iframe. `office_url` and `esign_url` may receive the selected file's URL.
+Only when a developer sets `pdf_tools_url`, `office_url` or `esign_url`: the UI loads your own instance (Stirling-PDF, Collabora/OnlyOffice, DocuSeal) in an iframe. `office_url` and `esign_url` may receive the selected file's URL.
 
 == Source & build ==
 
@@ -169,7 +170,7 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 = 1.1.3 =
 * Bundles FluxFiles core 1.2.1.
-* The file-content editor and chmod are disabled in the WordPress plugin; clarified what the plugin can and cannot access.
+* The file-content editor, chmod and the terminal embed are disabled in the WordPress plugin; clarified what the plugin can and cannot access.
 
 = 1.1.2 =
 * Bundles FluxFiles core 1.2.0.
@@ -242,7 +243,7 @@ First public release. WordPress adapter for the FluxFiles file manager:
 == Upgrade Notice ==
 
 = 1.1.3 =
-Disables the file-content editor and chmod, and documents what the plugin can and cannot access. Files can still be previewed and downloaded.
+Disables the file-content editor, chmod and the terminal embed, and documents what the plugin can and cannot access. Files can still be previewed and downloaded.
 
 = 1.1.2 =
 Updates the bundled FluxFiles core to 1.2.0, with storage path hardening. No change in behaviour for the free plugin.
