@@ -133,7 +133,7 @@ fails closed on every eligible write until the operator notices and fixes it (lo
 | Claim | Type | Default | Notes |
 |---|---|---|---|
 | `allow_dlp_scan` | bool | `false` | 3-layer gate claim for the `dlp` module (Enterprise bundle). Mirrors `allow_virus_scan` exactly — opt-in, and even when true the module's code must be installed + the license must cover it. |
-| `dlp_entity_types` | string[]\|null | `null` | Allowlist of Presidio entity-type names (e.g. `["US_SSN","CREDIT_CARD","EMAIL_ADDRESS"]`) that trigger a block. **`null` = the engine's full default detection set** (whatever entities Presidio returns unfiltered) — chosen to match the existing `allowed_ext: null = broadest` precedent in this codebase rather than inventing a hidden "curated safe default" that would silently differ from what the operator's own Presidio instance reports. Operators who only care about high-value identifiers (and want to avoid over-blocking on `PERSON`/`LOCATION`) should set this explicitly. Sanitized: each entry uppercased/trimmed, must match `^[A-Z_]+$`, else dropped. |
+| `dlp_entity_types` | string[]\|null | `null` | Allowlist of Presidio entity-type names (e.g. `["US_SSN","CREDIT_CARD","EMAIL_ADDRESS"]`) that trigger a block. **`null`/empty = the DLP module's curated PII default** (`DlpModule::DEFAULT_ENTITIES`: EMAIL_ADDRESS, PHONE_NUMBER, CREDIT_CARD, IBAN_CODE, US_SSN, US_ITIN, US_PASSPORT, US_DRIVER_LICENSE, US_BANK_NUMBER, UK_NHS, UK_NINO, IP_ADDRESS, CRYPTO, MEDICAL_LICENSE), narrowed to what the analyzer supports for `FLUXFILES_DLP_LANGUAGE` (`/supportedentities`); not Presidio's full set (module >= 1.1.0). Set it explicitly to widen (e.g. add `PERSON`/`LOCATION`) or narrow. Sanitized: each entry uppercased/trimmed, must match `^[A-Z_]+$`, else dropped. |
 | `dlp_scan_extensions` | string[]\|null | `null` → built-in list: `txt,csv,tsv,json,ndjson,log,md,yaml,yml,xml,html,htm,sql` | v1 scan-eligibility allowlist (§2.1) — extensions outside this list are **skipped, not blocked**, even with `allow_dlp_scan` on. Sanitized like `allowed_ext`: lowercase, no dot, alnum only. |
 | `dlp_max_scan_kb` | int (KB) | `0` → default `2048` (2 MB) | Per-file cap on bytes read and sent to the engine. A file over this cap is **skipped, not blocked** (documented gap, §9.3) — v1 stays synchronous and doesn't want a 200 MB log export to block an upload request for tens of seconds. Clamped `[16, 51200]` (16 KB–50 MB). |
 | `dlp_min_score` | float | `0` → default `0.6` | Minimum Presidio confidence score (0–1) an entity match must reach to count as "detected." Lower = more sensitive (more false positives on marginal matches like a phone-number-shaped string); higher = fewer false positives, more risk of a missed real PII value. Clamped `[0, 1]`. |
@@ -207,7 +207,7 @@ sales pitch, not just the code.
 | `FLUXFILES_DLP_ENDPOINT` unset (module installed+licensed+claimed, but server has no engine configured) | 501 | `dlp_unconfigured` | **Inside `DlpModule` itself** (private package) | **No** — mirrors `c2pa_unconfigured`/`aivision_unconfigured`/`ocr_unavailable`, none of which have core lang entries either, because they're thrown by module code the MIT core never sees at build time. |
 | Engine unreachable, connection refused, or times out (`FLUXFILES_DLP_TIMEOUT`) | 502 | `dlp_engine_unavailable` | Inside `DlpModule` | No, same reasoning as above |
 | Engine returns a non-2xx or a body that doesn't parse as the expected `[{entity_type,score,...}]` shape | 502 | `dlp_engine_unavailable` | Inside `DlpModule` | No |
-| PII detected (any entity in `dlp_entity_types` — or, if `null`, any entity at all — scoring ≥ `dlp_min_score`) | 422 | `pii_detected` | **`FileManager::assertNoPii()`** (core) | **Yes — new key, all 16 languages** |
+| PII detected (any entity in `dlp_entity_types` — or, if `null`/empty, the module's curated PII default set (module >= 1.1.0), not Presidio's full set — scoring ≥ `dlp_min_score`) | 422 | `pii_detected` | **`FileManager::assertNoPii()`** (core) | **Yes — new key, all 16 languages** |
 | Chunk-upload route hit while `allow_dlp_scan` is true | 409 | `dlp_unscannable` | **`index.php`** (core, mirrors the existing `virus_unscannable` block) | **Yes — new key, all 16 languages** |
 | Staging content to a temp file for scanning fails (disk full, permissions) | 500 | `dlp_failed` | **`FileManager.php`** (core, mirrors `virus_failed`) | **Yes — new key, all 16 languages** |
 
@@ -509,13 +509,18 @@ just remembering to bump the number by hand (gitignored packages aren't CI-visib
    fails closed on every eligible write until fixed. This is the correct failure mode
    for a security control (loud, not silently degraded) and avoids introducing new
    server-lifetime state this codebase has consistently avoided elsewhere.
-6. **`dlp_entity_types: null` = engine's full default set, not a FluxFiles-curated
-   "high-risk-only" starter list.** This was a genuine judgment call: the task brief's
-   own reasoning for the claim ("avoid over-blocking on names/locations") could argue
-   for a narrower built-in default. This spec picked "null = broadest" for consistency
-   with `allowed_ext`'s existing null-semantics, on the theory that a silent curated
-   default would be a support surprise ("why did it flag PERSON when I set nothing?").
-   Worth revisiting if early Enterprise feedback says otherwise — flagged, not settled.
+6. **`dlp_entity_types: null` = the module's curated PII default (REVERSED in dlp 1.1.0).**
+   This originally said null meant Presidio's full set, on the theory that a hidden
+   curated default would silently differ from the operator's own Presidio instance and
+   should match the `allowed_ext: null = broadest` precedent. In practice the full set
+   includes PERSON, LOCATION, DATE_TIME, NRP and URL, so ordinary prose was refused with
+   422 `pii_detected`; "broadest" is the wrong failure mode for a blocking gate. The
+   default is therefore a documented, structured-identifier set
+   (`DlpModule::DEFAULT_ENTITIES`), narrowed per request to the analyzer's
+   `/supportedentities` for the configured language. Operators who want names or places
+   blocked list them in `dlp_entity_types`. If the default has no overlap with the
+   analyzer's language, the write is refused (502, fail-closed) instead of scanning for
+   nothing.
 7. **No dedicated rate-limit bucket for this feature** (§6.5) — reuses the existing
    write bucket rather than getting its own. Revisit if the
    added per-request HTTP hop to Presidio proves to be an operational bottleneck in

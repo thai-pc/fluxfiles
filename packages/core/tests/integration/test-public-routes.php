@@ -216,11 +216,30 @@ test('OLD module (no PublicModuleInterface): 501 module_update_required on a JSO
     ModuleRegistry::reset();
 });
 
+test('page route gate failures render an escaped HTML page, API routes keep JSON', function () {
+    ModuleRegistry::reset();
+    [$code, $body] = run('share', 'GET', '/api/fm/share/page', ctx());
+    assertEqual(501, $code);
+    assertTrue(is_string($body) && str_starts_with($body, '<!doctype html>'), 'HTML, not JSON');
+    assertTrue(str_contains($body, 'module_not_installed') && !str_contains($body, '{"data"'), 'code shown, no envelope');
+    ModuleRegistry::register('share', FakePublicShare::class);
+    [$code, $body] = run('share', 'GET', '/api/fm/share/page', ctx(new NoLicense()));
+    assertEqual(402, $code);
+    assertTrue(is_string($body) && str_contains($body, '<h1>402</h1>'), '402 page');
+    [$code, $body] = run('share', 'GET', '/api/fm/share/info', ctx(new NoLicense()));
+    assertEqual(402, $code);
+    assertTrue(is_array($body) && isset($body['error_code']), 'API route keeps the JSON envelope');
+    [$code, $body] = run('share', 'POST', '/api/fm/share/page', ctx());
+    assertEqual(404, $code);
+    assertTrue(is_string($body) && str_contains($body, 'not_found'), 'non-GET on the page is an HTML 404');
+    ModuleRegistry::reset();
+});
+
 test('OLD module: the page route answers the same 501 (checked before the page branch)', function () {
     ModuleRegistry::register('share', OldShare::class);
     [$code, $body] = run('share', 'GET', '/api/fm/share/page', ctx());
     assertEqual(501, $code);
-    assertEqual('module_update_required', $body['error_code']);
+    assertTrue(is_string($body) && str_contains($body, 'module_update_required'), 'HTML page carries the code');
     ModuleRegistry::reset();
 });
 

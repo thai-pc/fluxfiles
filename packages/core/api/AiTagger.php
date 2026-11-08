@@ -86,7 +86,7 @@ class AiTagger
 
     public function __construct(string $provider, string $apiKey, ?string $model = null, ?string $baseUrl = null, ?HttpTransportInterface $transport = null)
     {
-        $this->transport = $transport ?? new CurlTransport(10);
+        $this->transport = $transport ?? new CurlTransport(10, 2 * 1024 * 1024);
         $this->provider = strtolower(trim($provider));
         $this->apiKey = $apiKey;
 
