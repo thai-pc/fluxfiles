@@ -4,7 +4,7 @@ Tags: file manager, offload media, amazon s3, cloudflare r2, media library
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -150,6 +150,11 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.1.2 =
+* Bundles FluxFiles core 1.2.0.
+* Security: stricter handling of storage paths in the bundled development router.
+* Internal groundwork for licence key renewal in the optional FluxFiles Pro add-on. No change in behaviour for the free plugin.
+
 = 1.1.1 =
 * Project links and the description now point at fluxfiles.thai-pc.com; the readme no longer mentions a WordPress Pro add-on that does not exist.
 * Bundles FluxFiles core 1.1.8.
@@ -214,6 +219,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.1.2 =
+Updates the bundled FluxFiles core to 1.2.0, with storage path hardening. No change in behaviour for the free plugin.
 
 = 1.1.1 =
 Updated project links; no functional change from 1.1.0.

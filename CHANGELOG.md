@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Changed
+- WordPress plugin 1.1.2 (the first WordPress.org submission build; 1.1.1 was never submitted): bundles core 1.2.0 (licence-file hardening, dev router path normalisation, `LicenseKeyFile`/`LicenseRefresh` groundwork for the FluxFiles Pro add-on's licence key renewal). The free plugin never calls the licence server itself: `LicenseManager` is not bundled, nothing in the plugin invokes `/refresh`, and `LicenseRefresh` only issues a request when a caller supplies an HTTP transport. No behaviour change for free users.
+
 ## [1.0.24] — 2026-11-08
 
 > Released: `core-v1.2.0` (licence key refresh: `fluxfiles license refresh`, automatic before `fluxfiles update`; dev router path normalisation). Needs a licence server with `POST /refresh` (the hosted one has it). Licence-server changes in this entry (HTML mail, `/refresh`, Pro download, plugin bundles) are deployed separately.
