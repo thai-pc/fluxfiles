@@ -5,10 +5,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
-> Will release: `wordpress-v1.1.3` (first WordPress.org submission build).
+> Will release: `core-v1.2.1` (first), then `wordpress-v1.1.3` (first WordPress.org submission build, bundles core 1.2.1).
 
 ### Security
 - WordPress plugin: the file-content editor (`allow_code_edit`) and `chmod` (`allow_chmod`) are disabled. No token minted by the plugin carries either claim as true, whatever the role preset, override, raw `claims` entry or `fluxfiles_token_overrides` filter says, and `PUT /content` and `POST /chmod` answer 403. Read-only preview of text files is unchanged.
+
+### Fixed
+- Core 1.2.1: the error page of a module page route (`PublicRoutes::emitErrorPage`) casts the status to int and carries a block `phpcs:disable` for the escaping rule (the single-line ignore did not cover the multi-line `echo`). Output is unchanged. `AboutInfo` guards `LicenseKeyFile` with `class_exists`.
+- WordPress build: `api/LicenseKeyFile.php` and `api/LicenseRefresh.php` (CLI-only licence key refresh) are no longer bundled, and `scripts/check-wp-dist.php` forbids them, so the free plugin ships no licence-server code.
 
 ### Documentation
 - WordPress readme: new "What FluxFiles can and cannot access" section and FAQ entry, a sandbox-first short description and tags.

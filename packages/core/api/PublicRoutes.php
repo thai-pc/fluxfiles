@@ -192,10 +192,11 @@ final class PublicRoutes
         header('X-Content-Type-Options: nosniff');
         // Nothing to load or embed: the tightest policy (inline style only, no framing).
         header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
-        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed strings plus a code filtered to [a-z0-9_] and HTML-escaped above
-        echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' . $status . '</title>'
+        // phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- $status is an int, $headline one of the fixed strings above, $safeCode is filtered to [a-z0-9_] and HTML-escaped
+        echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' . (int) $status . '</title>'
             . '<style>body{font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;color:#333}main{text-align:center;padding:2rem}small{color:#888}</style></head>'
-            . '<body><main><h1>' . $status . '</h1><p>' . $headline . '</p><small>' . $safeCode . '</small></main></body></html>';
+            . '<body><main><h1>' . (int) $status . '</h1><p>' . $headline . '</p><small>' . $safeCode . '</small></main></body></html>';
+        // phpcs:enable WordPress.Security.EscapeOutput.OutputNotEscaped
     }
 
     private static function emitError(ApiException $e): void

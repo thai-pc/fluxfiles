@@ -168,6 +168,7 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 == Changelog ==
 
 = 1.1.3 =
+* Bundles FluxFiles core 1.2.1.
 * The file-content editor and chmod are disabled in the WordPress plugin; clarified what the plugin can and cannot access.
 
 = 1.1.2 =
