@@ -11,10 +11,10 @@ final class I18n
     public function __construct(public string $lang = 'vi')
     {
         $this->fallback = require __DIR__ . '/../lang/en.php';
-        $this->strings = require __DIR__ . '/../lang/' . ($lang === 'en'?'en': 'vi') . '.php';
+        $this->strings = require __DIR__ . '/../lang/' . ($lang === 'en' ? 'en' : 'vi') . '.php';
     }
     public function t(string $key): string
     {
-        return $this->strings[$key] ?? $this->fallback[$key] ?? $key;
+        return $this->strings[$key] ?? ($this->fallback[$key] ?? $key);
     }
 }

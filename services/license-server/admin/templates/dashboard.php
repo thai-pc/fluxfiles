@@ -1,12 +1,124 @@
-<div class="page-heading"><div><p class="eyebrow">FLUXFILES / <?= $v->e(strtoupper($data['instance'])) ?></p><h1><?= $v->e($v->t('dashboard')) ?></h1></div><?php if (\FluxFiles\LicenseServer\Client\Config::sandbox()): ?><span class="pill test"><?= $v->e($v->t('test_data')) ?></span><?php endif ?></div>
-<section class="card attention"><h2><?= $v->e($v->t('needs_attention')) ?> <span class="count"><?= $data['attention_total'] ?></span></h2><p><a href="/licences"><?= $v->e($v->t('undelivered')) ?>: <?= $v->e($data['undelivered']) ?></a></p><?= $v->table($data['undelivered_rows'],['jti','email','plan','created_at'],'/licences/','empty_undelivered') ?><?= $v->table($data['needs_attention'],['id','type','outcome','product_id','attempts'],'/events/','empty_events') ?></section>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">FLUXFILES / <?= $v->e(strtoupper($data['instance'])) ?></p>
+        <h1><?= $v->e($v->t('dashboard')) ?></h1>
+    </div>
+    <?php if (\FluxFiles\LicenseServer\Client\Config::sandbox()): ?>
+    <span class="pill test"><?= $v->e($v->t('test_data')) ?></span>
+    <?php endif ?>
+</div>
+<section class="card attention">
+    <h2>
+        <?= $v->e($v->t('needs_attention')) ?>
+        <span class="count"><?= $data['attention_total'] ?></span>
+    </h2>
+    <p><a href="/licences"><?= $v->e($v->t('undelivered')) ?>: <?= $v->e($data['undelivered']) ?></a></p>
+    <?= $v->table(
+        $data['undelivered_rows'],
+        ['jti', 'email', 'plan', 'created_at'],
+        '/licences/',
+        'empty_undelivered',
+    ) ?><?= $v->table(
+        $data['needs_attention'],
+        ['id', 'type', 'outcome', 'product_id', 'attempts'],
+        '/events/',
+        'empty_events',
+    ) ?>
+</section>
 <div class="kpis">
-<?php foreach ($data['revenue']['currencies'] as $currency): ?><?php foreach (['net_month','net_previous','mrr','arr','refunds_30d'] as $metric): ?><a class="card kpi" href="/stats/revenue?currency=<?= $v->e($currency['currency']) ?>"><span><?= $v->e($v->t($metric)) ?></span><strong><?= $v->e(\FluxFiles\LicenseServer\Admin\View::money((int)$currency[$metric],$currency['currency'])) ?></strong></a><?php endforeach ?><?php endforeach ?>
-<?php foreach (['active_30d','never_installed','gone_quiet'] as $metric): ?><a class="card kpi" href="/stats/installs"><span><?= $v->e($v->t($metric)) ?></span><strong><?= $v->e($data['installs'][$metric]) ?></strong></a><?php endforeach ?>
-<div class="card kpi"><span><?= $v->e($v->t('backup')) ?></span><strong><?= $v->time($data['backup']['at'] ?? null) ?></strong><?php if (!$data['backup']['ok'] || (int)($data['backup']['at']??0)<time()-26*3600): ?><p class="<?= (int)($data['backup']['at']??0)<time()-50*3600?'alert':'warning' ?>"><?= $v->e($v->t('backup_stale')) ?></p><?php endif ?></div>
-<div class="card kpi"><span><?= $v->e($v->t('telegram')) ?></span><strong><?= $v->time($data['telegram']['last_sent']) ?></strong><span><?= $v->e($data['telegram']['queue_depth'] ?? 0) ?> <?= $v->e($v->t('queued')) ?></span><?php if ((int)($data['heartbeat']['at']??0)<time()-300): ?><p class="alert"><?= $v->e($v->t('worker_silent')) ?></p><?php endif ?></div></div>
-<section class="card"><h2><?= $v->e($v->t('founding')) ?></h2><?php foreach ($data['revenue']['founding'] as $discount): ?><h3><?= $v->e($discount['code']) ?> · <?= $v->e($discount['paid']) ?> / <?= $v->e($discount['cap']) ?></h3><progress max="<?= $v->e($discount['cap']) ?>" value="<?= $v->e(min($discount['cap'],$discount['used'])) ?>"><?= $v->e($discount['used']) ?></progress><p><?= $v->e($v->t('refunded')) ?>: <?= $v->e($discount['refunded']) ?> · <?= $v->e($v->t('refund_slots')) ?></p><?php foreach ($discount['net'] as $code=>$net): ?><p><?= $v->e(\FluxFiles\LicenseServer\Admin\View::money((int)$net,$code)) ?></p><?php endforeach ?><?= $v->time($discount['last_at']) ?><?php endforeach ?></section>
-<div class="two-col"><?php foreach (['plans','new_7d','expiring'] as $key): ?><section class="card"><h2><?= $v->e($v->t($key)) ?></h2><?= $v->table($key==='expiring'?array_map(static fn(array $row):array=>array_merge($row,['enforcement'=>$v->t($row['enforcement']==='subscription'?'stops_after_grace':'updates_end')]),$data[$key]):$data[$key]) ?></section><?php endforeach ?><section class="card"><h2><?= $v->e($v->t('webhook_errors_7d')) ?></h2><strong><?= $v->e($data['webhook_errors_7d']) ?></strong><h2><?= $v->e($v->t('mail')) ?></h2><?= $v->table($data['mail']['periods'][30]) ?></section></div>
+    <?php foreach ($data['revenue']['currencies'] as $currency): ?>
+    <?php foreach (['net_month', 'net_previous', 'mrr', 'arr', 'refunds_30d'] as $metric): ?>
+    <a class="card kpi" href="/stats/revenue?currency=<?= $v->e($currency['currency']) ?>">
+        <span><?= $v->e($v->t($metric)) ?></span>
+        <strong><?= $v->e(
+            \FluxFiles\LicenseServer\Admin\View::money((int) $currency[$metric], $currency['currency']),
+        ) ?></strong>
+    </a>
+    <?php endforeach ?>
+    <?php endforeach ?>
+    <?php foreach (['active_30d', 'never_installed', 'gone_quiet'] as $metric): ?>
+    <a class="card kpi" href="/stats/installs">
+        <span><?= $v->e($v->t($metric)) ?></span>
+        <strong><?= $v->e($data['installs'][$metric]) ?></strong>
+    </a>
+    <?php endforeach ?>
+    <div class="card kpi">
+        <span><?= $v->e($v->t('backup')) ?></span>
+        <strong><?= $v->time($data['backup']['at'] ?? null) ?></strong>
+        <?php if (!$data['backup']['ok'] || (int) ($data['backup']['at'] ?? 0) < time() - 26 * 3600): ?>
+        <p class="<?= (int) ($data['backup']['at'] ?? 0) < time() - 50 * 3600 ? 'alert' : 'warning' ?>"><?= $v->e($v->t('backup_stale')) ?></p>
+        <?php endif ?>
+    </div>
+    <div class="card kpi">
+        <span><?= $v->e($v->t('telegram')) ?></span>
+        <strong><?= $v->time($data['telegram']['last_sent']) ?></strong>
+        <span><?= $v->e($data['telegram']['queue_depth'] ?? 0) ?> <?= $v->e($v->t('queued')) ?></span>
+        <?php if ((int) ($data['heartbeat']['at'] ?? 0) < time() - 300): ?>
+        <p class="alert"><?= $v->e($v->t('worker_silent')) ?></p>
+        <?php endif ?>
+    </div>
+</div>
+<section class="card">
+    <h2><?= $v->e($v->t('founding')) ?></h2>
+    <?php foreach ($data['revenue']['founding'] as $discount): ?>
+    <h3><?= $v->e($discount['code']) ?> · <?= $v->e($discount['paid']) ?> / <?= $v->e($discount['cap']) ?></h3>
+    <progress max="<?= $v->e($discount['cap']) ?>" value="<?= $v->e(min($discount['cap'], $discount['used'])) ?>"><?= $v->e($discount['used']) ?></progress>
+    <p><?= $v->e($v->t('refunded')) ?>: <?= $v->e($discount['refunded']) ?> · <?= $v->e($v->t('refund_slots')) ?></p>
+    <?php foreach ($discount['net'] as $code => $net): ?>
+    <p><?= $v->e(\FluxFiles\LicenseServer\Admin\View::money((int) $net, $code)) ?></p>
+    <?php endforeach ?>
+    <?= $v->time($discount['last_at']) ?>
+    <?php endforeach ?>
+</section>
+<div class="two-col">
+    <?php foreach (['plans', 'new_7d', 'expiring'] as $key): ?>
+    <section class="card">
+        <h2><?= $v->e($v->t($key)) ?></h2>
+        <?= $v->table(
+            $key === 'expiring'
+                ? array_map(
+                    static fn(array $row): array => array_merge($row, [
+                        'enforcement' => $v->t(
+                            $row['enforcement'] === 'subscription' ? 'stops_after_grace' : 'updates_end',
+                        ),
+                    ]),
+                    $data[$key],
+                )
+                : $data[$key],
+        ) ?>
+    </section>
+    <?php endforeach ?>
+    <section class="card">
+        <h2><?= $v->e($v->t('webhook_errors_7d')) ?></h2>
+        <strong><?= $v->e($data['webhook_errors_7d']) ?></strong>
+        <h2><?= $v->e($v->t('mail')) ?></h2>
+        <?= $v->table($data['mail']['periods'][30]) ?>
+    </section>
+</div>
 
-<section class="card"><h2><?= $v->e($v->t('ops_items')) ?></h2><?= $v->table($data['ops_items']??[],['at','kind','ref_jti','ref_order','summary'],null,'empty_ops_items') ?><?php foreach ($data['ops_items']??[] as $item): ?><div class="actions"><?php if ($item['ref_jti']): ?><a href="/licences/<?= $v->e(rawurlencode($item['ref_jti'])) ?>"><?= $v->e($v->t('licences')) ?></a><?php endif ?><?php if ($v->canWrite()): ?><form method="post" action="/ops-items/<?= $v->e($item['id']) ?>/resolve"><?= $v->csrf() ?><button><?= $v->e($v->t('resolve')) ?></button></form><?php endif ?></div><?php endforeach ?></section>
-<section class="card"><h2><?= $v->e($v->t('past_due')) ?></h2><?= $v->table($data['past_due']??[],[],null,'empty_past_due') ?></section>
+<section class="card">
+    <h2><?= $v->e($v->t('ops_items')) ?></h2>
+    <?= $v->table(
+        $data['ops_items'] ?? [],
+        ['at', 'kind', 'ref_jti', 'ref_order', 'summary'],
+        null,
+        'empty_ops_items',
+    ) ?>
+    <?php foreach ($data['ops_items'] ?? [] as $item): ?>
+    <div class="actions">
+        <?php if ($item['ref_jti']): ?>
+        <a href="/licences/<?= $v->e(rawurlencode($item['ref_jti'])) ?>"><?= $v->e($v->t('licences')) ?></a>
+        <?php endif ?>
+        <?php if ($v->canWrite()): ?>
+        <form method="post" action="/ops-items/<?= $v->e($item['id']) ?>/resolve">
+            <?= $v->csrf() ?>
+            <button><?= $v->e($v->t('resolve')) ?></button>
+        </form>
+        <?php endif ?>
+    </div>
+    <?php endforeach ?>
+</section>
+<section class="card">
+    <h2><?= $v->e($v->t('past_due')) ?></h2>
+    <?= $v->table($data['past_due'] ?? [], [], null, 'empty_past_due') ?>
+</section>

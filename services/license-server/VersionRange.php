@@ -9,17 +9,29 @@ final class VersionRange
 {
     public static function validVersion(string $version): bool
     {
-        return preg_match('/^v?\d{1,4}(?:\.\d{1,4}){1,3}(?:[-+][0-9A-Za-z.-]{1,40})?$/D', $version) === 1;
+        return preg_match(
+            '/^v?\d{1,4}(?:\.\d{1,4}){1,3}(?:[-+][0-9A-Za-z.-]{1,40})?$/D',
+            $version,
+        ) === 1;
     }
 
     public static function valid(string $constraint): bool
     {
-        if ($constraint === '' || strlen($constraint) > 500) { return false; }
+        if ($constraint === '' || strlen($constraint) > 500) {
+            return false;
+        }
         foreach (explode('||', $constraint) as $group) {
             $tokens = preg_split('/\s+/', trim($group)) ?: [];
-            if ($tokens === []) { return false; }
+            if ($tokens === []) {
+                return false;
+            }
             foreach ($tokens as $token) {
-                if (!preg_match('/^(?:<=|>=|!=|=|<|>)?(.+)$/D', $token, $match) || !self::validVersion($match[1])) { return false; }
+                if (
+                    !preg_match('/^(?:<=|>=|!=|=|<|>)?(.+)$/D', $token, $match) ||
+                    !self::validVersion($match[1])
+                ) {
+                    return false;
+                }
             }
         }
         return true;
@@ -27,21 +39,35 @@ final class VersionRange
 
     private static function normalize(string $version): string
     {
-        $version=explode('+',ltrim($version,'v'),2)[0];$parts=explode('-',$version,2);
-        $numbers=array_map('intval',explode('.',$parts[0]));
-        return implode('.',array_pad($numbers,4,0)).(isset($parts[1])?'-'.$parts[1]:'');
+        $version = explode('+', ltrim($version, 'v'), 2)[0];
+        $parts = explode('-', $version, 2);
+        $numbers = array_map('intval', explode('.', $parts[0]));
+        return implode('.', array_pad($numbers, 4, 0)) . (isset($parts[1]) ? '-' . $parts[1] : '');
     }
 
     public static function matches(string $version, string $constraint): bool
     {
-        if (!self::validVersion($version) || !self::valid($constraint)) { return false; }
+        if (!self::validVersion($version) || !self::valid($constraint)) {
+            return false;
+        }
         foreach (explode('||', $constraint) as $group) {
             $all = true;
             foreach (preg_split('/\s+/', trim($group)) ?: [] as $token) {
                 preg_match('/^(<=|>=|!=|=|<|>)?(.+)$/D', $token, $m);
-                if (!version_compare(self::normalize($version), self::normalize($m[2]), ($m[1] ?? '') ?: '=')) { $all = false; break; }
+                if (
+                    !version_compare(
+                        self::normalize($version),
+                        self::normalize($m[2]),
+                        $m[1] ?? '' ?: '=',
+                    )
+                ) {
+                    $all = false;
+                    break;
+                }
             }
-            if ($all) { return true; }
+            if ($all) {
+                return true;
+            }
         }
         return false;
     }

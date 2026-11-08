@@ -1,7 +1,71 @@
-<?php $r=$data['licence']; $url='/licences/'.$r['jti'].'/'.($action==='refund'?'revoke':$action); if ($action==='subscription-revoke') { $url='/subscriptions/'.rawurlencode($r['subscription_id']).'/revoke'; } ?>
-<section class="card confirm" data-confirm-panel data-return="/licences/<?= $v->e($r['jti']) ?>"><h1><?= $v->e($v->t($title)) ?></h1><p><?= $v->e($r['email']) ?> · <code><?= $v->e($r['jti']) ?></code></p>
-<?php if (in_array($action,['revoke','refund','restore','subscription-revoke'],true)): ?><?= $v->table($preview['affected'],['jti','plan','status'],'/licences/') ?><?php if ($preview['reactivates'] ?? null): ?><p><?= $v->e($v->t('restore')) ?>: <?= $v->e($preview['reactivates']['jti']) ?></p><?php endif ?><p><?= $v->e($v->t('restore_notice')) ?></p><?php endif ?>
-<form method="post" action="<?= $v->e($url) ?>" <?= $action==='reveal'?'data-reveal-form':'' ?> data-error="<?= $v->e($v->t('stepup_required')) ?>"><?= $v->csrf() ?><input type="hidden" name="jti" value="<?= $v->e($r['jti']) ?>">
-<?php if (in_array($action,['revoke','refund','subscription-revoke'],true)): ?><input type="hidden" name="status" value="<?= $action==='refund'?'refunded':'revoked' ?>"><label><?= $v->e($v->t('confirm_suffix')) ?><input name="confirmation" required autocomplete="off" maxlength="6" pattern="<?= $v->e(substr($r['jti'],-6)) ?>"></label><?php else: ?><label><?= $v->e($v->t('code')) ?><input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"></label><?php endif ?>
-<?php if ($action==='reveal'): ?><label><?= $v->e($v->t('reason')) ?><input name="reason" maxlength="300"></label><?php endif ?><p data-form-error role="alert"></p><button class="<?= in_array($action,['revoke','refund','subscription-revoke'],true)?'danger':'primary' ?>"><?= $v->e($v->t('confirm')) ?></button> <a href="/licences/<?= $v->e($r['jti']) ?>"><?= $v->e($v->t('cancel')) ?></a></form></section>
-<?php if ($action==='reveal'): ?><dialog id="revealed"><h2><?= $v->e($v->t('reveal')) ?></h2><label><?= $v->e($v->t('reveal')) ?><textarea readonly data-key autocomplete="off"></textarea></label><button type="button" data-copy-key><?= $v->e($v->t('copy')) ?></button><button type="button" data-close><?= $v->e($v->t('close')) ?></button></dialog><?php endif ?>
+<?php $r = $data['licence'];
+
+$url = '/licences/' . $r['jti'] . '/' . ($action === 'refund' ? 'revoke' : $action);
+
+if ($action === 'subscription-revoke') {
+    $url = '/subscriptions/' . rawurlencode($r['subscription_id']) . '/revoke';
+} ?>
+<section class="card confirm" data-confirm-panel data-return="/licences/<?= $v->e($r['jti']) ?>">
+    <h1><?= $v->e($v->t($title)) ?></h1>
+    <p>
+        <?= $v->e($r['email']) ?> ·
+        <code><?= $v->e($r['jti']) ?></code>
+    </p>
+    <?php if (in_array($action, ['revoke', 'refund', 'restore', 'subscription-revoke'], true)): ?>
+    <?= $v->table($preview['affected'], ['jti', 'plan', 'status'], '/licences/') ?>
+    <?php if ($preview['reactivates'] ?? null): ?>
+    <p><?= $v->e($v->t('restore')) ?>: <?= $v->e($preview['reactivates']['jti']) ?></p>
+    <?php endif ?>
+    <p><?= $v->e($v->t('restore_notice')) ?></p>
+    <?php endif ?>
+    <form method="post" action="<?= $v->e($url) ?>" <?= $action === 'reveal' ? 'data-reveal-form' : '' ?> data-error="<?= $v->e($v->t('stepup_required')) ?>">
+        <?= $v->csrf() ?>
+        <input type="hidden" name="jti" value="<?= $v->e($r['jti']) ?>" />
+        <?php if (in_array($action, ['revoke', 'refund', 'subscription-revoke'], true)): ?>
+        <input type="hidden" name="status" value="<?= $action === 'refund' ? 'refunded' : 'revoked' ?>" />
+        <label>
+            <?= $v->e($v->t('confirm_suffix')) ?>
+            <input
+                name="confirmation"
+                required
+                autocomplete="off"
+                maxlength="6"
+                pattern="<?= $v->e(substr($r['jti'], -6)) ?>"
+            />
+        </label>
+        <?php else: ?>
+        <label>
+            <?= $v->e($v->t('code')) ?>
+            <input
+                name="code"
+                inputmode="numeric"
+                pattern="[0-9]{6}"
+                maxlength="6"
+                autocomplete="one-time-code"
+            />
+        </label>
+        <?php endif ?>
+        <?php if ($action === 'reveal'): ?>
+        <label>
+            <?= $v->e($v->t('reason')) ?>
+            <input name="reason" maxlength="300" />
+        </label>
+        <?php endif ?>
+        <p data-form-error role="alert"></p>
+        <button class="<?= in_array($action, ['revoke', 'refund', 'subscription-revoke'], true)
+            ? 'danger'
+            : 'primary' ?>"><?= $v->e($v->t('confirm')) ?></button>
+        <a href="/licences/<?= $v->e($r['jti']) ?>"><?= $v->e($v->t('cancel')) ?></a>
+    </form>
+</section>
+<?php if ($action === 'reveal'): ?>
+<dialog id="revealed">
+    <h2><?= $v->e($v->t('reveal')) ?></h2>
+    <label>
+        <?= $v->e($v->t('reveal')) ?>
+        <textarea readonly data-key autocomplete="off"></textarea>
+    </label>
+    <button type="button" data-copy-key><?= $v->e($v->t('copy')) ?></button>
+    <button type="button" data-close><?= $v->e($v->t('close')) ?></button>
+</dialog>
+<?php endif ?>

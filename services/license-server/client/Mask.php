@@ -12,19 +12,23 @@ final class Mask
     public static function email(string $email): string
     {
         $at = strrpos($email, '@');
-        return $at === false ? '***': mb_substr($email, 0, 1) . '***' . substr($email, $at);
+        return $at === false ? '***' : mb_substr($email, 0, 1) . '***' . substr($email, $at);
     }
 
     public static function id(string $id): string
     {
-        return strlen($id) <= 14 ? $id: substr($id, 0, 6) . '…' . substr($id, - 6);
+        return strlen($id) <= 14 ? $id : substr($id, 0, 6) . '…' . substr($id, -6);
     }
 
     public static function clean(string $text): string
     {
         $text = (string) preg_replace(self::KEY, '[redacted]', $text);
         $text = (string) preg_replace('/bot[0-9]+:[A-Za-z0-9_-]+/', 'bot[redacted]', $text);
-        return (string) preg_replace_callback(self::EMAIL, static fn (array $m): string => self::email($m[0]), $text);
+        return (string) preg_replace_callback(
+            self::EMAIL,
+            static fn(array $m): string => self::email($m[0]),
+            $text,
+        );
     }
 
     public static function safe(string $text, bool $emails = false): string

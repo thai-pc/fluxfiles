@@ -1,1 +1,10 @@
-<dialog open id="revealed"><h1><?= $v->e($v->t('reveal')) ?></h1><label><?= $v->e($v->t('reveal')) ?><textarea readonly data-key autocomplete="off"><?= \FluxFiles\LicenseServer\Admin\View::h($key) ?></textarea></label><button type="button" data-copy-key><?= $v->e($v->t('copy')) ?></button><button type="button" data-close><?= $v->e($v->t('close')) ?></button><a href="/licences"><?= $v->e($v->t('back')) ?></a></dialog>
+<dialog open id="revealed">
+    <h1><?= $v->e($v->t('reveal')) ?></h1>
+    <label>
+        <?= $v->e($v->t('reveal')) ?>
+        <textarea readonly data-key autocomplete="off"><?= \FluxFiles\LicenseServer\Admin\View::h($key) ?></textarea>
+    </label>
+    <button type="button" data-copy-key><?= $v->e($v->t('copy')) ?></button>
+    <button type="button" data-close><?= $v->e($v->t('close')) ?></button>
+    <a href="/licences"><?= $v->e($v->t('back')) ?></a>
+</dialog>
