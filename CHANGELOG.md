@@ -5,6 +5,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+> Will release: `wordpress-v1.1.3` (first WordPress.org submission build).
+
+### Security
+- WordPress plugin: the file-content editor (`allow_code_edit`) and `chmod` (`allow_chmod`) are disabled. No token minted by the plugin carries either claim as true, whatever the role preset, override, raw `claims` entry or `fluxfiles_token_overrides` filter says, and `PUT /content` and `POST /chmod` answer 403. Read-only preview of text files is unchanged.
+
+### Documentation
+- WordPress readme: new "What FluxFiles can and cannot access" section and FAQ entry, a sandbox-first short description and tags.
+
 ## [1.0.26] — 2026-11-08
 
 > Released: `mcp-v1.1.1` (dependency security refresh).

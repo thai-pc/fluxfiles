@@ -1,18 +1,18 @@
 === FluxFiles ===
 Contributors: thaipc
-Tags: file manager, offload media, amazon s3, cloudflare r2, media library
+Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.1.2
+Stable tag: 1.1.3
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
-File manager with folders and media offload to Amazon S3 and Cloudflare R2. Picked files become real attachments. Free and open source.
+Folder-based media & document library with cloud storage (Amazon S3, Cloudflare R2). Sandboxed: no access to WordPress files, no code uploads.
 
 == Description ==
 
-FluxFiles is a file manager for WordPress with a modern browser UI. Keep your files in folders on your local disk, Amazon S3 or Cloudflare R2 (and SFTP through a developer-minted token), and insert them into posts: what you pick is registered as a real WordPress attachment whose URL points at your storage, so it is served from your bucket or CDN instead of your web server.
+FluxFiles is a folder-based media and document library for WordPress with a modern browser UI. Keep your files in folders on your local disk, Amazon S3 or Cloudflare R2 (and SFTP through a developer-minted token), and insert them into posts: what you pick is registered as a real WordPress attachment whose URL points at your storage, so it is served from your bucket or CDN instead of your web server.
 
 **Features**
 
@@ -27,6 +27,20 @@ FluxFiles is a file manager for WordPress with a modern browser UI. Keep your fi
 * WordPress attachment bridge: files picked in FluxFiles appear in the media library, and their URLs (with a responsive `srcset` for images) are served from your storage
 * Media offload: `wp fluxfiles migrate` moves existing Media Library attachments to a public S3/R2 bucket; deleting an attachment can optionally delete the stored file too
 * WP-CLI: `wp fluxfiles seed` indexes files that already exist on a disk
+
+**What FluxFiles can and cannot access**
+
+FluxFiles manages the files in its **own storage area**. It is not a tool for browsing or editing your WordPress installation.
+
+* **Its own sandbox only.** The local disk is a dedicated folder, `wp-content/uploads/fluxfiles/` (or `wp-content/fluxfiles/` on older installs). It is chosen automatically and cannot be changed from the admin screens. Only a site developer can move it, in code (the `FLUXFILES_STORAGE_DIR` constant or the `fluxfiles_storage_base` filter). FluxFiles cannot open, list or modify WordPress core, plugin or theme files, or `wp-config.php`. Every path is resolved inside the storage root: `..` segments are dropped, and an archive entry containing `..` is rejected.
+* **No server-side code can be uploaded.** PHP and every other server-executed type (`php`, `phtml`, `phar`, `php3`, `php4`, `php5`, `php7`, `php8`, `pht`, `cgi`, `pl`, `py`, `rb`, `sh`, `asp`, `aspx`, `jsp`, and more), plus the files `.htaccess`, `.htpasswd`, `.user.ini` and `web.config`, are always refused, including as a middle extension such as `shell.php.jpg`. This built-in list applies to uploads, renames, moves, copies and archive extraction, and no setting can turn it off.
+* **Archives are checked entry by entry.** Extracting a ZIP applies the same list, and the upload extension rules, to every file inside it before anything is written. An archive that contains a refused file is rejected as a whole, and hidden dot-files are skipped.
+* **No active content for untrusted roles.** A user without the `unfiltered_html` capability can never upload HTML, SVG, XML, XSL, JavaScript or Flash files, the same rule WordPress applies to its own Media Library. On Apache, the plugin also writes a `.htaccess` into the storage folder that turns the PHP engine off there and serves stored HTML, SVG and XML as plain downloads. On nginx, the settings page shows the equivalent rules to add.
+* **There is no code or file-content editor in the WordPress plugin; stored files can be previewed and downloaded, never edited in place or executed.** Changing file permissions (`chmod`) is also disabled.
+* **Nothing it stores is ever executed.** FluxFiles never includes, requires or evaluates a file from its storage area, and it contains no `eval`.
+* **No code is downloaded.** The plugin never downloads or installs plugins, themes or executable code, and it has no updater of its own. Updates come from WordPress.org.
+* **Permissions follow WordPress roles.** Read, upload, delete and admin actions are derived from the user's WordPress capabilities (Administrators and Editors manage all files, Authors only their own). Each multisite sub-site gets its own separate storage root.
+* **External services are opt-in.** Amazon S3, Cloudflare R2, SFTP and AI tagging are contacted only when an administrator configures them (see External services).
 
 The plugin is free and open source (MIT). Everything in this plugin works without a licence. Optional paid modules (share links, upload portals, compliance tools) are available for the self-hosted FluxFiles server; see [fluxfiles.thai-pc.com](https://fluxfiles.thai-pc.com).
 
@@ -73,12 +87,11 @@ Only when a developer sets `terminal_pty_url`, `pdf_tools_url`, `office_url` or 
 * Build the plugin ZIP from a checkout with `bash scripts/build-wordpress.sh`. It needs PHP 8.1+, Composer, rsync and zip.
 * `assets/fm.js` and `assets/fm.css` are the readable sources of `assets/fm.min.js` and `assets/fm.min.css`, which are produced by `bash scripts/build-ui.sh` (esbuild, minify only).
 * [Alpine.js](https://github.com/alpinejs/alpine) 3.15.12 ships unmodified as `assets/vendor/alpine/alpine.min.js`.
-* The code editor uses the CodeMirror that WordPress itself ships (`wp-includes/js/codemirror/`); no CodeMirror copy is bundled. File types its build has no syntax mode for open as plain text.
 * PHP dependencies in `vendor/` are installed from `packages/core/composer.lock`; their licences ship in their folders. See `docs/THIRD-PARTY-NOTICES.md`.
 
 == Using an existing upload directory ==
 
-If you already have files in the local storage folder (`wp-content/uploads/fluxfiles/uploads/` on new installs, `wp-content/fluxfiles/uploads/` on older ones, or any other local-disk path configured in Settings → FluxFiles) from before the plugin was installed, listing and preview work out of the box. **Search** however relies on the FluxFiles metadata index (`_fluxfiles/index.json`) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API.
+If you already have files in the local storage folder (`wp-content/uploads/fluxfiles/uploads/` on new installs, `wp-content/fluxfiles/uploads/` on older ones, or the path set with the `FLUXFILES_STORAGE_DIR` constant) from before the plugin was installed, listing and preview work out of the box. **Search** however relies on the FluxFiles metadata index (`_fluxfiles/index.json`) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API.
 
 To make pre-existing files and folders searchable, use the bundled WP-CLI command:
 
@@ -99,6 +112,10 @@ The command walks the disk recursively (skipping the internal `_fluxfiles/` and 
 If you cannot use WP-CLI, trigger the same indexing by re-uploading files through the FluxFiles UI — new uploads register metadata automatically.
 
 == Frequently Asked Questions ==
+
+= Is this a file manager for my WordPress installation? =
+
+No. FluxFiles only manages the files in its own storage folder, or in the S3/R2 bucket you connect. It cannot see or edit WordPress, plugin or theme files, it has no code or file-content editor, and it refuses PHP and other executable uploads. Think of it as a folder-based media and document library with cloud storage, not as a server file browser.
 
 = Can I put two [fluxfiles] shortcodes on one page? =
 No: the file manager runs in a single frame per page, so only the first one loads and later ones show a notice.
@@ -149,6 +166,9 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 4. Insert images from FluxFiles straight into the block editor with the "FluxFiles Image" block.
 
 == Changelog ==
+
+= 1.1.3 =
+* The file-content editor and chmod are disabled in the WordPress plugin; clarified what the plugin can and cannot access.
 
 = 1.1.2 =
 * Bundles FluxFiles core 1.2.0.
@@ -219,6 +239,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.1.3 =
+Disables the file-content editor and chmod, and documents what the plugin can and cannot access. Files can still be previewed and downloaded.
 
 = 1.1.2 =
 Updates the bundled FluxFiles core to 1.2.0, with storage path hardening. No change in behaviour for the free plugin.

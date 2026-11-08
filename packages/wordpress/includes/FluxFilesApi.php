@@ -1823,30 +1823,14 @@ class FluxFilesApi
         }
     }
 
+    /**
+     * The WordPress plugin never edits file content, whatever the token says: tokens
+     * minted here always carry allow_code_edit=false, and this closes the route for a
+     * token minted by other means too. GET (read-only preview) stays available.
+     */
     public function handlePutContent(\WP_REST_Request $request): \WP_REST_Response
     {
-        try {
-            $claims = $this->claims();
-            $this->rateLimit($claims, true);
-            $fm = $this->fileManager($claims);
-
-            $body = $this->body($request);
-            $result = $fm->putContent(
-                (string) ($body['disk'] ?? 'local'),
-                (string) ($body['path'] ?? ''),
-                (string) ($body['content'] ?? '')
-            );
-            $this->auditOk($claims, 'content', $body, $result);
-            $this->dispatchWebhook($claims, 'content_update', [
-                'disk' => (string) ($body['disk'] ?? 'local'),
-                'path' => (string) ($body['path'] ?? ''),
-                'name' => basename((string) ($body['path'] ?? '')),
-            ]);
-
-            return $this->ok($result);
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
-        }
+        return $this->error('Editing file content is not allowed', 403, 'edit_forbidden');
     }
 
     // Extract a zip in place — slip/bomb/quota/dangerous-ext guards live inside
@@ -1950,35 +1934,13 @@ class FluxFilesApi
     }
 
     /**
-     * Set the Unix mode of one file on an SFTP disk. The allow_chmod claim is
-     * checked here to match core's index.php (FileManager::setMode() enforces the
-     * write perm, path scope and owner_only, but not this claim).
+     * chmod is disabled in the WordPress plugin: it only matters on SFTP disks, and
+     * tokens minted here always carry allow_chmod=false. Closing the route outright
+     * covers a token minted by other means.
      */
     public function handleSetChmod(\WP_REST_Request $request): \WP_REST_Response
     {
-        try {
-            $claims = $this->claims();
-            $this->rateLimit($claims, true);
-            if (!$claims->allowChmod) {
-                throw new ApiException('Changing permissions is not allowed', 403, 'chmod_forbidden');
-            }
-            $fm = $this->fileManager($claims);
-
-            $body = $this->body($request);
-            $disk = (string) ($body['disk'] ?? '');
-            $path = (string) ($body['path'] ?? '');
-            $result = $fm->setMode($disk, $path, (string) ($body['mode'] ?? ''));
-            $this->logAudit($claims, 'chmod', $disk, $path, 'mode=' . $result['mode']);
-            $this->dispatchWebhook($claims, 'chmod', [
-                'disk' => $disk,
-                'path' => $path,
-                'name' => basename($path),
-            ]);
-
-            return $this->ok($result);
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
-        }
+        return $this->error('Changing permissions is not allowed', 403, 'chmod_forbidden');
     }
 
     // Trash (soft-delete) — gated by the 'delete' permission inside FileManager
