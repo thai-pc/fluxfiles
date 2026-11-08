@@ -109,6 +109,8 @@ packages/audit-export/
 packages/sso/
 packages/dlp/
 packages/legal-hold/
+# Paid WordPress add-on (own private repo; GPL glue + proprietary modules)
+packages/wordpress-pro/
 
 # License server runtime DB (customer records — never commit)
 services/license-server/data/
