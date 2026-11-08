@@ -65,24 +65,95 @@ if ($command === 'about') {
     exit(0);
 }
 
+/** Is the automatic licence refresh switched off (FLUXFILES_LICENSE_REFRESH=false)? */
+function fluxfiles_refresh_disabled(): bool
+{
+    $v = strtolower(trim((string) ($_ENV['FLUXFILES_LICENSE_REFRESH'] ?? '')));
+    return in_array($v, ['false', '0', 'off', 'no'], true);
+}
+
+/** Refresh the licence key through the vendor licence server (never prints the key). */
+function fluxfiles_license_refresh(bool $write): array
+{
+    $curl = new \FluxFiles\CurlTransport(10, \FluxFiles\LicenseRefresh::MAX_RESPONSE);
+    return \FluxFiles\LicenseKeyFile::refresh($_ENV, [$curl, 'request'], $write);
+}
+
+// `license refresh` — fetch the newest key of this subscription and keep it in a
+// server-local file (FLUXFILES_LICENSE_FILE) that overlays FLUXFILES_LICENSE_KEY.
+//   fluxfiles license refresh [--check] [--print] [--json]
+// --check asks and reports without writing; --print writes the new key to stdout only
+// (never to the file) for operators who manage secrets elsewhere.
+// Exit: 0 refreshed/current/nothing to refresh, 1 usage/config, 2 network/server
+// (retryable), 3 not available for this licence.
+if ($command === 'license') {
+    $check = $print = $json = false;
+    $usage = ($argv[2] ?? '') !== 'refresh';
+    foreach (array_slice($argv, 3) as $arg) {
+        if ($arg === '--check') { $check = true; }
+        elseif ($arg === '--print') { $print = true; }
+        elseif ($arg === '--json') { $json = true; }
+        else { $usage = true; }
+    }
+    if ($usage || ($check && $print)) {
+        fwrite(STDERR, "Usage: fluxfiles license refresh [--check|--print] [--json]\n");
+        exit(1);
+    }
+    \FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
+    $warn = \FluxFiles\LicenseKeyFile::pathWarning($_ENV);
+    if ($warn !== null) {
+        fwrite(STDERR, $warn . "\n");
+    }
+    $res = fluxfiles_license_refresh(!$check && !$print);
+    $exit = match ($res['outcome']) {
+        'refreshed', 'current', 'nothing' => 0,
+        'config' => 1,
+        'unavailable', 'invalid', 'rejected' => 3,
+        default => 2,
+    };
+    if ($json) {
+        $out = ['status' => $res['outcome'], 'message' => $res['message']];
+        foreach (['issued', 'expires', 'stored', 'retry_after'] as $f) {
+            if (array_key_exists($f, $res)) { $out[$f] = $res[$f]; }
+        }
+        if ($print && isset($res['key'])) { $out['license_key'] = $res['key']; }
+        fwrite(STDOUT, json_encode($out, JSON_UNESCAPED_SLASHES) . "\n");
+    } elseif ($print && isset($res['key'])) {
+        fwrite(STDOUT, $res['key'] . "\n");
+        fwrite(STDERR, "Not stored. Put this key in FLUXFILES_LICENSE_KEY.\n");
+    } else {
+        $line = $res['message'];
+        if ($res['outcome'] === 'refreshed') {
+            $line = $check ? 'A newer licence key is available (not stored: --check).' : 'Licence key refreshed and stored.';
+            if (isset($res['expires'])) { $line .= ' New expiry: ' . gmdate('Y-m-d', (int) $res['expires']) . '.'; }
+        }
+        fwrite($exit === 0 ? STDOUT : STDERR, $line . "\n");
+    }
+    exit($exit);
+}
+
 // `update` — self-hosted module updates. Asks the vendor update server (env
 // FLUXFILES_UPDATE_URL) for a SIGNED manifest using the license key (env
 // FLUXFILES_LICENSE_KEY), verifies the manifest + the zip's sha256, and installs
 // the module into vendor/fluxfiles/<module>/. `--check` only reports.
-//   fluxfiles update optimize [--check] [--force]
+//   fluxfiles update optimize [--check] [--force] [--no-refresh]
+// Before asking, it refreshes the licence key (best-effort, never blocks the update; skipped by
+// --no-refresh or FLUXFILES_LICENSE_REFRESH=false) and sends the effective, newest key.
 // A release whose `requires_core` the running core doesn't satisfy is refused;
 // --force only overrides an UNKNOWN core version (git checkout), never a known mismatch.
 if ($command === 'update') {
     $module = '';
     $checkOnly = false;
     $force = false;
+    $noRefresh = false;
     foreach (array_slice($argv, 2) as $arg) {
         if ($arg === '--check') { $checkOnly = true; }
         elseif ($arg === '--force') { $force = true; }
+        elseif ($arg === '--no-refresh') { $noRefresh = true; }
         elseif (strncmp($arg, '--', 2) !== 0 && $module === '') { $module = $arg; }
     }
     if ($module === '' || !preg_match('/^[a-z0-9-]+$/', $module)) {
-        fwrite(STDERR, "Usage: fluxfiles update <module> [--check] [--force]\n");
+        fwrite(STDERR, "Usage: fluxfiles update <module> [--check] [--force] [--no-refresh]\n");
         exit(1);
     }
 
@@ -95,6 +166,20 @@ if ($command === 'update') {
         fwrite(STDERR, "No FLUXFILES_LICENSE_KEY set — updates require a license.\n");
         exit(1);
     }
+
+    // A renewed perpetual licence only opens the update window with its NEWEST key, so
+    // refresh first and send the effective key. Best-effort: one stderr line, then carry on.
+    if (!$noRefresh && !fluxfiles_refresh_disabled()) {
+        try {
+            $refreshed = fluxfiles_license_refresh(true);
+            if (in_array($refreshed['outcome'], ['unavailable', 'invalid', 'rejected', 'throttled', 'error', 'config'], true)) {
+                fwrite(STDERR, 'Licence refresh skipped: ' . $refreshed['message'] . "\n");
+            }
+        } catch (\Throwable $e) {
+            fwrite(STDERR, "Licence refresh skipped: unexpected error\n");
+        }
+    }
+    $license = trim(\FluxFiles\LicenseKeyFile::effectiveKey($_ENV));
 
     // Where the module lives: vendor/fluxfiles/<module> relative to the host's
     // autoloader (two levels up when installed as a dependency), else a sibling of
@@ -225,7 +310,8 @@ if (!in_array($command, ['index', 'seed'], true)) {
     fwrite(STDERR, "Usage:\n"
         . "  fluxfiles serve [--host=127.0.0.1] [--port=8080]\n"
         . "  fluxfiles about [--json]\n"
-        . "  fluxfiles update <module> [--check] [--force]\n"
+        . "  fluxfiles update <module> [--check] [--force] [--no-refresh]\n"
+        . "  fluxfiles license refresh [--check|--print] [--json]\n"
         . "  fluxfiles index --disk=local [--path=prefix] [--owner=user-id] [--readonly] [--overwrite] [--dry-run] [--hash] [--variants] [--persist-metadata]\n");
     exit(1);
 }

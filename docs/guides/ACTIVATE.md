@@ -179,6 +179,34 @@ php vendor/bin/fluxfiles update share --check    # is there a newer build?
 php vendor/bin/fluxfiles update share            # install it
 ```
 
+`fluxfiles update` first refreshes your licence key (see below), then sends the newest one.
+Add `--no-refresh` to skip that for one run.
+
+### Keeping the key current (subscriptions)
+
+A monthly plan mints a new key on every paid renewal. You do not have to paste it:
+
+```bash
+php vendor/bin/fluxfiles license refresh            # fetch + store the newest key of your subscription
+php vendor/bin/fluxfiles license refresh --check    # ask, write nothing
+php vendor/bin/fluxfiles license refresh --print    # print the new key (never stored), for Vault/k8s secrets
+```
+
+```cron
+17 4 * * * cd /path/to/project && php vendor/bin/fluxfiles license refresh
+```
+
+The key you pasted stays in `FLUXFILES_LICENSE_KEY`. The new one is kept in a separate
+server-local file (`FLUXFILES_LICENSE_FILE`, default `<storage>/license-refresh.json`, mode 0600,
+never web-served) that is used only while it was derived from that exact key and is newer.
+Paste a different key and the file steps aside until the next refresh; delete the file to
+revert. On a Composer install without `FLUXFILES_STORAGE_PATH`, set `FLUXFILES_LICENSE_FILE`
+to a path outside `vendor/`. Exit codes: `0` refreshed or current, `1` usage/config,
+`2` network/server (retry), `3` not available for this licence (revoked, unknown, too old,
+or a plan change that would shorten the term: paste the key from your e-mail).
+Refresh never runs inside a web request, and `FLUXFILES_LICENSE_REFRESH=false` stops the
+automatic call in `fluxfiles update` for air-gapped servers.
+
 The free WordPress plugin has no updater of its own (updates come from WordPress.org);
 paid-module updates will come with the FluxFiles Pro add-on.
 

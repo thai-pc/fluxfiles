@@ -74,13 +74,20 @@ final class AboutInfo
 
         $allow = array_filter(array_map('trim', explode(',', (string) ($env['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''))), static fn ($h) => $h !== '');
         $info = $license->info();
+        // Where the key in $_ENV-style config comes from; null when no env key is configured
+        // (e.g. WordPress Pro supplies its own licence through the resolver).
+        $keySource = null;
+        if (trim((string) ($env['FLUXFILES_LICENSE_KEY'] ?? '')) !== '') {
+            $r = LicenseKeyFile::resolve($env);
+            $keySource = ['source' => $r['source'], 'fetched_at' => $r['fetched_at']];
+        }
 
         return [
             'core' => ['version' => $coreVersion, 'source' => $coreSource, 'bundled_with' => $bundledWith],
             'php' => ['version' => PHP_VERSION],
             'storage_backend' => $backend,
             'disks' => $diskList,
-            'license' => ['edition' => (string) ($info['edition'] ?? 'free'), 'status' => $license->status()],
+            'license' => ['edition' => (string) ($info['edition'] ?? 'free'), 'status' => $license->status(), 'key_source' => $keySource],
             'modules' => $modules,
             'scanning' => [
                 'virus' => (bool) ($modules['virus']['enabled'] ?? false),
@@ -114,6 +121,12 @@ final class AboutInfo
         $disks = array_map(static fn ($d) => $d['name'] . ' (' . $d['driver'] . ')', $info['disks']);
         $add('Disks', $disks === [] ? 'none' : implode(', ', $disks), true);
         $add('Licence', $info['license']['edition'] . ' / ' . $info['license']['status'], true);
+        $src = $info['license']['key_source'] ?? null;
+        if (is_array($src)) {
+            $add('Licence source', $src['source'] === 'refreshed'
+                ? 'refreshed' . ($src['fetched_at'] !== null ? ' (fetched ' . gmdate('Y-m-d', (int) $src['fetched_at']) . ')' : '')
+                : ($src['source'] === 'unreadable' ? 'refreshed file unreadable (using the env key)' : 'env'));
+        }
         foreach ($info['modules'] as $id => $m) {
             if (!$m['installed']) {
                 $add("Module {$id}", 'not installed');

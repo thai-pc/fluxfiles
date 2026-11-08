@@ -46,6 +46,9 @@ class LicenseManager implements LicenseCheckInterface
 
     private int $now;
 
+    /** @var array<string,string>|null Test seam: replaces the embedded keys (see {@see overridePublicKeys()}). */
+    private static ?array $keyOverride = null;
+
     /**
      * @param string|null              $key        the FLUXFILES_LICENSE_KEY value
      * @param array<string,string>|null $publicKeys override key map (tests); null = embedded
@@ -53,7 +56,7 @@ class LicenseManager implements LicenseCheckInterface
     public function __construct(#[\SensitiveParameter] ?string $key, ?array $publicKeys = null, ?int $now = null)
     {
         $this->now = $now ?? time();
-        $keys = $publicKeys ?? self::PUBLIC_KEYS;
+        $keys = $publicKeys ?? self::$keyOverride ?? self::PUBLIC_KEYS;
 
         $parsed = self::verify($key, $keys);
         if ($parsed !== null) {
@@ -66,7 +69,26 @@ class LicenseManager implements LicenseCheckInterface
     public static function fromEnv(?array $env = null, ?int $now = null): self
     {
         $env = $env ?? $_ENV;
-        return new self(isset($env['FLUXFILES_LICENSE_KEY']) ? (string) $env['FLUXFILES_LICENSE_KEY'] : null, null, $now);
+        $key = isset($env['FLUXFILES_LICENSE_KEY']) ? (string) $env['FLUXFILES_LICENSE_KEY'] : null;
+        // A refreshed key (`fluxfiles license refresh`) overlays the env key only when it was
+        // derived from this exact key and is strictly newer. The class is absent from WP Pro's
+        // lib/ copy of this file, which resolves its key itself.
+        if ($key !== null && $key !== '' && class_exists(LicenseKeyFile::class)) {
+            $key = LicenseKeyFile::effectiveKey($env);
+        }
+        return new self($key, null, $now);
+    }
+
+    /**
+     * Test seam: trust these `kid => base64 public key` pairs instead of the embedded ones,
+     * process-wide, until called again with null. Lets a test mint keys with a throwaway
+     * keypair. Production code never calls it.
+     *
+     * @param array<string,string>|null $keys
+     */
+    public static function overridePublicKeys(?array $keys): void
+    {
+        self::$keyOverride = $keys;
     }
 
     /**
@@ -139,6 +161,22 @@ class LicenseManager implements LicenseCheckInterface
             return [];
         }
         return array_values(array_map('strval', $this->claims['modules']));
+    }
+
+    /** Did a correctly-signed key parse (any edition)? */
+    public function isVerified(): bool
+    {
+        return $this->verified;
+    }
+
+    /** When the key was minted (unix, signed), or null when unverified or unset. */
+    public function issuedAt(): ?int
+    {
+        if (!$this->verified) {
+            return null;
+        }
+        $i = $this->claims['issued'] ?? null;
+        return is_numeric($i) ? (int) $i : null;
     }
 
     /** Opaque licence id for the vendor's update-status check; never expose it in UI. */
