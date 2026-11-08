@@ -897,21 +897,23 @@ cannot inject markup or links. There is no public webhook endpoint, and the work
 - `FLUXFILES_TELEGRAM_THREAD_ID` (optional) is a forum-topic id. When it is set, every `sendMessage` also carries `message_thread_id`.
 - `FLUXFILES_TELEGRAM_TAG` (default `FluxFiles`) is prefixed to every message as `[FluxFiles] …`.
 
-**One bot shared by several products (owner decision).** The same bot (for example `@fluxfiles_ops_bot`) is also used
-by other products (FluxDocs, FluxGantt, …). Each product's worker holds a copy of the same token. So:
-- **Where messages go.** The recommended target is a private supergroup with Topics enabled, one topic per product.
-  `CHAT_ID` is the group id (negative) and `THREAD_ID` is the product's topic. A private chat with `TAG` prefixes also works.
-- **Only one consumer may poll `getUpdates`.** Telegram delivers each update to whichever poller fetches it first, and the
-  offsets of two pollers fight each other. For a shared bot, **exactly one deployment** may set `FLUXFILES_TELEGRAM_COMMANDS=1`.
-  Every other product is send-only. The worker must never call `getUpdates` while `COMMANDS` is 0. A test covers this.
-- **Blast radius.** A token leaked from any product's server lets an attacker post into the ops chat and read pending
-  updates. Messages already never contain keys, full emails or `/claim` handles (see the masking rules below), so what
-  leaks is limited to notices. Rotating the token (BotFather `/revoke`) means updating every product's token file. The
-  System screen shows the token's fingerprint (sha256 prefix), never the token, so the operator can check that every
-  product is on the current token.
-- **Group hardening.** Set BotFather `/setjoingroups` to Disable after adding the bot to the ops group, and keep
-  `/setprivacy` enabled. In a group, commands are accepted only when `message.from.id` equals
-  `FLUXFILES_TELEGRAM_ADMIN_USER_ID`. In a private chat, the chat id check below is enough.
+**One bot per product (owner decision).** FluxFiles has its own bot (for example `@fluxfiles_ops_bot`). Other products
+(FluxDocs, FluxGantt, …) each get their own bot and token. They never share a token. Reasons:
+- **Isolation.** A token leaked from one product's server affects only that product's bot. Rotating it (BotFather
+  `/revoke`) touches one server.
+- **Commands stay simple.** Each bot has exactly one `getUpdates` consumer, so every product may enable its own read-only
+  commands without fighting over update offsets. The worker never calls `getUpdates` while `COMMANDS` is 0, and a test covers this.
+- **Notifications per bot.** The owner can mute one product's bot without touching the others.
+
+**Where messages go.** This can be a private chat with the bot, or a private ops supergroup with Topics enabled, one topic per
+product, with each product's bot added only to that group and posting to its own `THREAD_ID`. In a group, every bot sees
+only commands addressed to it (`/stats@fluxfiles_ops_bot`), with privacy mode on.
+
+**Hardening.**
+- After adding the bot to its chat or group, set BotFather `/setjoingroups` to Disable and keep `/setprivacy` enabled.
+- In a group, commands are accepted only when `message.from.id` equals `FLUXFILES_TELEGRAM_ADMIN_USER_ID`. In a private chat,
+  the chat id check below is enough.
+- The System screen shows the token's fingerprint (sha256 prefix), never the token.
 
 **Flow:**
 
@@ -952,7 +954,7 @@ Example (vi): `[ĐƠN MỚI] pro-monthly · a***@acme.example · 19.00 USD (thu�
 - It accepts a message **only** if `message.chat.id == FLUXFILES_TELEGRAM_CHAT_ID`, and either `chat.type == "private"`,
   or the chat is the configured supergroup and `message.from.id == FLUXFILES_TELEGRAM_ADMIN_USER_ID`. When `THREAD_ID` is set,
   the message must also be in that topic. Everything else is consumed (the offset advances) and ignored without a reply.
-  For a shared bot, only one deployment polls; see "One bot shared by several products" above.
+  In a group, the command must be addressed to this bot (`/stats` in a private chat, `/stats@<bot>` in a group).
 - **Commands:** `/stats` (this month: revenue, MRR, active installs) and `/today` (orders, refunds, failures and alerts today). The text comes from
   `GET /admin/ops/summary`, and `/help` lists the commands.
 - **No command can act** (no revoke, no issue, no reveal), and none is ever added. The ops token cannot do those things anyway.
@@ -1149,7 +1151,7 @@ docs/update-server.example.php   MOD  send the optional telemetry fields (§7.4)
 | `FLUXFILES_ADMIN_API`, `FLUXFILES_LICENSE_OPS_TOKEN_FILE` | as above |
 | `FLUXFILES_TELEGRAM_BOT_TOKEN_FILE` | unset (Telegram off) |
 | `FLUXFILES_TELEGRAM_CHAT_ID` | unset |
-| `FLUXFILES_TELEGRAM_COMMANDS` | `0` (for a shared bot, `1` on exactly one deployment) |
+| `FLUXFILES_TELEGRAM_COMMANDS` | `0` |
 | `FLUXFILES_TELEGRAM_THREAD_ID` | unset (no forum topic) |
 | `FLUXFILES_TELEGRAM_TAG` | `FluxFiles` |
 | `FLUXFILES_TELEGRAM_ADMIN_USER_ID` | unset (needed only for commands in a group) |
