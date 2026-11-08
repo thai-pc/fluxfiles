@@ -55,7 +55,7 @@ fclose($probe);
 
 $docroot = sys_get_temp_dir() . '/fluxfiles-doctor-ssrf-' . uniqid();
 @mkdir($docroot, 0777, true);
-file_put_contents($docroot . '/index.php', "<?php http_response_code(200); echo 'fluxfiles-doctor-probe-body';");
+file_put_contents($docroot . '/index.php', "<?php http_response_code(200); if (\$_SERVER['REQUEST_URI'] === '/big') { echo str_repeat('x', 2097152); exit; } echo 'fluxfiles-doctor-probe-body';");
 
 $proc = proc_open(
     [PHP_BINARY, '-S', "127.0.0.1:{$port}", $docroot . '/index.php'],
@@ -92,6 +92,17 @@ test('SECURITY: a pinned IP that is private/loopback is rejected post-connect, n
         throw new \RuntimeException('expected ApiException(ssrf_blocked), none was thrown');
     } catch (ApiException $e) {
         assertEqual('ssrf_blocked', $e->getErrorCode(), 'blocked with the right error code');
+    }
+});
+
+test('a pinned (tenant-supplied) endpoint cannot make us buffer more than the cap: [0, ""]', function () use ($httpGet, $doctor, $port) {
+    SsrfGuard::$allowTestHosts = ["fluxfiles-doctor-test.invalid:{$port}"];
+    try {
+        [$code, $body] = $httpGet->invoke($doctor, "http://fluxfiles-doctor-test.invalid:{$port}/big", '127.0.0.1');
+        assertEqual(0, $code, 'oversized body refused');
+        assertEqual('', $body);
+    } finally {
+        SsrfGuard::$allowTestHosts = [];
     }
 });
 

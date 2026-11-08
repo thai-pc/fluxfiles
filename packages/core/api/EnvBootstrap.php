@@ -68,4 +68,44 @@ final class EnvBootstrap
         }
         return null;
     }
+
+    /**
+     * Directories the CLI searches for `.env`, first match wins (see load()).
+     *
+     *  1. the current directory, when it holds composer.json or .env: cron and
+     *     `php vendor/bin/fluxfiles` are normally run from the project root, and
+     *     the operator chose that directory;
+     *  2. the host project root, when the package sits at
+     *     `<project>/vendor/fluxfiles/fluxfiles` (Composer install);
+     *  3. the package root (standalone / release zip / monorepo package);
+     *  4. three levels above bin/ (the monorepo root in a checkout; `vendor/`
+     *     in a Composer install, kept for backward compatibility).
+     *
+     * @param string      $binDir the CLI's own directory (`__DIR__` of bin/fluxfiles)
+     * @param string|null $cwd    injectable for tests; defaults to getcwd()
+     * @return array<int,string>
+     */
+    public static function cliDirs(string $binDir, ?string $cwd = null): array
+    {
+        $dirs = [];
+        $add = static function ($d) use (&$dirs): void {
+            if (is_string($d) && $d !== '' && !in_array($d, $dirs, true)) { $dirs[] = $d; }
+        };
+
+        $cwd ??= getcwd();
+        if (is_string($cwd) && (is_file($cwd . '/composer.json') || is_file($cwd . '/.env'))) {
+            $add(realpath($cwd));
+        }
+
+        $pkg = realpath($binDir . '/..') ?: $binDir . '/..';
+        $parent = dirname($pkg);
+        // vendor/fluxfiles/fluxfiles: parent is "fluxfiles" and the vendor dir
+        // (which may be renamed via config.vendor-dir) holds Composer's autoload.php.
+        if (basename($parent) === 'fluxfiles' && is_file(dirname($parent) . '/autoload.php')) {
+            $add(dirname($parent, 2));
+        }
+        $add($pkg);
+        $add(realpath($binDir . '/../../..') ?: null);
+        return $dirs;
+    }
 }

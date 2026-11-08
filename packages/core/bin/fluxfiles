@@ -57,7 +57,7 @@ if ($command === 'about') {
             exit(1);
         }
     }
-    \FluxFiles\EnvBootstrap::load([realpath(__DIR__ . '/..'), realpath(__DIR__ . '/../../..')]);
+    \FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
     $about = \FluxFiles\AboutInfo::collect();
     fwrite(STDOUT, $json
         ? json_encode($about, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
@@ -86,9 +86,9 @@ if ($command === 'update') {
         exit(1);
     }
 
-    // Load .env from the package root or the host project root so the license +
-    // update URL are available (mirrors the index command below).
-    \FluxFiles\EnvBootstrap::load([realpath(__DIR__ . '/..'), realpath(__DIR__ . '/../../..')]);
+    // Load .env (cwd, host project root, package root; see EnvBootstrap::cliDirs) so
+    // the license + update URL are available (mirrors the index command below).
+    \FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
     $updateBase = rtrim((string) ($_ENV['FLUXFILES_UPDATE_URL'] ?? 'https://fluxfiles-updates.thai-pc.com'), '/');
     $license = (string) ($_ENV['FLUXFILES_LICENSE_KEY'] ?? '');
     if ($license === '') {
@@ -264,12 +264,7 @@ foreach (array_slice($argv, 2) as $arg) {
     }
 }
 
-$envDirs = [
-    realpath(__DIR__ . '/..') ?: (__DIR__ . '/..'),
-    realpath(__DIR__ . '/../../..') ?: (__DIR__ . '/../../..'),
-];
-
-\FluxFiles\EnvBootstrap::load($envDirs);
+\FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
 \FluxFiles\SsrfGuard::setAllowHosts((string) ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''));
 
 try {
