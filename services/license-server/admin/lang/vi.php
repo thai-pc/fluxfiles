@@ -8,6 +8,8 @@ return [
     'empty_build' => 'Chưa có mã bản dựng. Ghi tệp SOURCE khi triển khai để nhận diện phiên bản.',
     'empty_mail_tls' => 'Chưa kiểm tra TLS kênh thư; phép kiểm tra này chỉ áp dụng cho Resend. Xem cấu hình phương thức gửi thư bên dưới.',
     'empty_heartbeat' => 'Chưa nhận báo cáo worker. Bật timer vận hành và kiểm tra nhật ký dịch vụ.',
+    'empty_plan_map' => 'Chưa có ánh xạ sản phẩm. Đặt FLUXFILES_POLAR_PLAN_MAP trong cấu hình máy chủ giấy phép, nếu không đơn hàng Polar sẽ không được cấp giấy phép.',
+    'empty_unmapped_products' => 'Mọi sản phẩm Polar đã gặp đều có ánh xạ. Không cần làm gì.',
     'menu' => 'Menu',
     'preferences' => 'Tùy chọn',
 

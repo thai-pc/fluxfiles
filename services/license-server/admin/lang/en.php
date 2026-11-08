@@ -8,6 +8,8 @@ return [
     'empty_build' => 'No build identifier. Write a SOURCE file during deployment to identify the version.',
     'empty_mail_tls' => 'Mail TLS has not been checked; this probe applies to Resend. Check the mail transport below.',
     'empty_heartbeat' => 'No worker heartbeat yet. Enable the ops timer and inspect its service journal.',
+    'empty_plan_map' => 'No product mapping yet. Set FLUXFILES_POLAR_PLAN_MAP in the licence server config, or Polar orders will not be issued licences.',
+    'empty_unmapped_products' => 'Every Polar product seen so far is mapped. Nothing to do.',
     'menu' => 'Menu',
     'preferences' => 'Preferences',
 

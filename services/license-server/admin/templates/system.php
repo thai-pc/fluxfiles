@@ -20,7 +20,7 @@
     <?php if ($value === null || $value === '' || $value === []): ?>
     <p class="empty"><?= $v->e(
         $v->t(
-            in_array($key, ['build', 'mail_tls', 'heartbeat'], true) ? 'empty_' . $key : 'empty_system',
+            in_array($key, ['build', 'mail_tls', 'heartbeat', 'plan_map', 'unmapped_products'], true) ? 'empty_' . $key : 'empty_system',
         ),
     ) ?></p>
     <?php elseif ($key === 'health'): ?>
