@@ -658,23 +658,27 @@ final class LicenseStore
      */
     public function supersedeOlderInSubscription(string $subscriptionId, ?int $now = null): int
     {
-        $s = $this->db->prepare(
-            "SELECT jti, status FROM licenses WHERE subscription_id = ? AND status IN ('active','superseded') ORDER BY issued DESC, id DESC LIMIT 1"
-        );
-        $s->execute([$subscriptionId]);
-        $head = $s->fetch();
-        if ($head === false) {
-            return 0;
-        }
-        $n = 0;
-        if ($head['status'] === 'superseded') {
-            if ($this->repairableHead($subscriptionId, $now) !== $head['jti']) {
+        // One write transaction: the head check, the revival and the supersede must not
+        // interleave with a webhook issuing a newer row.
+        return $this->transaction(function () use ($subscriptionId, $now): int {
+            $s = $this->db->prepare(
+                "SELECT jti, status FROM licenses WHERE subscription_id = ? AND status IN ('active','superseded') ORDER BY issued DESC, id DESC LIMIT 1"
+            );
+            $s->execute([$subscriptionId]);
+            $head = $s->fetch();
+            if ($head === false) {
                 return 0;
             }
-            $this->db->prepare("UPDATE licenses SET status = 'active' WHERE jti = ? AND status = 'superseded'")->execute([$head['jti']]);
-            $n++;
-        }
-        return $n + $this->supersedeActiveForSubscription($subscriptionId, (string) $head['jti']);
+            $n = 0;
+            if ($head['status'] === 'superseded') {
+                if ($this->repairableHead($subscriptionId, $now) !== $head['jti']) {
+                    return 0;
+                }
+                $this->db->prepare("UPDATE licenses SET status = 'active' WHERE jti = ? AND status = 'superseded'")->execute([$head['jti']]);
+                $n++;
+            }
+            return $n + $this->supersedeActiveForSubscription($subscriptionId, (string) $head['jti']);
+        });
     }
 
     /**

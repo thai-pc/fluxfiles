@@ -184,6 +184,8 @@ Copy the **whole `services/license-server` directory** (minus `tests/`), includi
 mail (the text part is sent and a loud `LICENSE MAIL: HTML template failed` is logged),
 but customers then get plain-text mail only.
 
+**Rollback caveat:** rolling back to pre-refresh code ignores `revoked_subscriptions`; revoked subscriptions' new orders would issue active keys again.
+
 ### Migration and backfill (existing server)
 
 The two new columns (`subscription_id`, `billing_reason`) and `idx_subscription` are
