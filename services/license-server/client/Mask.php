@@ -23,6 +23,16 @@ final class Mask
     public static function clean(string $text): string
     {
         $text = (string) preg_replace(self::KEY, '[redacted]', $text);
+        $text = (string) preg_replace(
+            '/\b(?:polar_oat_|re_)[A-Za-z0-9_-]+\b/',
+            '[redacted]',
+            $text,
+        );
+        $text = (string) preg_replace(
+            '/\bBearer[ \t]+[^\s,;<>"\x27]+/i',
+            'Bearer [redacted]',
+            $text,
+        );
         $text = (string) preg_replace('/bot[0-9]+:[A-Za-z0-9_-]+/', 'bot[redacted]', $text);
         return (string) preg_replace_callback(
             self::EMAIL,

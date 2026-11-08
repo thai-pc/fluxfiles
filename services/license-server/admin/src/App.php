@@ -92,7 +92,7 @@ final class App
                 'ui:' . ($this->auth->session['name'] ?? 'unknown'),
                 null,
                 30,
-                $this->auth->session['role'] ?? 'admin',
+                $this->auth->session['role'] ?? 'viewer',
             );
             if (!in_array($method, ['GET', 'POST'], true)) {
                 $this->error('method_not_allowed', 405);
@@ -126,7 +126,7 @@ final class App
                         'ui:' . ($ok ? $this->auth->session['name'] : 'unknown'),
                         null,
                         30,
-                        $this->auth->session['role'] ?? 'admin',
+                        $this->auth->session['role'] ?? 'viewer',
                     );
                     try {
                         $this->api->request('POST', '/admin/audit', [
@@ -331,6 +331,13 @@ final class App
             $this->view->render('system', [
                 'title' => 'system',
                 'data' => $this->api->request('GET', '/admin/system'),
+                'cookieIsolationWarning' =>
+                    Config::sandbox() &&
+                    !str_ends_with(
+                        explode(':', (string) ($_SERVER['HTTP_HOST'] ?? ''), 2)[0],
+                        '.localhost',
+                    ) &&
+                    !Access::enabled(),
             ]);
             return;
         }

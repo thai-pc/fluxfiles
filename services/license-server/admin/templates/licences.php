@@ -3,14 +3,15 @@
         <p class="eyebrow">FLUXFILES / ADMIN</p>
         <h1><?= $v->e($v->t('licences')) ?></h1>
     </div>
-    <?php if ($v->canWrite()): ?>
-    <div class="actions">
+    <div class="actions sticky-actions list-actions">
+        <a class="button filter-link" href="#licence-filters"><?= $v->e($v->t('filter')) ?></a>
+        <?php if ($v->canWrite()): ?>
         <a href="#lookup" class="button" data-open="lookup-dialog"><?= $v->e($v->t('lookup')) ?></a>
         <a class="button primary" href="/issue">+ <?= $v->e($v->t('issue')) ?></a>
+        <?php endif ?>
     </div>
-    <?php endif ?>
 </div>
-<form class="filters card" method="get" action="/licences">
+<form id="licence-filters" class="filters card" method="get" action="/licences">
     <label class="search">
         <?= $v->e($v->t('search')) ?>
         <input type="search" name="q" data-search maxlength="100" value="<?= $v->e($_GET['q'] ?? '') ?>" />
@@ -46,7 +47,7 @@
     </label>
     <button><?= $v->e($v->t('filter')) ?></button>
 </form>
-<section class="card flush"><?= $v->table(
+<section class="card flush licence-list"><?= $v->table(
     $data['rows'],
     [
         'select',

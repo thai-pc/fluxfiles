@@ -110,6 +110,54 @@ $h->test(
         );
     },
 );
+$h->test('R1 rotating actor headers cannot bypass the shared UI-token reveal cap', function () use (
+    $h,
+    $api,
+    $db,
+): void {
+    $db->exec("DELETE FROM rate_hits WHERE bucket LIKE 'key-reveal:%'");
+    $db->exec("DELETE FROM ops_outbox WHERE kind='key.reveal_burst'");
+    $jti = $h->call($api, 'POST', '/issue', ['email' => 'rotate@example.test', 'plan' => 'pro'])[
+        'body'
+    ]['record']['jti'];
+    for ($i = 0; $i < 40; $i++) {
+        $r = $h->request(
+            $api,
+            'POST',
+            '/admin/licences/' . $jti . '/reveal',
+            [],
+            [
+                'Authorization: Bearer ui-secret',
+                'Content-Type: application/json',
+                'X-FluxFiles-Actor: ui:rot' . $i,
+            ],
+        );
+        Harness::eq($i < 10 ? 200 : 429, $r['code'], 'actor ' . $i);
+        if ($i >= 10) {
+            Harness::ok(!preg_match(Mask::KEY, $r['raw']));
+        }
+    }
+    Harness::eq(
+        1,
+        (int) $db
+            ->query("SELECT COUNT(*) FROM ops_outbox WHERE kind='key.reveal_burst'")
+            ->fetchColumn(),
+    );
+    Harness::eq(
+        29,
+        (int) $db
+            ->query("SELECT suppressed FROM ops_outbox WHERE kind='key.reveal_burst'")
+            ->fetchColumn(),
+    );
+    Harness::eq(
+        30,
+        (int) $db
+            ->query(
+                "SELECT COUNT(*) FROM admin_audit WHERE action='key.reveal' AND result='rate_limited' AND actor LIKE 'ui:rot%'",
+            )
+            ->fetchColumn(),
+    );
+});
 $h->test(
     'A2 backfill applies refunded fixture at modified_at, is idempotent and cleans dry-run copy on failure',
     function () use ($h, $api, $db): void {
@@ -289,6 +337,19 @@ $h->test(
 $h->test(
     'B22 weekly report subject/body and five-line digest default to Vietnamese on the wire',
     function () use ($h, $db): void {
+        $db->prepare('INSERT OR REPLACE INTO health_checks VALUES(?,?,?,?,?,?)')->execute([
+            'DOWNLOADS-api',
+            time(),
+            0,
+            1,
+            null,
+            '',
+        ]);
+        $db->prepare('INSERT INTO ops_items(at,kind,summary) VALUES(?,?,?)')->execute([
+            time(),
+            'test-r2',
+            'j***@unknown.io · unknown-DOWN',
+        ]);
         $file = $h->dir . '/vi-report-provider.php';
         file_put_contents(
             $file,
@@ -310,6 +371,9 @@ $h->test(
         $wire = json_decode(file_get_contents($h->dir . '/vi-report.json'), true);
         Harness::ok(str_contains($wire['subject'], 'Báo cáo tuần FluxFiles'));
         Harness::ok(str_contains($wire['text'], 'Sao lưu thành công gần nhất'));
+        Harness::ok(str_contains($wire['text'], 'DOWNLOADS-api'));
+        Harness::ok(str_contains($wire['text'], 'j***@unknown.io · unknown-DOWN'));
+
         $digest = $db
             ->query(
                 "SELECT text FROM ops_outbox WHERE kind='report.weekly' ORDER BY id DESC LIMIT 1",
@@ -391,5 +455,71 @@ $h->test('B3 HTTPS logout expires the host-only session with Secure still set', 
     Harness::eq(2, count($cookies[1]));
     Harness::ok(stripos($cookies[1][1], 'secure') !== false);
     Harness::ok(stripos($cookies[1][1], 'expires=') !== false);
+});
+$h->test(
+    'R6 sandbox System flags default shared hosts and clears the warning on sbx.localhost',
+    function () use ($h, $api): void {
+        require_once dirname(__DIR__) . '/admin/src/Auth.php';
+        $a = new \FluxFiles\LicenseServer\Admin\Auth($h->dir . '/cookie-r2.sqlite');
+        $a->db
+            ->prepare('INSERT INTO users(name,pass_hash,totp_secret,created_at) VALUES(?,?,?,?)')
+            ->execute(['owner', 'unused', 'unused', time()]);
+        $token = bin2hex(random_bytes(32));
+        $a->db
+            ->prepare('INSERT INTO sessions VALUES(?,?,?,?,?,?,?,?)')
+            ->execute([hash('sha256', $token), 1, time(), time(), null, 'csrf', 'vi', 'auto']);
+        $ui = $h->start(dirname(__DIR__) . '/admin/public/index.php', [
+            'PATH' => (string) getenv('PATH'),
+            'FLUXFILES_ADMIN_DB' => $h->dir . '/cookie-r2.sqlite',
+            'FLUXFILES_ADMIN_API' => 'http://127.0.0.1:' . $api,
+            'FLUXFILES_ADMIN_UI_TOKEN' => 'ui-secret',
+            'FLUXFILES_LICENSE_INSTANCE' => 'sandbox',
+            'FLUXFILES_ADMIN_HOSTS' => 'localhost,127.0.0.1,sbx.localhost',
+        ]);
+        foreach (
+            ['localhost' => true, '127.0.0.1' => true, 'sbx.localhost' => false]
+            as $host => $warning
+        ) {
+            $r = $h->request($ui, 'GET', '/system', null, [
+                'Host: ' . $host,
+                'Cookie: fxadm_sbx=' . $token,
+            ]);
+            Harness::eq(200, $r['code']);
+            Harness::eq($warning, str_contains($r['raw'], 'Sandbox đang dùng tên máy chung'));
+        }
+    },
+);
+$h->test('R7 anonymous session sends viewer upstream when login audit is posted', function () use (
+    $h,
+): void {
+    $fake = $h->dir . '/role-api.php';
+    file_put_contents(
+        $fake,
+        '<?php file_put_contents(__DIR__."/role-sent",$_SERVER["HTTP_X_FLUXFILES_ROLE"]??"missing");header("Content-Type: application/json");echo "{}";',
+    );
+    $port = $h->start($fake, ['PATH' => (string) getenv('PATH')]);
+    $ui = $h->start(dirname(__DIR__) . '/admin/public/index.php', [
+        'PATH' => (string) getenv('PATH'),
+        'FLUXFILES_ADMIN_DB' => $h->dir . '/role-admin.sqlite',
+        'FLUXFILES_ADMIN_API' => 'http://127.0.0.1:' . $port,
+        'FLUXFILES_ADMIN_UI_TOKEN' => 'ui-secret',
+    ]);
+    $r = $h->request($ui, 'GET', '/login');
+    preg_match('/Set-Cookie: (fxadm=[^;]+)/i', $r['headers'], $cookie);
+    preg_match('/name="_csrf" value="([a-f0-9]+)"/', $r['raw'], $csrf);
+    $r = $h->request(
+        $ui,
+        'POST',
+        '/login',
+        ['_csrf' => $csrf[1], 'username' => 'missing', 'password' => 'wrong', 'code' => '000000'],
+        [
+            'Cookie: ' . $cookie[1],
+            'Origin: http://127.0.0.1:' . $ui,
+            'Content-Type: application/x-www-form-urlencoded',
+        ],
+        true,
+    );
+    Harness::eq(401, $r['code']);
+    Harness::eq('viewer', file_get_contents($h->dir . '/role-sent'));
 });
 $h->finish();

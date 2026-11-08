@@ -150,8 +150,18 @@ $h->test(
     'B3/B22 default Vietnamese alert and suppression are sent with inherited proxies disabled',
     function () use ($s, $run, $calls, $clear): void {
         $clear();
-        $s->enqueueAlert('test', 'crit', 'vi-wire', 'Admin test alert');
-        $s->enqueueAlert('test', 'crit', 'vi-wire', 'Admin test alert');
+        $s->enqueueAlert(
+            'test',
+            'crit',
+            'vi-wire',
+            \FluxFiles\LicenseServer\Client\OpsText::text('Admin test alert'),
+        );
+        $s->enqueueAlert(
+            'test',
+            'crit',
+            'vi-wire',
+            \FluxFiles\LicenseServer\Client\OpsText::text('Admin test alert'),
+        );
         $r = $run('vi-wire', [
             'http_proxy' => 'http://127.0.0.1:1',
             'HTTP_PROXY' => 'http://127.0.0.1:1',
@@ -357,6 +367,46 @@ $h->test(
         Harness::ok($elapsed >= 19 && $elapsed < 55, 'elapsed ' . $elapsed);
         Harness::ok(str_contains($r[1], 'mail_jobs'));
         Harness::eq('sendMessage', $calls()[0]['method']);
+    },
+);
+$h->test('R3 worker uses API language even when its local language disagrees', function () use (
+    $h,
+    $s,
+    $run,
+    $calls,
+    $clear,
+): void {
+    $clear();
+    $api = $h->api(['FLUXFILES_ADMIN_LANG' => 'en']);
+    $s->enqueueAlert('test', 'crit', 'language-r2', 'Admin test alert');
+    $s->enqueueAlert('test', 'crit', 'language-r2', 'Admin test alert');
+    $r = $run('language-r2', [
+        'FLUXFILES_ADMIN_API' => 'http://127.0.0.1:' . $api,
+        'FLUXFILES_ADMIN_LANG' => 'vi',
+    ]);
+    Harness::eq(0, $r[0]);
+    Harness::ok(str_contains($calls()[0]['body']['text'], 'Admin test alert (+1 similar)'));
+    Harness::ok(!str_contains($calls()[0]['body']['text'], 'tương tự'));
+});
+$h->test(
+    'R2 review API 5xx in one stage preserves alert delivery and records stage name',
+    function () use ($h, $api, $s, $run, $calls, $clear): void {
+        $clear();
+        $s->enqueueAlert('test', 'crit', '5xx-r2', 'Critical before API failure');
+        $proxy = $h->dir . '/5xx-proxy.php';
+        file_put_contents(
+            $proxy,
+            '<?php if(parse_url($_SERVER["REQUEST_URI"],PHP_URL_PATH)==="/admin/ops/mail-jobs"){http_response_code(503);echo "{\"error\":\"provider_down\"}";exit;}$c=curl_init("http://127.0.0.1:' .
+                $api .
+                '".$_SERVER["REQUEST_URI"]);curl_setopt_array($c,[CURLOPT_CUSTOMREQUEST=>$_SERVER["REQUEST_METHOD"],CURLOPT_POSTFIELDS=>file_get_contents("php://input"),CURLOPT_HTTPHEADER=>["Authorization: Bearer ops-secret","Content-Type: application/json"],CURLOPT_RETURNTRANSFER=>true]);$raw=curl_exec($c);http_response_code(curl_getinfo($c,CURLINFO_HTTP_CODE)?:503);echo $raw;',
+        );
+        $port = $h->start($proxy, ['PATH' => (string) getenv('PATH')]);
+        $r = $run('5xx-r2', ['FLUXFILES_ADMIN_API' => 'http://127.0.0.1:' . $port]);
+        Harness::eq(1, $r[0]);
+        Harness::ok(str_contains($r[1], 'mail_jobs'));
+        Harness::ok(!str_contains($r[1], 'provider_down'));
+        Harness::eq('sendMessage', $calls()[0]['method']);
+        Harness::ok(in_array('mail_jobs', $s->state('heartbeat')['stage_errors'], true));
     },
 );
 $h->finish();

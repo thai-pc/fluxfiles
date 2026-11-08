@@ -57,7 +57,7 @@ const start = async (file, env) => {
   throw Error("server start");
 };
 (async () => {
-  const setup = `require '${root}/LicenseStore.php';require '${root}/LicenseSigner.php';require '${root}/LicenseIssuer.php';require '${root}/Plans.php';require '${root}/admin/src/Auth.php';$a=new FluxFiles\\LicenseServer\\Admin\\Auth('${dir}/admin.sqlite');$secret=FluxFiles\\LicenseServer\\Admin\\Totp::secret();$a->db->prepare('INSERT INTO users(name,pass_hash,totp_secret,created_at) VALUES(?,?,?,?)')->execute(['owner',password_hash('test-password-long',PASSWORD_BCRYPT),$secret,time()]);$signer=new FluxFiles\\LicenseServer\\LicenseSigner(base64_encode(sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair())));$s=new FluxFiles\\LicenseServer\\LicenseStore('${dir}/l.sqlite');$issuer=new FluxFiles\\LicenseServer\\LicenseIssuer($signer,$s);$r=$issuer->issue(['email'=>'linh@example.test','customer'=>'Linh Nguyễn','plan'=>'pro-monthly','gateway'=>'polar','order_id'=>'ord-visual']);$s->markMailed($r['record']['jti']);$s->upsertOrder(['order_id'=>'ord-visual','currency'=>'usd','status'=>'paid','paid_at'=>time(),'net_amount'=>1900,'total_amount'=>1900,'plan'=>'pro-monthly','jti'=>$r['record']['jti']]);$a->db->prepare('INSERT INTO users(name,pass_hash,totp_secret,created_at,role) VALUES(?,?,?,?,?)')->execute(['viewer',password_hash('test-password-long',PASSWORD_BCRYPT),$secret,time(),'viewer']);$s->pdo()->prepare('INSERT INTO install_pings VALUES(?,?,?,?,?,?,0,1,1,?,?)')->execute([gmdate('Y-m-d'),$r['record']['jti'],'share','hmac','1.2.1','1.2.1',time(),time()]);$s->pdo()->prepare('INSERT INTO advisories VALUES(?,?,?,?,?,?,?,?)')->execute(['FF-BROWSER-1','share','<1.2.3','1.2.3','high','Browser security notice','https://example.test/fix',time()]);$s->ingest('public_counters',gmdate('Y-m-d'),[['source'=>'github','subject'=>'test/repo','metric'=>'stargazers_count','value'=>10]]);$s->ingest('demo_daily',gmdate('Y-m-d'),[['sandboxes_created'=>3,'sandbox_limit_hits'=>1,'page_limit_hits'=>2,'sandboxes_live'=>2,'uploads_bytes'=>1000]]);echo json_encode(['secret'=>$secret,'jti'=>$r['record']['jti']]);`;
+  const setup = `require '${root}/LicenseStore.php';require '${root}/LicenseSigner.php';require '${root}/LicenseIssuer.php';require '${root}/Plans.php';require '${root}/admin/src/Auth.php';$a=new FluxFiles\\LicenseServer\\Admin\\Auth('${dir}/admin.sqlite');$secret=FluxFiles\\LicenseServer\\Admin\\Totp::secret();$a->db->prepare('INSERT INTO users(name,pass_hash,totp_secret,created_at) VALUES(?,?,?,?)')->execute(['owner',password_hash('test-password-long',PASSWORD_BCRYPT),$secret,time()]);$signer=new FluxFiles\\LicenseServer\\LicenseSigner(base64_encode(sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair())));$s=new FluxFiles\\LicenseServer\\LicenseStore('${dir}/l.sqlite');$issuer=new FluxFiles\\LicenseServer\\LicenseIssuer($signer,$s);$r=$issuer->issue(['email'=>'linh@example.test','customer'=>'Linh Nguyễn','plan'=>'pro-monthly','gateway'=>'polar','order_id'=>'ord-visual']);$s->markMailed($r['record']['jti']);$s->upsertOrder(['order_id'=>'ord-visual','currency'=>'usd','status'=>'paid','paid_at'=>time(),'net_amount'=>1900,'total_amount'=>1900,'plan'=>'pro-monthly','jti'=>$r['record']['jti']]);$a->db->prepare('INSERT INTO users(name,pass_hash,totp_secret,created_at,role) VALUES(?,?,?,?,?)')->execute(['viewer',password_hash('test-password-long',PASSWORD_BCRYPT),$secret,time(),'viewer']);$s->pdo()->prepare('INSERT INTO install_pings VALUES(?,?,?,?,?,?,0,1,1,?,?)')->execute([gmdate('Y-m-d'),$r['record']['jti'],'share','hmac','1.2.1','1.2.1',time(),time()]);$s->pdo()->prepare('INSERT INTO advisories VALUES(?,?,?,?,?,?,?,?)')->execute(['FF-BROWSER-1','share','<1.2.3','1.2.3','high','Browser security notice','https://example.test/fix',time()]);$s->ingest('public_counters',gmdate('Y-m-d'),[['source'=>'github','subject'=>'test/repo','metric'=>'stargazers_count','value'=>10]]);$s->ingest('demo_daily',gmdate('Y-m-d'),[['sandboxes_created'=>3,'sandbox_limit_hits'=>1,'page_limit_hits'=>2,'sandboxes_live'=>2,'uploads_bytes'=>1000]]);$s->state('heartbeat',['at'=>time(),'stage_errors'=>['mail_jobs']]);echo json_encode(['secret'=>$secret,'jti'=>$r['record']['jti']]);`;
   const seed = JSON.parse(
     execFileSync(php, ["-r", setup], { encoding: "utf8" }),
   );
@@ -124,6 +124,10 @@ const start = async (file, env) => {
     );
   if (shortControl) throw Error("Interactive controls below 44px");
   if (
+    !(await page.locator("main").innerText()).includes("Gửi thư trong hàng đợi")
+  )
+    throw Error("Dashboard omits worker stage errors");
+  if (
     !(await page.locator("main").innerText()).includes(
       "Chưa cấu hình mã giảm giá theo dõi",
     )
@@ -157,6 +161,20 @@ const start = async (file, env) => {
       ),
     );
   if (badHeader) throw Error("Licence table headers may wrap mid-word");
+  if (
+    await page
+      .locator(".licence-list .table-wrap")
+      .evaluate((el) => el.scrollWidth > el.clientWidth + 1)
+  )
+    throw Error("1440px licence list needs horizontal scrolling");
+  if (
+    await page
+      .locator(".licence-list time")
+      .evaluateAll((nodes) =>
+        nodes.some((el) => getComputedStyle(el).whiteSpace !== "nowrap"),
+      )
+  )
+    throw Error("Licence dates wrap");
   await page.locator("[data-search]").blur();
   await page.keyboard.press("j");
   if ((await page.locator("tr.selected").count()) !== 1)
@@ -192,6 +210,34 @@ const start = async (file, env) => {
     fullPage: true,
   });
   if (overflow) throw Error("mobile viewport overflow");
+  const headerRows = await page.locator(".topbar").evaluate((el) => {
+    const brand = el.querySelector(".brand").getBoundingClientRect();
+    const controls = el
+      .querySelector(".header-controls")
+      .getBoundingClientRect();
+    return (
+      Math.abs(
+        (brand.top + brand.bottom) / 2 - (controls.top + controls.bottom) / 2,
+      ) > 2
+    );
+  });
+  if (headerRows) throw Error("Mobile header has multiple rows");
+  if (await page.locator("#admin-nav").isVisible())
+    throw Error("Mobile navigation must collapse");
+  await page.locator("[data-nav-toggle]").click();
+  if (!(await page.locator("#admin-nav").isVisible()))
+    throw Error("Mobile menu does not open");
+  if (
+    await page
+      .locator("#admin-nav")
+      .evaluate(
+        (el) =>
+          getComputedStyle(el).display !== "grid" ||
+          el.scrollWidth > el.clientWidth,
+      )
+  )
+    throw Error("Mobile menu is a horizontal strip");
+  await page.locator("[data-nav-toggle]").click();
   await page.goto("http://127.0.0.1:" + ui + "/licences");
   await page.screenshot({
     path: path.join(output, "ff-admin-mobile-list.png"),
@@ -203,6 +249,23 @@ const start = async (file, env) => {
     )
   )
     throw Error("mobile list overflow");
+  if (
+    await page
+      .locator(".row-link")
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().height < 44)
+  )
+    throw Error("Mobile row link below 44px");
+  if (
+    await page
+      .locator(".list-actions")
+      .evaluate(
+        (el) =>
+          getComputedStyle(el).position !== "fixed" ||
+          el.getBoundingClientRect().bottom > innerHeight + 1,
+      )
+  )
+    throw Error("Mobile list lacks sticky action bar");
   await page.goto("http://127.0.0.1:" + ui + "/stats/revenue");
   if (
     (await page.locator(".chart-legend").count()) === 0 ||
@@ -211,6 +274,14 @@ const start = async (file, env) => {
     throw Error("Revenue legend/axis missing");
   if (!(await page.locator("main").innerText()).includes("19.00 USD"))
     throw Error("Raw minor units in revenue table");
+  const refunds = page
+    .locator("section.card")
+    .filter({ has: page.locator("h2", { hasText: "Hoàn tiền theo tháng" }) });
+  if (
+    (await refunds.locator("table").count()) > 0 &&
+    (await refunds.locator(".empty").count()) > 0
+  )
+    throw Error("Stray empty guidance under populated refund table");
   const routes = [
     "/customers",
     "/mail",

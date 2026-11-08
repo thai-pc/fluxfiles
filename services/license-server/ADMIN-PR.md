@@ -34,10 +34,10 @@ for f in services/license-server/tests/*.php; do php "$f" || exit; done
 node services/license-server/tests/browser-admin.cjs
 ```
 
-After the consolidated review, **all 19 PHP scripts pass: 288 checks per PHP
-version**, locally on **8.2.35, 8.3.36, 8.4.27 and 8.5.12** (1,152 passing checks
-across the four runs). E_ALL/display_errors are enabled in the test process and
-the self-booting HTTP servers. PHP 8.1 is included in the dedicated CI matrix.
+After round 2, **all 20 PHP scripts run 300 checks**. The local run uses PHP
+8.2.35 with E_ALL/display_errors in both tests and HTTP fixture servers. Dedicated
+CI covers PHP 8.1–8.5, installs cached core Composer dependencies and fails if the
+119-check licence suite or 9-check renewal suite would otherwise skip.
 
 | Suite | Passed |
 |---|---:|
@@ -46,13 +46,21 @@ the self-booting HTTP servers. PHP 8.1 is included in the dedicated CI matrix.
 | Admin API / UI HTTP / UI security unit | 12 / 12 / 8 |
 | Statistics-backfill / ops-Telegram-health | 5 / 7 |
 | Phase API / phase unit / operations HTTP | 15 / 7 / 6 |
-| Review data / HTTP / worker / UI | 10 / 10 / 11 / 8 |
+| Review data / HTTP / worker / UI / R2 | 10 / 13 / 13 / 8 / 7 |
 
-PHP lint passes for **96 service PHP files** plus the update example; JavaScript
+PHP lint passes for **97 service PHP files** plus the update example; JavaScript
 syntax, workflow YAML parsing and `git diff --check` pass. Chromium passes desktop
 and 375px screens, header wrapping, 44px controls, explicit empty guidance, chart
 legend/axis/currency tables, fresh step-up, CSV BOM, notices, viewer, sandbox and
 host-only cookie isolation. No page errors or viewport overflow.
+
+Round-2 regressions cover actor rotation against the shared token cap, immediate
+revocation without a paid-period end, opaque message arguments, API-authoritative
+worker language, CI dependency guards, sandbox host warnings, provider token
+redaction, proxy refusal, System empty guidance and distinct zero-MRR axis labels.
+Chromium verifies a 1440px list without horizontal scrolling, unbroken dates,
+collapsed mobile navigation, a single header row, 44px row links, sticky list
+actions and dashboard stage errors. Root-run collector formatting is separate.
 
 The review regressions cover historical/cumulative refunds, key-rotation install
 identity, observation grace, stage isolation, global Telegram 429, host-only

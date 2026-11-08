@@ -63,3 +63,23 @@ The CSRF HTTP fixture also replaces its default Origin header when a test suppli
 an override, instead of sending two Origin headers. PHP 8.1's development server
 selects the first duplicate header; the test now sends the intended single hostile
 Origin consistently and still requires a 403 response.
+
+
+## Round 2 (re-review of d5791e2)
+
+| Item | Change | Regression evidence |
+|---|---|---|
+| R1 | Shared authenticated-role reveal bucket alongside actor bucket; refusal audit and burst alert | `test-review-http.php`: ten rotated actors allowed, next thirty refused, one suppressed burst alert |
+| R2 | Revoke fallback uses licence expiry, never immediate `ended_at` | `test-review-r2.php`: null/absent period-end payloads with 24h/72h licences |
+| R3 | Exact templates translate before opaque arguments; storage never retranslates messages; worker follows API language | Unit target/product/masked-email/placeholder cases; weekly-provider wire; worker mismatched-language wire |
+| R4 | Cached core Composer install in PHP matrix; missing vendor fails both legacy suites under CI | Subprocess missing-vendor fixtures; actual 119 + 9 suites in local/full CI runs |
+| R5 | Root collector/parser formatting only, separate commit | PHP semantic AST comparison; collector parser/CLI/root smoke suites |
+| R6 | Sandbox System warns on shared localhost/IP; explicit isolated hostname removes warning | Authenticated HTTP checks on localhost, 127.0.0.1 and sbx.localhost |
+| R7 | Mask provider/Bearer tokens, viewer fallback upstream, disable Polar proxy inheritance | Diagnostic unit, anonymous-login audit HTTP, cancel HTTP with hostile proxy env |
+| R8 | Detail/action/empty labels, System guidance, list fit/dates/links, MRR labels, mobile menu/header/sticky list and dashboard errors | Renderer/axis units plus Chromium 1440/375px checks and screenshots |
+| R9 | Explain systemd failed state, journal stage names, recovery and dashboard status | Real worker API-503 fixture asserts exit 1, stage-only CLI diagnostic and retained delivery/heartbeat |
+| Untested follow-up | API 5xx stage isolation; cleaner parsing | Fake-API 503 worker fixture; JSON/legacy cleaner counts with wrong-day, negative and overlong hostile input |
+
+Round-2 test totals: 20 scripts, 300 named checks. Local PHP uses E_ALL; CI includes
+PHP 8.1–8.5, core dependencies, privileged collector smoke and Chromium. The PR
+reply records the final run and commit list. No merge, tag or deployment.

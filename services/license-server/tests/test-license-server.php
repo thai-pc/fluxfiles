@@ -11,7 +11,10 @@
 declare(strict_types=1);
 
 $core = __DIR__ . '/../../../packages/core/vendor/autoload.php';
-if (!is_file($core)) { fwrite(STDERR, "skip: core vendor not installed\n"); exit(0); }
+if (!is_file($core)) {
+    fwrite(STDERR, "core vendor not installed; run composer install -d packages/core\n");
+    exit(filter_var(getenv('CI'), FILTER_VALIDATE_BOOLEAN) ? 1 : 0);
+}
 require_once $core;
 require_once __DIR__ . '/../LicenseSigner.php';
 require_once __DIR__ . '/../LicenseStore.php';

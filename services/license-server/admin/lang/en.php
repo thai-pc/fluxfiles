@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 return [
+    'cookie_isolation_warning' => 'Sandbox uses a shared host. Open sbx.localhost and set FLUXFILES_ADMIN_HOSTS=sbx.localhost; cookies are not isolated by port.',
+    'event_issued' => 'Issued',
+    'empty_build' => 'No build identifier. Write a SOURCE file during deployment to identify the version.',
+    'empty_mail_tls' => 'Mail TLS has not been checked; this probe applies to Resend. Check the mail transport below.',
+    'empty_heartbeat' => 'No worker heartbeat yet. Enable the ops timer and inspect its service journal.',
+    'menu' => 'Menu',
+    'preferences' => 'Preferences',
+
     'refund_rate' => 'Refund rate (%)',
     'refunds_monthly' => 'Monthly refunds',
     'site_checks' => 'Landing and update checks',

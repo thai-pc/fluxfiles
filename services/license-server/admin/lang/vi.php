@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 return [
+    'cookie_isolation_warning' => 'Sandbox đang dùng tên máy chung. Mở qua sbx.localhost và đặt FLUXFILES_ADMIN_HOSTS=sbx.localhost; cookie không tách biệt theo cổng.',
+    'event_issued' => 'Đã cấp',
+    'empty_build' => 'Chưa có mã bản dựng. Ghi tệp SOURCE khi triển khai để nhận diện phiên bản.',
+    'empty_mail_tls' => 'Chưa kiểm tra TLS kênh thư; phép kiểm tra này chỉ áp dụng cho Resend. Xem cấu hình phương thức gửi thư bên dưới.',
+    'empty_heartbeat' => 'Chưa nhận báo cáo worker. Bật timer vận hành và kiểm tra nhật ký dịch vụ.',
+    'menu' => 'Menu',
+    'preferences' => 'Tùy chọn',
+
     'refund_rate' => 'Tỷ lệ hoàn tiền (%)',
     'refunds_monthly' => 'Hoàn tiền theo tháng',
     'site_checks' => 'Kiểm tra trang giới thiệu và cập nhật',

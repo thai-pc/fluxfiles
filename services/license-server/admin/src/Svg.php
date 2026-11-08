@@ -168,7 +168,12 @@ final class Svg
             );
         }
         if ($high === $low) {
-            $high = $low + 1;
+            $high =
+                $low +
+                (isset($rows[0]['currency']) &&
+                !in_array(strtolower($rows[0]['currency']), ['vnd', 'jpy', 'krw'], true)
+                    ? 100
+                    : 1);
         }
         $y = static fn(float $number): float => 195 - (($number - $low) / ($high - $low)) * 170;
         $zero = $y(0);
@@ -176,16 +181,22 @@ final class Svg
         $palette = array_flip(array_keys($series));
         $svg = self::start($title, $fallback, 250, $class);
         $svg .= '<path class="axis" d="M95 15V195 M95 ' . self::n($zero) . 'H750"/>';
+        $tickLabels = [];
         foreach (array_unique([$low, ($high + $low) / 2, $high]) as $tick) {
             $row = [$value => (int) $tick];
             if (isset($rows[0]['currency'])) {
                 $row['currency'] = $rows[0]['currency'];
             }
+            $labelText = self::display($row, $value);
+            if (isset($tickLabels[$labelText])) {
+                continue;
+            }
+            $tickLabels[$labelText] = true;
             $svg .=
                 '<text class="axis-label y-axis" text-anchor="end" x="88" y="' .
                 self::n($y((float) $tick) + 4) .
                 '">' .
-                self::h(self::display($row, $value)) .
+                self::h($labelText) .
                 '</text>';
         }
         $i = 0;

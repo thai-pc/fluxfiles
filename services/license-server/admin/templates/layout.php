@@ -38,44 +38,64 @@
                 FluxFiles
                 <span><?= $v->e($v->t('app')) ?></span>
             </a>
-            <div class="preferences">
-                <?php if ($v->session): ?>
-                <form method="post" action="/pref/lang">
-                    <?= $v->csrf() ?>
-                    <button name="value" value="<?= $v->i18n->lang === 'vi' ? 'en' : 'vi' ?>" aria-label="<?= $v->e($v->t('language')) ?>">
-                        <?= $v->i18n->lang === 'vi' ? 'EN' : 'VI' ?>
-                    </button>
-                </form>
-                <form method="post" action="/pref/theme">
-                    <?= $v->csrf() ?>
-                    <label class="sr-only" for="theme"><?= $v->e($v->t('theme')) ?></label>
-                    <select id="theme" name="value">
-                        <?php foreach (['auto', 'light', 'dark'] as $theme): ?>
-                        <option value="<?= $theme ?>" <?= ($v->session['theme'] ?? 'auto') === $theme ? 'selected' : '' ?>>
-                            <?= $v->e($v->t($theme)) ?>
-                        </option>
-                        <?php endforeach ?>
-                    </select>
-                    <button><?= $v->e($v->t('save_theme')) ?></button>
-                </form>
-                <?php if ($v->session['user_id']): ?>
-                <span>
-                    <?= $v->e($v->session['name']) ?>
-                    <?php if (!$v->canWrite()): ?>
-                    · <?= $v->e($v->t('viewer')) ?>
-                    <?php endif ?>
-                </span>
-                <form method="post" action="/logout">
-                    <?= $v->csrf() ?>
-                    <button><?= $v->e($v->t('logout')) ?></button>
-                </form>
+            <div class="header-controls">
+                <?php if ($v->session['user_id'] ?? false): ?>
+                <button
+                    type="button"
+                    class="nav-toggle"
+                    aria-controls="admin-nav"
+                    aria-expanded="false"
+                    data-nav-toggle
+                >
+                    <?= $v->e($v->t('menu')) ?>
+                </button>
                 <?php endif ?>
-                <?php endif ?>
+                <details class="preferences-menu">
+                    <summary><?= $v->e($v->t('preferences')) ?></summary>
+                    <div class="preferences">
+                        <?php if ($v->session): ?>
+                        <form method="post" action="/pref/lang">
+                            <?= $v->csrf() ?>
+                            <button
+                                name="value"
+                                value="<?= $v->i18n->lang === 'vi' ? 'en' : 'vi' ?>"
+                                aria-label="<?= $v->e($v->t('language')) ?>"
+                            >
+                                <?= $v->i18n->lang === 'vi' ? 'EN' : 'VI' ?>
+                            </button>
+                        </form>
+                        <form method="post" action="/pref/theme">
+                            <?= $v->csrf() ?>
+                            <label class="sr-only" for="theme"><?= $v->e($v->t('theme')) ?></label>
+                            <select id="theme" name="value">
+                                <?php foreach (['auto', 'light', 'dark'] as $theme): ?>
+                                <option value="<?= $theme ?>" <?= ($v->session['theme'] ?? 'auto') === $theme ? 'selected' : '' ?>>
+                                    <?= $v->e($v->t($theme)) ?>
+                                </option>
+                                <?php endforeach ?>
+                            </select>
+                            <button><?= $v->e($v->t('save_theme')) ?></button>
+                        </form>
+                        <?php if ($v->session['user_id']): ?>
+                        <span>
+                            <?= $v->e($v->session['name']) ?>
+                            <?php if (!$v->canWrite()): ?>
+                            · <?= $v->e($v->t('viewer')) ?>
+                            <?php endif ?>
+                        </span>
+                        <form method="post" action="/logout">
+                            <?= $v->csrf() ?>
+                            <button><?= $v->e($v->t('logout')) ?></button>
+                        </form>
+                        <?php endif ?>
+                        <?php endif ?>
+                    </div>
+                </details>
             </div>
         </header>
         <div class="shell">
             <?php if ($v->session['user_id'] ?? false): ?>
-            <nav aria-label="FluxFiles">
+            <nav id="admin-nav" aria-label="FluxFiles">
                 <?php foreach (
                     [
                         '/' => 'dashboard',

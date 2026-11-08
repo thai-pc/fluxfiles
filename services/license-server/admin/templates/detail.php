@@ -100,7 +100,7 @@ $base = '/licences/' . rawurlencode($r['jti']); ?>
         <p><?= $v->e($v->t('first_seen_at')) ?>: <?= $v->time($data['install']['first_seen_at']) ?></p>
         <p><?= $v->e($v->t('last_seen_at')) ?>: <?= $v->time($data['install']['last_seen_at']) ?></p>
         <p><?= $v->e($v->t('nets_30d')) ?>: <?= $v->e($data['install']['nets_30d']) ?></p>
-        <?= $v->table($data['install']['versions']) ?>
+        <?= $v->table($data['install']['versions'], [], null, 'empty_installs') ?>
     </section>
 </div>
 <section class="card">
@@ -120,8 +120,10 @@ $base = '/licences/' . rawurlencode($r['jti']); ?>
     <details>
         <summary><?= $v->time($item['at']) ?> · <?= $v->e($v->t($item['source'])) ?> · <?= $v->e(
             $v->t(
-                $item['item']['kind'] ??
-                    ($item['item']['action'] ?? ($item['item']['outcome'] ?? 'update-status')),
+                ($item['item']['kind'] ?? '') === 'issued'
+                    ? 'event_issued'
+                    : $item['item']['kind'] ??
+                        ($item['item']['action'] ?? ($item['item']['outcome'] ?? 'update-status')),
             ),
         ) ?></summary>
         <?= $v->table([$item['item']]) ?>

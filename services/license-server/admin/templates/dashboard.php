@@ -7,6 +7,13 @@
     <span class="pill test"><?= $v->e($v->t('test_data')) ?></span>
     <?php endif ?>
 </div>
+<?php if (!empty($data['heartbeat']['stage_errors'])): ?>
+<section class="card warning" role="status">
+    <h2><?= $v->e($v->t('stage_errors')) ?></h2>
+    <?= $v->facts(['stage_errors' => $data['heartbeat']['stage_errors']]) ?>
+    <a class="button" href="/system"><?= $v->e($v->t('system')) ?></a>
+</section>
+<?php endif ?>
 <section class="card attention">
     <h2>
         <?= $v->e($v->t('needs_attention')) ?>

@@ -321,6 +321,7 @@ immediately instead of waiting for the next billing cycle. Safe to re-run
 ## Test
 
 ```bash
+composer install -d packages/core --prefer-dist --no-interaction
 php services/license-server/tests/test-license-server.php   # from the repo root
 php services/license-server/tests/test-renewal-http.php
 php services/license-server/tests/test-pro-download-http.php   # /claim cache, no-deadlock, /pro-download
@@ -610,8 +611,8 @@ call only `/admin/ops/*`; it cannot read customers, keys or accounting exports.
 Subscription canceled/uncanceled events toggle reminder suppression without
 revoking a paid period. Past-due subscriptions appear separately and are excluded
 from current MRR. A revoked event revokes all subscription rows only when the
-paid period has **more than 48 hours** remaining (current_period_end, then ended_at,
-with licence expiry only for legacy missing period fields). Unknown subscriptions
+paid period has **more than 48 hours** remaining (`current_period_end`, falling
+back to licence expiry when the paid-period field is absent or null). Unknown subscriptions
 ACK 200; older events cannot undo newer state. Refunds leave an operator item until
 cancellation is observed. Enable these four subscription events at Polar after
 migration. `subscription.created/updated` are also accepted for known subscriptions.
@@ -767,3 +768,29 @@ use. Never keep it in an env file or browser storage.
 The PHP 8.5 path uses the native SQLite `createFunction` method and avoids
 no-op/deprecated cURL/reflection calls. The legacy method remains only as the
 PHP 8.1–8.3 compatibility fallback. See [PHP's SQLite deprecation note](https://www.php.net/manual/en/pdo.sqlitecreatefunction.php).
+
+### Worker stage failures and operational language
+
+The worker completes independent stages and exits **1** if any stage fails. An
+optional setting that stays broken therefore leaves the systemd oneshot unit in
+`failed` state after each timer run, even when queued alerts were delivered.
+Inspect `journalctl -u fluxfiles-license-ops.service -n 50` (use the sandbox unit
+name for sandbox): lines such as `ops stage failed: mail_jobs` identify the stage
+without logging provider messages or credentials. Fix that stage's setting, run
+its service again, then use `systemctl reset-failed fluxfiles-license-ops.service`
+to clear historical failure state. Dashboard and System show `stage_errors` from
+the heartbeat; a recent heartbeat alone does not mean every stage succeeded.
+
+The API's `FLUXFILES_ADMIN_LANG` is authoritative for operational messages. The
+worker adopts it from API responses for generated alerts and suppression suffixes;
+its local setting is only a fallback before it can reach the API. Set the same
+value in both process configurations. Templates translate before inserting data,
+so target names, product names and masked buyer addresses retain their spelling.
+
+On sandbox, System displays a cookie-isolation warning if opened through plain
+`localhost` or `127.0.0.1`. Configure `FLUXFILES_ADMIN_HOSTS=sbx.localhost` and open
+that hostname; use `prod.localhost` for production. Ports do not isolate cookies.
+
+The dedicated admin CI caches Composer downloads and installs core dependencies
+before testing. Both legacy licence suites exit with failure when dependencies
+are absent and `CI=true`; a CI pass cannot silently omit their 119 and 9 checks.

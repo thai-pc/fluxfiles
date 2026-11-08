@@ -434,22 +434,24 @@ final class Communications
             );
             $previous = $this->store->state('weekly_report') ?? [];
             $mrr = [];
-            $lines = ['FluxFiles weekly report ' . $week];
+            $lines = [OpsText::text('FluxFiles weekly report {week}', ['week' => $week])];
             foreach ($weekRows as $row) {
-                $lines[] = 'Week net: ' . $row['net'] . ' ' . $row['currency'] . ' minor units';
+                $lines[] = OpsText::text('Week net: {net} {currency} minor units', [
+                    'net' => $row['net'],
+                    'currency' => $row['currency'],
+                ]);
             }
             foreach ($data['revenue']['currencies'] as $row) {
                 $mrr[$row['currency']] = $row['mrr'];
-                $lines[] =
-                    'Month-to-date net: ' .
-                    $row['net_month'] .
-                    ' ' .
-                    $row['currency'] .
-                    ' minor units; MRR ' .
-                    $row['mrr'] .
-                    '; change ' .
-                    ($row['mrr'] - ($previous['mrr'][$row['currency']] ?? 0)) .
-                    ' since previous report';
+                $lines[] = OpsText::text(
+                    'Month-to-date net: {net} {currency} minor units; MRR {mrr}; change {change} since previous report',
+                    [
+                        'net' => $row['net_month'],
+                        'currency' => $row['currency'],
+                        'mrr' => $row['mrr'],
+                        'change' => $row['mrr'] - ($previous['mrr'][$row['currency']] ?? 0),
+                    ],
+                );
             }
             $counts = (new Analytics($this->store))->stats('customers', [
                 'from' => $start->format('Y-m-d'),
@@ -463,54 +465,50 @@ final class Communications
             $open = $this->rows(
                 'SELECT kind,summary FROM ops_items WHERE resolved_at IS NULL ORDER BY id DESC LIMIT 20',
             );
-            $lines[] = 'New customers: ' . $new . '; refunds: ' . $refunds;
-            $lines[] =
-                'Active installs: ' .
-                $data['installs']['active_30d'] .
-                '; never installed: ' .
-                $data['installs']['never_installed'];
+            $lines[] = OpsText::text('New customers: {count}; refunds: {refunds}', [
+                'count' => $new,
+                'refunds' => $refunds,
+            ]);
+            $lines[] = OpsText::text('Active installs: {count}; never installed: {never}', [
+                'count' => $data['installs']['active_30d'],
+                'never' => $data['installs']['never_installed'],
+            ]);
             foreach ($data['revenue']['founding'] as $discount) {
-                $lines[] =
-                    $discount['code'] .
-                    ': ' .
-                    $discount['paid'] .
-                    ' / ' .
-                    $discount['cap'] .
-                    '; refunded ' .
-                    $discount['refunded'];
+                $lines[] = OpsText::text('{code}: {paid}/{cap}; refunded {refunded}', [
+                    'code' => $discount['code'],
+                    'paid' => $discount['paid'],
+                    'cap' => $discount['cap'],
+                    'refunded' => $discount['refunded'],
+                ]);
             }
             foreach ($open as $item) {
-                $lines[] = 'Needs attention: ' . Mask::clean($item['summary']);
+                $lines[] = OpsText::text('Needs attention: {summary}', [
+                    'summary' => Mask::clean($item['summary']),
+                ]);
             }
-            $lines[] = 'Webhook failures (7d): ' . $data['webhook_errors_7d'];
+            $lines[] = OpsText::text('Webhook failures (7d): {count}', [
+                'count' => $data['webhook_errors_7d'],
+            ]);
             foreach ($data['mail']['periods'][30] as $mail) {
-                $lines[] =
-                    'Mail (30d): ' .
-                    $mail['kind'] .
-                    '; sent: ' .
-                    $mail['sent'] .
-                    '; accepted: ' .
-                    $mail['accepted'] .
-                    '; delivered: ' .
-                    $mail['delivered'] .
-                    '; bounced: ' .
-                    $mail['bounced'] .
-                    '; failed: ' .
-                    $mail['failed'];
+                $lines[] = OpsText::text(
+                    'Mail (30d): {kind}; sent: {sent}; accepted: {accepted}; delivered: {delivered}; bounced: {bounced}; failed: {failed}',
+                    $mail,
+                );
             }
             $backup = $this->store->backupStatus();
-            $lines[] =
-                'Backup last OK: ' . ($backup['at'] ? gmdate('c', (int) $backup['at']) : 'missing');
+            $lines[] = OpsText::text('Backup last OK: {time}', [
+                'time' => $backup['at']
+                    ? gmdate('c', (int) $backup['at'])
+                    : OpsText::text('missing'),
+            ]);
             foreach ((new Analytics($this->store))->health()['latest'] as $health) {
-                $lines[] =
-                    'Health ' .
-                    $health['target'] .
-                    ': ' .
-                    ($health['ok'] ? 'OK' : 'DOWN') .
-                    '; TLS days ' .
-                    ($health['tls_days'] ?? 'unknown');
+                $lines[] = OpsText::text('Health {target}: {status}; TLS days {days}', [
+                    'target' => $health['target'],
+                    'status' => $health['ok'] ? 'OK' : OpsText::text('DOWN'),
+                    'days' => $health['tls_days'] ?? OpsText::text('unknown'),
+                ]);
             }
-            $body = Mask::clean(OpsText::text(implode("\n", $lines)));
+            $body = Mask::clean(implode("\n", $lines));
             $mailer = (new AdminApi($this->store, 'ops'))->mailer();
             $mailer->setTimeout(12);
             $mailer->setIdempotencyKey('weekly-' . $week);
@@ -521,7 +519,7 @@ final class Communications
             $ok = $mailer->sendStructured(
                 'report',
                 $email,
-                OpsText::text('FluxFiles weekly report ' . $week),
+                OpsText::text('FluxFiles weekly report {week}', ['week' => $week]),
                 $body,
             );
             $delay = min(3600, 60 * 2 ** min(6, $receipt['attempts'] - 1));
@@ -537,25 +535,27 @@ final class Communications
                     'at' => time(),
                     'mrr' => $mrr,
                 ]);
-                $digest =
-                    'Weekly ' .
-                    $week .
-                    "\n" .
+                $digest = implode("\n", [
+                    OpsText::text('Weekly {week}', ['week' => $week]),
                     implode(
                         '; ',
                         array_map(
-                            static fn(array $r): string => $r['currency'] . ' net ' . $r['net'],
+                            static fn(array $r): string => OpsText::text(
+                                '{currency} net {net}',
+                                $r,
+                            ),
                             $weekRows,
                         ),
-                    ) .
-                    "\nNew customers: " .
-                    $new .
-                    '; refunds: ' .
-                    $refunds .
-                    "\nActive installs: " .
-                    $data['installs']['active_30d'] .
-                    "\nNeeds attention: " .
-                    count($open);
+                    ),
+                    OpsText::text('New customers: {count}; refunds: {refunds}', [
+                        'count' => $new,
+                        'refunds' => $refunds,
+                    ]),
+                    OpsText::text('Active installs: {count}', [
+                        'count' => $data['installs']['active_30d'],
+                    ]),
+                    OpsText::text('Needs attention: {summary}', ['summary' => count($open)]),
+                ]);
                 $this->store->enqueueAlert(
                     'report.weekly',
                     'info',

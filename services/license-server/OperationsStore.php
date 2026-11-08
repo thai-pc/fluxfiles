@@ -6,6 +6,7 @@ namespace FluxFiles\LicenseServer;
 
 use FluxFiles\LicenseServer\Client\Ingest;
 use FluxFiles\LicenseServer\Client\Mask;
+use FluxFiles\LicenseServer\Client\OpsText;
 
 require_once __DIR__ . '/PolarWebhook.php';
 require_once __DIR__ . '/client/Ingest.php';
@@ -147,10 +148,7 @@ trait OperationsStore
                 );
                 $pick->execute([$sid]);
                 $expires = $pick->fetchColumn();
-                $periodEnd =
-                    $end ??
-                    (self::eventTime($data['ended_at'] ?? null) ??
-                        ($expires === false ? null : (int) $expires));
+                $periodEnd = $end ?? ($expires === false ? null : (int) $expires);
                 if (
                     $expires !== false &&
                     $periodEnd !== null &&
@@ -184,11 +182,7 @@ trait OperationsStore
         ?string $order = null,
         ?int $event = null,
     ): void {
-        $summary = mb_substr(
-            Mask::clean(\FluxFiles\LicenseServer\Client\OpsText::text($summary)),
-            0,
-            500,
-        );
+        $summary = mb_substr(Mask::clean($summary), 0, 500);
         $q = $this->db->prepare(
             'INSERT OR IGNORE INTO ops_items(at,kind,ref_jti,ref_order,ref_event,summary) VALUES(?,?,?,?,?,?)',
         );
@@ -228,11 +222,10 @@ trait OperationsStore
         }
         $this->opsItem(
             'refund_sub_active',
-            'Refunded order ' .
-                Mask::id((string) $facts['order_id']) .
-                '; cancel subscription ' .
-                Mask::id($sid) .
-                ' in Polar',
+            OpsText::text('Refunded order {order}; cancel subscription {subscription} in Polar', [
+                'order' => Mask::id((string) $facts['order_id']),
+                'subscription' => Mask::id($sid),
+            ]),
             $facts['jti'] ?? null,
             $facts['order_id'],
         );
@@ -262,7 +255,9 @@ trait OperationsStore
             if (!$row['is_test'] && !$row['archived_at']) {
                 $this->opsItem(
                     'mail_failed',
-                    'Undelivered licence · ' . Mask::email($row['email']),
+                    OpsText::text('Undelivered licence · {email}', [
+                        'email' => Mask::email($row['email']),
+                    ]),
                     $row['jti'],
                 );
             }
@@ -277,7 +272,9 @@ trait OperationsStore
         ) {
             $this->opsItem(
                 $event['outcome'],
-                'Webhook: ' . $event['outcome'],
+                OpsText::text('Webhook: {outcome}', [
+                    'outcome' => OpsText::text($event['outcome']),
+                ]),
                 $event['jti'],
                 $event['order_id'],
                 (int) $event['id'],
@@ -291,7 +288,9 @@ trait OperationsStore
                 $never[$r['jti']] = true;
                 $this->opsItem(
                     'never_installed',
-                    'Never installed · ' . Mask::email($r['email']),
+                    OpsText::text('Never installed · {email}', [
+                        'email' => Mask::email($r['email']),
+                    ]),
                     $r['jti'],
                 );
             }

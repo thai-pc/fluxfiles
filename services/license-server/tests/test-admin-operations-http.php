@@ -175,6 +175,11 @@ $h->test(
         );
         $enabled = $h->api([
             'FLUXFILES_ADMIN_POLAR_ACTIONS' => '1',
+            'http_proxy' => 'http://127.0.0.1:1',
+            'HTTP_PROXY' => 'http://127.0.0.1:1',
+            'ALL_PROXY' => 'http://127.0.0.1:1',
+            'NO_PROXY' => '',
+            'no_proxy' => '',
             'FLUXFILES_POLAR_API_BASE' => 'http://127.0.0.1:' . $provider,
         ]);
         Harness::eq(

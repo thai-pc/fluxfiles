@@ -7,6 +7,7 @@ namespace FluxFiles\LicenseServer\Ops;
 use FluxFiles\LicenseServer\Client\ApiClient;
 use FluxFiles\LicenseServer\Client\Config;
 use FluxFiles\LicenseServer\Client\Mask;
+use FluxFiles\LicenseServer\Client\OpsText;
 
 require_once __DIR__ . '/../../client/ApiClient.php';
 require_once __DIR__ . '/Telegram.php';
@@ -147,12 +148,16 @@ final class Worker
 
     private function request(string $method, string $path, array $data = []): array
     {
-        return (new ApiClient(
+        $response = (new ApiClient(
             Config::secret('FLUXFILES_LICENSE_OPS_TOKEN'),
             'ops',
             null,
             max(1, min(20, $this->remaining())),
         ))->request($method, $path, $data);
+        if (isset($response['lang'])) {
+            OpsText::useLanguage((string) $response['lang']);
+        }
+        return $response;
     }
 
     private function inbox(): void
@@ -292,9 +297,7 @@ final class Worker
                     $text =
                         $item['text'] .
                         ($item['suppressed'] > 0
-                            ? ' (+' .
-                                $item['suppressed'] .
-                                \FluxFiles\LicenseServer\Client\OpsText::text(' similar)')
+                            ? OpsText::text(' (+{count} similar)', ['count' => $item['suppressed']])
                             : '');
                     Mask::safe($text, true);
                     $res = $this->send($text);
@@ -421,7 +424,7 @@ final class Worker
                             'health.down',
                             'crit',
                             'down:' . $name,
-                            'Health down · ' . $name,
+                            OpsText::text('Health down · {target}', ['target' => $name]),
                         );
                         $previous['down'] = true;
                     }
@@ -431,7 +434,7 @@ final class Worker
                             'health.up',
                             'info',
                             'up:' . $name,
-                            'Health recovered · ' . $name,
+                            OpsText::text('Health recovered · {target}', ['target' => $name]),
                         );
                     }
                     $previous = ['failures' => 0, 'down' => false];
@@ -442,7 +445,10 @@ final class Worker
                         'tls.expiring',
                         $r['tls_days'] < 3 ? 'crit' : 'warn',
                         'tls:' . $name,
-                        'TLS expires · ' . $name . ' · ' . $r['tls_days'] . ' days',
+                        OpsText::text('TLS expires · {target} · {days} days', [
+                            'target' => $name,
+                            'days' => $r['tls_days'],
+                        ]),
                         86400,
                     );
                 }
@@ -460,11 +466,10 @@ final class Worker
                         'disk.low',
                         $level,
                         'disk:' . hash('sha256', $path) . ':' . $level,
-                        'Disk space low · ' .
-                            mb_substr(Mask::clean($path), 0, 160) .
-                            ' · ' .
-                            (int) round(($free / $total) * 100) .
-                            '%',
+                        OpsText::text('Disk space low · {path} · {percent}%', [
+                            'path' => mb_substr(Mask::clean($path), 0, 160),
+                            'percent' => (int) round(($free / $total) * 100),
+                        ]),
                         21600,
                     );
                 }
@@ -476,7 +481,7 @@ final class Worker
                         'backup.stale',
                         'crit',
                         'backup',
-                        'Backup missing or older than 26 hours',
+                        OpsText::text('Backup missing or older than 26 hours'),
                         86400,
                     );
                 }

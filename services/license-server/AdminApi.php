@@ -7,6 +7,7 @@ namespace FluxFiles\LicenseServer;
 use PDO;
 use FluxFiles\LicenseServer\Client\Config;
 use FluxFiles\LicenseServer\Client\Mask;
+use FluxFiles\LicenseServer\Client\OpsText;
 
 require_once __DIR__ . '/Stats.php';
 require_once __DIR__ . '/LicenseMailer.php';
@@ -66,7 +67,8 @@ final class AdminApi
         $db = $s->pdo();
         $stats = new Stats($db);
         if (str_starts_with($path, '/admin/ops/')) {
-            return $this->ops($method, $path, $b, $q);
+            [$code, $body] = $this->ops($method, $path, $b, $q);
+            return [$code, $body + ['lang' => OpsText::language()]];
         }
         $extended = (new AdminExtensions($s, $this->role, $this->issuer))->handle(
             $method,
@@ -157,19 +159,20 @@ final class AdminApi
                 return [200, $s->cascadePreview($jti, $status)];
             }
             if ($method === 'POST' && $action === 'reveal') {
-                if (
-                    !$s->rateHit(
-                        'key-reveal:' . hash('sha256', MachineAuth::actor($this->role, $_SERVER)),
-                        600,
-                        10,
-                    )
-                ) {
+                // Actor headers are caller-supplied, so the token role also owns a shared cap.
+                $tokenAllowed = $s->rateHit('key-reveal:role:' . $this->role, 600, 10);
+                $actorAllowed = $s->rateHit(
+                    'key-reveal:' . hash('sha256', MachineAuth::actor($this->role, $_SERVER)),
+                    600,
+                    10,
+                );
+                if (!$tokenAllowed || !$actorAllowed) {
                     $s->audit('key.reveal', $jti, 'rate_limited');
                     $s->enqueueAlert(
                         'key.reveal_burst',
                         'warn',
                         'key-reveal-burst',
-                        'Key reveal burst; inspect the audit log',
+                        OpsText::text('Key reveal burst; inspect the audit log'),
                         600,
                     );
                     return [429, ['error' => 'rate_limited']];
@@ -311,7 +314,7 @@ final class AdminApi
                 'test',
                 'crit',
                 'telegram-test:' . intdiv(time(), 60),
-                'Admin test alert',
+                OpsText::text('Admin test alert'),
                 60,
             );
             $s->audit('telegram.test');
@@ -623,26 +626,24 @@ final class AdminApi
                             ($label === 'failures' ? ' AND http_status>=400' : ''),
                         [$today],
                     )[0]['n'];
-                    $text[] = $label . ': ' . $n;
+                    $text[] = OpsText::text($label . ': {count}', ['count' => $n]);
                 }
             } else {
                 foreach ($d['revenue']['currencies'] as $r) {
-                    $text[] =
-                        $r['currency'] .
-                        ' net: ' .
-                        $r['net_month'] .
-                        ' minor units; MRR: ' .
-                        $r['mrr'];
+                    $text[] = OpsText::text('{currency} net: {net} minor units; MRR: {mrr}', [
+                        'currency' => $r['currency'],
+                        'net' => $r['net_month'],
+                        'mrr' => $r['mrr'],
+                    ]);
                 }
-                $text[] = 'Active installs: ' . $d['installs']['active_30d'];
+                $text[] = OpsText::text('Active installs: {count}', [
+                    'count' => $d['installs']['active_30d'],
+                ]);
             }
             return [
                 200,
                 [
-                    'text' => Mask::safe(
-                        \FluxFiles\LicenseServer\Client\OpsText::text(implode("\n", $text)),
-                        true,
-                    ),
+                    'text' => Mask::safe(implode("\n", $text), true),
                 ],
             ];
         }

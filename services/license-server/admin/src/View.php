@@ -104,7 +104,12 @@ final class View
         }
         $html = '<div class="table-wrap"><table><thead><tr>';
         foreach ($cols as $col) {
-            $html .= '<th scope="col">' . $this->e($this->t($col)) . '</th>';
+            $html .=
+                '<th scope="col" data-column="' .
+                $this->e($col) .
+                '">' .
+                $this->e($this->t($col)) .
+                '</th>';
         }
         $html .= '</tr></thead><tbody>';
         foreach ($rows as $r) {
@@ -128,7 +133,12 @@ final class View
                 '>';
             foreach ($cols as $i => $col) {
                 $val = $r[$col] ?? null;
-                $html .= '<td data-label="' . $this->e($this->t($col)) . '">';
+                $html .=
+                    '<td data-column="' .
+                    $this->e($col) .
+                    '" data-label="' .
+                    $this->e($this->t($col)) .
+                    '">';
                 $text = is_array($val)
                     ? json_encode($val, JSON_UNESCAPED_UNICODE)
                     : ($val === null
@@ -253,7 +263,7 @@ final class View
                     $cell = $this->e($text);
                 }
                 if ($url && $i === ($cols[0] === 'select' ? 1 : 0)) {
-                    $cell = '<a href="' . $this->e($url) . '">' . $cell . '</a>';
+                    $cell = '<a class="row-link" href="' . $this->e($url) . '">' . $cell . '</a>';
                 }
                 $html .= $cell . '</td>';
             }

@@ -1,5 +1,14 @@
 "use strict";
 (() => {
+  document
+    .querySelector("[data-nav-toggle]")
+    ?.addEventListener("click", (event) => {
+      const button = event.currentTarget;
+      const nav = document.getElementById(button.getAttribute("aria-controls"));
+      const open = button.getAttribute("aria-expanded") !== "true";
+      button.setAttribute("aria-expanded", String(open));
+      nav?.classList.toggle("is-open", open);
+    });
   const clearKey = (dialog) => {
     dialog
       .querySelectorAll("[data-key], input[type=password]")

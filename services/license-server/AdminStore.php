@@ -547,7 +547,7 @@ trait AdminStore
                     'webhook.bad_signature',
                     'warn',
                     'badsig:' . $source . ':' . intdiv($now, 3600),
-                    'Webhook signature failures',
+                    OpsText::text('Webhook signature failures'),
                     3600,
                 );
             }
@@ -556,7 +556,10 @@ trait AdminStore
                 'webhook.failure',
                 'crit',
                 'hook:' . $outcome . ':' . ($facts['product_id'] ?? ''),
-                'Webhook: ' . $outcome . ' · ' . Mask::id((string) ($facts['product_id'] ?? '')),
+                OpsText::text('Webhook: {outcome} · {product}', [
+                    'outcome' => OpsText::text($outcome),
+                    'product' => Mask::id((string) ($facts['product_id'] ?? '')),
+                ]),
                 3600,
             );
         }
@@ -591,12 +594,16 @@ trait AdminStore
                 $this->actor,
             ]);
         if (!$ok) {
-            $this->opsItem('mail_failed', 'Mail failed · ' . Mask::email($to), $jti);
+            $this->opsItem(
+                'mail_failed',
+                OpsText::text('Mail failed · {email}', ['email' => Mask::email($to)]),
+                $jti,
+            );
             $this->enqueueAlert(
                 'mail.failed',
                 'warn',
                 'mailfail:' . Config::get('FLUXFILES_MAIL_TRANSPORT', 'log'),
-                'Mail failed · ' . Mask::email($to),
+                OpsText::text('Mail failed · {email}', ['email' => Mask::email($to)]),
                 3600,
             );
         }
@@ -609,7 +616,6 @@ trait AdminStore
         string $text,
         int $windowSec = PHP_INT_MAX,
     ): void {
-        $text = OpsText::text($text);
         Mask::safe($text, true);
         Mask::safe($dedupKey, true);
         $now = time();
@@ -679,9 +685,9 @@ trait AdminStore
                             "UPDATE ops_outbox SET dropped_at=?,last_error='budget_digest' WHERE id>=? AND channel='telegram' AND sent_at IS NULL AND dropped_at IS NULL AND next_at<=? AND COALESCE(lease_until,0)<=CAST(? AS INTEGER)",
                         )
                         ->execute([$now, $tailId, $now, $now]);
-                    $text = OpsText::text(
-                        'Alert digest: ' . $digest['n'] . ' alerts; open the admin UI',
-                    );
+                    $text = OpsText::text('Alert digest: {count} alerts; open the admin UI', [
+                        'count' => $digest['n'],
+                    ]);
                     $this->db
                         ->prepare(
                             "INSERT INTO ops_outbox(created_at,channel,kind,severity,dedup_key,text,next_at) VALUES(?,'telegram','budget.digest',?,?,?,?)",

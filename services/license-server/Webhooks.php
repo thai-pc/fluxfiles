@@ -6,6 +6,7 @@ namespace FluxFiles\LicenseServer;
 
 use FluxFiles\LicenseServer\Client\Config;
 use FluxFiles\LicenseServer\Client\Mask;
+use FluxFiles\LicenseServer\Client\OpsText;
 
 require_once __DIR__ . '/PolarWebhook.php';
 require_once __DIR__ . '/AdminApi.php';
@@ -86,7 +87,7 @@ final class Webhooks
                 'order.refund',
                 'warn',
                 'refund:' . $refunded,
-                'Order refunded · ' . Mask::id($refunded),
+                OpsText::text('Order refunded · {order}', ['order' => Mask::id($refunded)]),
             );
             return [200, ['refunded' => $r !== null], 'refunded'];
         }
@@ -158,12 +159,11 @@ final class Webhooks
                 'order.new',
                 'info',
                 'order:' . $order['order_id'],
-                'New order · ' .
-                    Mask::clean($order['plan']) .
-                    ' · ' .
-                    Mask::email($order['email']) .
-                    ' · ' .
-                    Mask::id($order['order_id']),
+                OpsText::text('New order · {plan} · {email} · {order}', [
+                    'plan' => Mask::clean($order['plan']),
+                    'email' => Mask::email($order['email']),
+                    'order' => Mask::id($order['order_id']),
+                ]),
             );
         }
         return [
@@ -216,14 +216,18 @@ final class Webhooks
                 if ($status === 'bounced' && $row['kind'] === 'licence') {
                     $this->store->opsItem(
                         'mail_failed',
-                        'Licence email bounced · ' . $row['recipient'],
+                        OpsText::text('Licence email bounced · {email}', [
+                            'email' => $row['recipient'],
+                        ]),
                         $row['jti'],
                     );
                     $this->alert(
                         'mail.bounced',
                         'warn',
                         'bounce:' . $pid,
-                        'Licence email bounced · ' . $row['recipient'],
+                        OpsText::text('Licence email bounced · {email}', [
+                            'email' => $row['recipient'],
+                        ]),
                     );
                 }
             }
@@ -262,7 +266,7 @@ final class Webhooks
                 ) {
                     $this->store->opsItem(
                         $outcome,
-                        'Webhook: ' . $outcome,
+                        OpsText::text('Webhook: {outcome}', ['outcome' => OpsText::text($outcome)]),
                         $jti,
                         $event['order_id'],
                         (int) $event['id'],
@@ -295,11 +299,10 @@ final class Webhooks
                             'discount.cap',
                             'info',
                             'cap:' . $f['code'] . ':' . $threshold,
-                            'Discount ' .
-                                $f['code'] .
-                                ' reached ' .
-                                $threshold .
-                                '% (refunds shown separately)',
+                            OpsText::text(
+                                'Discount {code} reached {percent}% (refunds shown separately)',
+                                ['code' => $f['code'], 'percent' => $threshold],
+                            ),
                         );
                     }
                 }
@@ -327,7 +330,9 @@ final class Webhooks
             foreach ($store->lastCascade() as $row) {
                 $store->opsItem(
                     'cascade',
-                    'Paid renewal cancelled by cascade · ' . Mask::id($row['jti']),
+                    OpsText::text('Paid renewal cancelled by cascade · {jti}', [
+                        'jti' => Mask::id($row['jti']),
+                    ]),
                     $row['jti'],
                 );
             }

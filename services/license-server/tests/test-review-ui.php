@@ -62,9 +62,7 @@ $h->test(
             ->execute(['owner', $hash, $secret, time()]);
         $a->create();
         $loginCode = Totp::code($secret, intdiv(time(), 30));
-        Harness::ok(
-            $a->login('owner', 'review-password-long', $loginCode),
-        );
+        Harness::ok($a->login('owner', 'review-password-long', $loginCode));
         Harness::eq(null, $a->session['stepup_at']);
         Harness::ok(!$a->stepup(''));
         Harness::ok(!$a->stepup($loginCode));
@@ -225,19 +223,27 @@ $h->test(
         putenv('FLUXFILES_ADMIN_LANG');
         foreach (
             [
-                'Alert digest: 3 alerts; open the admin UI',
-                ' (+2 similar)',
-                'FluxFiles weekly report 2025-W01',
-                'Health down · demo',
-                'New order · pro',
+                ['Alert digest: {count} alerts; open the admin UI', ['count' => 3]],
+                [' (+{count} similar)', ['count' => 2]],
+                ['FluxFiles weekly report {week}', ['week' => '2025-W01']],
+                ['Health down · {target}', ['target' => 'demo']],
+                [
+                    'New order · {plan} · {email} · {order}',
+                    ['plan' => 'pro', 'email' => 'j***@unknown.io', 'order' => 'x'],
+                ],
             ]
-            as $message
+            as [$template, $args]
         ) {
-            Harness::ok(OpsText::text($message) !== $message, $message);
+            Harness::ok(OpsText::text($template, $args) !== $template);
         }
-        Harness::ok(str_contains(OpsText::text(' (+2 similar)'), 'lần tương tự'));
+        Harness::ok(
+            str_contains(OpsText::text(' (+{count} similar)', ['count' => 2]), 'lần tương tự'),
+        );
         putenv('FLUXFILES_ADMIN_LANG=en');
-        Harness::eq('New order · pro', OpsText::text('New order · pro'));
+        Harness::eq(
+            'Health down · demo',
+            OpsText::text('Health down · {target}', ['target' => 'demo']),
+        );
         putenv('FLUXFILES_ADMIN_LANG');
     },
 );

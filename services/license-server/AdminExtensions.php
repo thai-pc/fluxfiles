@@ -475,6 +475,7 @@ final class AdminExtensions
         }
         $ch = curl_init($base . '/subscriptions/' . rawurlencode($sid));
         curl_setopt_array($ch, [
+            CURLOPT_PROXY => '',
             CURLOPT_CUSTOMREQUEST => 'PATCH',
             CURLOPT_POSTFIELDS => '{"cancel_at_period_end":true}',
             CURLOPT_HTTPHEADER => [

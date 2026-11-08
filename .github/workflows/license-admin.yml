@@ -29,8 +29,18 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: pdo_sqlite, sodium, curl, mbstring, openssl, zlib, posix
+          extensions: pdo_sqlite, sodium, curl, mbstring, openssl, zlib, posix, gd, fileinfo, zip
           coverage: none
+      - name: Locate Composer download cache
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: licence-admin-composer-${{ runner.os }}-${{ matrix.php }}-${{ hashFiles('packages/core/composer.lock') }}
+          restore-keys: licence-admin-composer-${{ runner.os }}-${{ matrix.php }}-
+      - name: Install core dependencies for existing licence suites
+        run: composer install --working-dir=packages/core --prefer-dist --no-interaction --no-progress
       - name: Lint service and update example
         run: |
           find services/license-server -name '*.php' -print0 | xargs -0 -n1 php -l

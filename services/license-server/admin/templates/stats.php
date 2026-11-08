@@ -74,7 +74,10 @@
 <?php endforeach ?>
 <section class="card">
     <h2><?= $v->e($v->t('refunds_monthly')) ?></h2>
-    <?= $v->table($data['refunds_monthly']) ?><?= $v->table($data['refunds']) ?>
+    <?= $v->table($data['refunds_monthly']) ?>
+    <?php if ($data['refunds'] !== []): ?>
+    <?= $v->table($data['refunds']) ?>
+    <?php endif ?>
 </section>
 <section class="card">
     <h2><?= $v->e($v->t('revenue_by_plan')) ?></h2>
