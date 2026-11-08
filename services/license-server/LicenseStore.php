@@ -6,13 +6,21 @@ namespace FluxFiles\LicenseServer;
 
 use PDO;
 
+require_once __DIR__ . '/AdminSchema.php';
+require_once __DIR__ . '/AdminStore.php';
+
 /**
  * The vendor customer/license DB (SQLite). This is the stateful back-office — kept
  * OUTSIDE the stateless FluxFiles core. One row per issued license key.
  */
 final class LicenseStore
 {
+    use AdminStore;
+
     private PDO $db;
+    private string $actor = 'system';
+    private string $historyKind = '';
+    private ?string $historyRef = null;
     /** @var array<int,array{jti:string,plan:string,email:string}> rows the last cascade changed */
     private array $cascaded = [];
     private bool $inTx = false;   // own flag: PDO::inTransaction() ignores a hand-issued BEGIN on older PHP
@@ -37,6 +45,7 @@ final class LicenseStore
         $this->db->exec('PRAGMA journal_mode=WAL');
         $this->db->exec('PRAGMA busy_timeout=5000');   // a concurrent writer waits instead of failing
         $this->migrate();
+        $this->installHistoryTriggers();
     }
 
     private function migrate(): void
@@ -127,6 +136,7 @@ final class LicenseStore
         } catch (\PDOException $e) {
             error_log('license store: duplicate (gateway, order_id) rows exist; uniq_order not created — ' . $e->getMessage());
         }
+        AdminSchema::migrate($this->db);
     }
 
     /** ADD COLUMN that survives a concurrent first request adding it at the same moment. */
@@ -166,8 +176,8 @@ final class LicenseStore
             }
         }
         $stmt = $this->db->prepare('INSERT OR IGNORE INTO licenses
-            (jti,email,customer,plan,edition,modules,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at,grace_days,customer_id,renews_jti,subscription_id,billing_reason)
-            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at,:grace_days,:customer_id,:renews_jti,:subscription_id,:billing_reason)');
+            (jti,email,customer,plan,edition,modules,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at,grace_days,customer_id,renews_jti,subscription_id,billing_reason,is_test,note,product_id)
+            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at,:grace_days,:customer_id,:renews_jti,:subscription_id,:billing_reason,:is_test,:note,:product_id)');
         $row = [
             'jti'         => (string) $rec['jti'],
             'email'       => (string) $rec['email'],
@@ -191,6 +201,9 @@ final class LicenseStore
             'customer_id' => ($rec['customer_id'] ?? '') !== '' ? (string) $rec['customer_id'] : null,
             'renews_jti'  => ($rec['renews_jti'] ?? '') !== '' ? (string) $rec['renews_jti'] : null,
             'subscription_id' => ($rec['subscription_id'] ?? '') !== '' ? (string) $rec['subscription_id'] : null,
+            'is_test' => !empty($rec['is_test']) ? 1 : 0,
+            'note' => isset($rec['note']) ? mb_substr((string) $rec['note'], 0, 500) : null,
+            'product_id' => $rec['product_id'] ?? null,
             'billing_reason'  => ($rec['billing_reason'] ?? '') !== '' ? (string) $rec['billing_reason'] : null,
         ];
         $stmt->execute($row);
@@ -963,7 +976,9 @@ final class LicenseStore
                 $cur = array_shift($queue);
                 $pick->execute([$cur]);
                 foreach ($pick->fetchAll() as $c) { $this->cascaded[] = $c; }
-                $up->execute([$status, $cur]);
+                $this->historyKind = 'cascade';
+                $this->historyRef = $jti;
+                try { $up->execute([$status, $cur]); } finally { $this->historyKind = ''; $this->historyRef = null; }
                 $kids->execute([$cur]);
                 foreach ($kids->fetchAll(\PDO::FETCH_COLUMN) as $k) {
                     if (!in_array($k, $seen, true)) { $seen[] = $k; $queue[] = $k; }

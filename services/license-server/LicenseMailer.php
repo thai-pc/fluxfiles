@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FluxFiles\LicenseServer;
 
 require_once __DIR__ . '/ProDownload.php';
+if (is_file(__DIR__ . '/client/Mask.php')) { require_once __DIR__ . '/client/Mask.php'; }
 
 /**
  * Delivers a freshly issued licence key to the buyer.
@@ -26,13 +27,19 @@ require_once __DIR__ . '/ProDownload.php';
  */
 final class LicenseMailer
 {
+    private ?\Closure $onResult;
+    private string $kind = 'licence';
+    private ?string $providerId = null;
+
     private const SITE = 'https://fluxfiles.thai-pc.com';
 
     public function __construct(
         private string $transport = '',
         private string $from = '',
-        private string $fromName = ''
+        private string $fromName = '',
+        ?callable $onResult = null
     ) {
+        $this->onResult = $onResult === null ? null : \Closure::fromCallable($onResult);
         $this->transport = $transport !== '' ? $transport : (string) (getenv('FLUXFILES_MAIL_TRANSPORT') ?: 'log');
         $this->from = $from !== '' ? $from : (string) (getenv('FLUXFILES_MAIL_FROM') ?: 'licenses@localhost');
         $this->fromName = $fromName !== '' ? $fromName : (string) (getenv('FLUXFILES_MAIL_FROM_NAME') ?: 'FluxFiles');
@@ -50,6 +57,7 @@ final class LicenseMailer
      */
     public function sendLicense(array $record): bool
     {
+        $this->kind = trim((string) ($record['modules'] ?? '')) === '' ? 'support' : 'licence';
         try {
             return $this->sendLicenseImpl($record);
         } catch (\Throwable $e) {
@@ -79,6 +87,7 @@ final class LicenseMailer
      */
     public function sendRenewalUnmatched(string $email, string $plan, string $orderId): bool
     {
+        $this->kind = 'renewal_unmatched';
         try {
             return $this->sendRenewalUnmatchedImpl($email, $plan, $orderId);
         } catch (\Throwable $e) {
@@ -115,6 +124,7 @@ final class LicenseMailer
     /** Operator notice to FLUXFILES_OPS_EMAIL (no-op when unset). Plain text. Never throws. */
     public function sendOpsNotice(string $subject, string $body): bool
     {
+        $this->kind = 'ops';
         $ops = (string) (getenv('FLUXFILES_OPS_EMAIL') ?: '');
         if ($ops === '' || !filter_var($ops, FILTER_VALIDATE_EMAIL)) {
             return false;
@@ -155,26 +165,36 @@ final class LicenseMailer
 
     private function deliver(string $to, string $subject, string $body, ?string $html = null, string $failPrefix = 'license mail failed for '): bool
     {
+        $ok = false; $error = null; $this->providerId = null;
         try {
-            // Sandbox guard: a recipient outside FLUXFILES_MAIL_ALLOW_TO is NOT sent. It
-            // reports true ("handled") on purpose: sendLicense()'s result drives mailed_at,
-            // and false would leave the row unmailed so every Polar retry and /redeliver
-            // run would attempt (and fail to) deliver it again, forever.
             if (!$this->recipientAllowed($to)) {
                 error_log('mail suppressed by FLUXFILES_MAIL_ALLOW_TO (to=' . self::maskEmail($to) . ')');
-                return true;
+                return $ok = true;
             }
             $subject = self::subjectPrefix() . $subject;
-            return match ($this->transport) {
+            return $ok = match ($this->transport) {
                 'resend' => $this->sendResend($to, $subject, $body, $html),
                 'smtp' => $this->sendSmtp($to, $subject, $body, $html),
                 'sendmail' => $this->sendMail($to, $subject, $body, $html),
                 default => $this->sendLog($to, $subject, $body),
             };
         } catch (\Throwable $e) {
-            error_log($failPrefix . $to . ': ' . $e->getMessage());
+            $error = 'mail transport failed';
+            error_log($failPrefix . self::maskEmail($to) . ': ' . $error);
             return false;
+        } finally {
+            if ($this->onResult !== null) {
+                try { ($this->onResult)($this->kind, $to, $ok, $error, $this->providerId); }
+                catch (\Throwable $e) { error_log('mail result recording failed'); }
+            }
         }
+    }
+
+    public function sendTest(): bool
+    {
+        $this->kind = 'test';
+        $to = (string) (getenv('FLUXFILES_OPS_EMAIL') ?: '');
+        return filter_var($to, FILTER_VALIDATE_EMAIL) !== false && $this->deliver($to, 'FluxFiles admin test', 'Licence server mail test.');
     }
 
     /**
@@ -484,6 +504,7 @@ final class LicenseMailer
      */
     public function sendReminder(array $record, string $bucket): bool
     {
+        $this->kind = 'reminder:' . $bucket;
         try {
             return $this->sendReminderImpl($record, $bucket);
         } catch (\Throwable $e) {
@@ -700,12 +721,19 @@ final class LicenseMailer
         // Server logs are read by more people and kept longer than a mailbox: show
         // the message, but not the working key in it — unless the operator asks
         // (FLUXFILES_MAIL_LOG_FULL=1, e.g. while testing a setup).
-        if (getenv('FLUXFILES_MAIL_LOG_FULL') !== '1') {
+        if (PHP_SAPI !== 'cli' || $this->onResult !== null || getenv('FLUXFILES_MAIL_LOG_FULL') !== '1') {
             $body = (string) preg_replace_callback(
                 '/[A-Za-z0-9_-]{16,}(?:\.[A-Za-z0-9_+\/=-]{16,})+/',
                 static fn (array $m): string => substr($m[0], 0, 12) . '…[redacted]',
                 $body
             );
+        }
+        if (PHP_SAPI !== 'cli' || $this->onResult !== null) {
+            $to = self::maskEmail($to);
+            if (class_exists(\FluxFiles\LicenseServer\Client\Mask::class, false)) {
+                $subject = \FluxFiles\LicenseServer\Client\Mask::clean($subject);
+                $body = \FluxFiles\LicenseServer\Client\Mask::clean($body);
+            }
         }
         error_log("license mail [log transport] to={$to} subject={$subject}\n{$body}");
         return true;
@@ -752,9 +780,12 @@ final class LicenseMailer
 
         $payload = $this->resendPayload($to, $subject, $body, $html, $replyTo);
 
-        $ch = curl_init('https://api.resend.com/emails');
+        $base = (string) (getenv('FLUXFILES_RESEND_API_BASE') ?: 'https://api.resend.com');
+        if ($base !== 'https://api.resend.com' && !preg_match('~^http://127\.0\.0\.1(?::[0-9]{1,5})?(?:/[A-Za-z0-9_/-]*)?$~D', $base)) { throw new \RuntimeException('invalid Resend API base'); }
+        $ch = curl_init($base . '/emails');
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
+            CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_TIMEOUT => 15,
@@ -775,6 +806,8 @@ final class LicenseMailer
         if ($status < 200 || $status >= 300) {
             throw new \RuntimeException('Resend API returned ' . $status . ': ' . (string) $responseBody);
         }
+        $decoded = is_string($responseBody) ? json_decode($responseBody, true) : null;
+        $this->providerId = is_string($decoded['id'] ?? null) ? mb_substr($decoded['id'], 0, 100) : null;
         return true;
     }
 

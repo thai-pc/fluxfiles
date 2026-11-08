@@ -46,7 +46,11 @@ if ($lockFp === false || !flock($lockFp, LOCK_EX | LOCK_NB)) {
 }
 
 $store = new LicenseStore();
-$mailer = new LicenseMailer();
+$store->setActor('cron:reminder');
+$mailJti = null;
+$mailer = new LicenseMailer('', '', '', static function (string $kind, string $to, bool $ok, ?string $error, ?string $id) use ($store, &$mailJti): void {
+    $store->logMail($kind, $to, $ok, $error, $id, $mailJti);
+});
 
 $thresholdsRaw = (string) (getenv('FLUXFILES_LICENSE_REMINDER_DAYS') ?: '30,14,7,1');
 $thresholds = array_values(array_filter(array_map(
@@ -62,6 +66,7 @@ $due = $store->needingReminder($thresholds, time());
 foreach ($due as $record) {
     $bucket = (string) ($record['_reminder_bucket'] ?? '');
     $jti = (string) ($record['jti'] ?? '');
+    $mailJti = $jti;
     $sent = $mailer->sendReminder($record, $bucket);
     if ($sent) {
         // Only advance the stage once the send actually succeeded — a failed send

@@ -1,0 +1,2 @@
+<h1><?= $v->e($v->t('events')) ?> #<?= $v->e($data['id']) ?></h1><section class="card"><?= $v->table([$data]) ?><p><?= $v->e($v->t('redeliver_polar')) ?></p><?php if ($data['jti']): ?><a href="/licences/<?= $v->e($data['jti']) ?>"><?= $v->e($v->t('licences')) ?></a><?php endif ?>
+<?php if (!$data['resolved_at']): ?><form method="post" action="/events/<?= $v->e($data['id']) ?>/resolve"><?= $v->csrf() ?><button><?= $v->e($v->t('resolve')) ?></button></form><?php endif ?></section>

@@ -134,6 +134,9 @@ final class LicenseIssuer
             'customer_id' => $customerId,
             'renews_jti'  => $base !== null ? (string) $base['jti'] : '',
             'subscription_id' => $subId,
+            'is_test' => $order['is_test'] ?? false,
+            'note' => $order['note'] ?? null,
+            'product_id' => $order['product_id'] ?? null,
             'billing_reason'  => (string) ($order['billing_reason'] ?? ''),
         ]);
 

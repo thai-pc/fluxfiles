@@ -346,3 +346,230 @@ after `CLAIM_WINDOW` (1h). That last part matters because a success URL can surv
 browser history, a screen share or a referrer header, and the window keeps that from
 being a permanent handle on the key. After it closes, email is the way — or the operator
 looks it up through `/licenses`.
+
+## Private admin UI (MVP)
+
+The implementation follows [the approved design](../../docs/design/LICENSE-ADMIN-UI-DESIGN.md),
+§0, §2–6, §7.1/3/4/7, §8.1/3 and §15. There is no new JWT claim, framework,
+composer dependency, CDN or build step. Copy the directory with its `client/`,
+`admin/`, `ops/` and mail templates intact. PHP 8.1–8.5 is supported; extensions:
+PDO SQLite, sodium, curl, mbstring, openssl, json and zlib. The UI does not import
+server classes or access the licence database. Its `admin.sqlite` contains only
+users, sessions and login throttles.
+
+Production uses **127.0.0.1:9471** for the API and **127.0.0.1:9472** for the UI.
+Sandbox uses **:9473 / :9474**, its own users, token files and databases. Set
+`FLUXFILES_LICENSE_INSTANCE=sandbox` in every sandbox process. There is no instance
+switch or cross-instance operation. Sandbox pages have a fixed banner, amber
+accent and `[SANDBOX]` titles, including login and errors; statistics are test data.
+Sandbox sessions use the separate `fxadm_sbx` cookie.
+
+Reach the UI through an SSH tunnel, for example:
+
+```text
+ssh -N -L 127.0.0.1:8471:127.0.0.1:9472 <licence-host>
+```
+
+Open `http://localhost:8471`. Forward sandbox to a different laptop port, e.g.
+`8473:127.0.0.1:9474`. Do not expose either UI through a public vhost. Both the
+application and nginx must check Host; only localhost/127.0.0.1 are permitted.
+A `FLUXFILES_ADMIN_HOSTS` value narrows that list and cannot enable a public host.
+
+Enroll an account as the appropriate **UI Unix user**, with its UI config loaded:
+
+```text
+php admin/cli/admin-user.php add owner
+php admin/cli/admin-user.php passwd owner
+php admin/cli/admin-user.php totp-reset owner
+php admin/cli/admin-user.php disable owner
+php admin/cli/admin-user.php logout-all owner
+```
+
+The password is read from stdin, hidden on a TTY. Keep the printed `otpauth://` URI
+private and enroll it locally. Enrolment is separate per instance. Recovery is SSH
+plus `totp-reset`; there is no browser enrolment or recovery code. Password changes,
+TOTP resets and disabling a user revoke all their sessions. `admin.sqlite` is not
+backed up; loss requires reenrolment.
+
+Login uses password plus six-digit RFC 6238 TOTP, with replay prevention, rolling
+username/global failure limits and 15-minute lockouts. Session tokens are random
+32-byte values, stored only as SHA-256 hashes. They rotate at login and expire after
+30 minutes idle or 12 hours absolute. Reveal, manual issue, restore and archive
+require a TOTP accepted within the last 10 minutes. Revoke requires the typed final
+six jti characters and a server-rendered cascade preview. Read-only pages retain native links and forms;
+reveal is an explicit POST and clears after 60 seconds when JS is available. Close
+or navigate away after a reveal when scripting is disabled. Never share a screenshot
+of a revealed key. Copying to the clipboard is explicit.
+
+The screens are Dashboard, Licences (filters, cycle collapse, lookup by POST, detail,
+manual issue, flags, notes, archive and subscription revoke), Webhooks (read/resolve),
+Audit, basic System and Revenue / Installs / Mail statistics. Vietnamese is the
+default; English and light/dark/auto are session preferences. Times use
+Asia/Ho_Chi_Minh with UTC on hover. Charts are server-generated SVG with table
+fallbacks; each currency has its own chart. `j/k`, Enter, `/`, `x`, `g d/l/s/w/a`,
+`?` and Escape provide keyboard navigation.
+
+`licenses.sqlite` migrations are guarded by `PRAGMA user_version=2` and preserve
+existing rows. Back up before migrating. History is written by connection-local
+SQLite triggers, in the same transaction as the mutation, including bulk supersedes
+and cascades. Offline SQLite tools do not depend on a PHP UDF; edits made outside
+`LicenseStore` therefore do not create history. Never use an offline editor for
+routine licence state changes.
+
+### Process and token configuration
+
+See [.env.example](.env.example) for examples; it is documentation, not an env loader.
+Every secret setting below supports `_FILE` (preferred) or a process env value.
+Each of the four tokens must be different; duplicates fail closed at API boot.
+Tokens must also differ across instances, checked by the operator before installing.
+
+| Setting | Default / purpose |
+|---|---|
+| `FLUXFILES_LICENSE_ROLE` | `all` for backward-compatible local development; set each deployed pool to `public`, `status` or `admin-api` |
+| `FLUXFILES_LICENSE_ADMIN_TOKEN` / `_FILE` | Existing root CLI credential |
+| `FLUXFILES_UPDATE_STATUS_TOKEN` / `_FILE` | `/update-status` only |
+| `FLUXFILES_LICENSE_UI_TOKEN` / `_FILE` | UI credential; `X-FluxFiles-Actor: ui:<name>` is honoured only with this token |
+| `FLUXFILES_LICENSE_OPS_TOKEN` / `_FILE` | Worker; `/admin/ops/*` only |
+| `FLUXFILES_POLAR_WEBHOOK_SECRET` / `_FILE` | Existing Polar verification secret |
+| `FLUXFILES_RESEND_WEBHOOK_SECRET` / `_FILE` | Unset; Svix delivery webhook verification secret |
+| `FLUXFILES_LICENSE_NET_PEPPER_FILE` | Unset; 32 random bytes, owner-only, HMAC of network prefixes; without it no network identifier is stored |
+| `FLUXFILES_LICENSE_K1_PUB` | Unset; reserved public value for the Phase 2 key comparison; never a signing key |
+| `FLUXFILES_LICENSE_BACKUP_STATUS` | `/var/lib/fluxfiles-license/backup-status.json` (sandbox `license-sbx`), JSON `{"ok":true,"at":<unix seconds>}` written atomically by root's existing backup tool |
+| `FLUXFILES_ADMIN_TRACKED_DISCOUNTS` | Unset; `CODE:CAP[,CODE:CAP]`, e.g. `FOUNDING40:50` |
+| `FLUXFILES_ADMIN_TZ` | `Asia/Ho_Chi_Minh`; accounting month boundaries and UI display |
+
+Set the status role without signing-key env. The signer is lazy: only issuing and
+refresh verification initialize it. Admin reads and update-status do not require it.
+nginx must still route each location to the correct pool; the role check is defence
+in depth, not a replacement for that split. No HTTP route downloads a DB or backup.
+
+| UI-only setting | Default / purpose |
+|---|---|
+| `FLUXFILES_ADMIN_API` | `http://127.0.0.1:9471`, sandbox `:9473`; literal http loopback only, no redirects |
+| `FLUXFILES_ADMIN_UI_TOKEN` / `_FILE` | Own 0400 copy of the instance's UI token |
+| `FLUXFILES_ADMIN_DB` | `/var/lib/fluxfiles-license-admin/admin.sqlite`, sandbox `/var/lib/fluxfiles-license-sbx-admin/admin.sqlite` |
+| `FLUXFILES_ADMIN_HOSTS` | `localhost,127.0.0.1`, incoming port ignored |
+| `FLUXFILES_ADMIN_LANG` | `vi`, or `en` |
+| `FLUXFILES_ADMIN_SESSION_IDLE` / `FLUXFILES_ADMIN_SESSION_ABSOLUTE` | `1800` / `43200` seconds |
+| `FLUXFILES_ADMIN_POLAR_ORG` | Unset; links are hidden until configured |
+| `FLUXFILES_ADMIN_POLAR_ORDER_URL` | `https://polar.sh/dashboard/{org}/sales/{id}` |
+| `FLUXFILES_ADMIN_POLAR_SUBSCRIPTION_URL` | `https://polar.sh/dashboard/{org}/sales/subscriptions/{id}` |
+| `FLUXFILES_ADMIN_POLAR_CUSTOMER_URL` | `https://polar.sh/dashboard/{org}/customers/{id}` |
+
+Verify the configurable Polar URL paths in the live dashboard. Links are restricted
+to https://polar.sh and use `noreferrer noopener`. Secrets and bearer tokens never
+reach browser HTML. The UI's own API calls connect in 2 seconds and time out at 30.
+UI-triggered `/redeliver` is capped at 10. CLI `/licenses` remains backward compatible
+and audits bulk key access; UI calls receive masked rows. Only the explicit reveal
+endpoint returns a key to the UI. Existing public buyer-key and refresh contracts
+are unchanged.
+
+### Revenue, telemetry and delivery
+
+Verified paid and refund orders are recorded even if a product is unmapped or its
+renewal cannot match. Amounts are strict integer minor units; currencies are never
+summed. Net revenue subtracts refund-net in the month of the refund, in
+`FLUXFILES_ADMIN_TZ`. MRR uses the newest active, unexpired subscription licence and
+its latest non-refunded order; annual plans divide by 12. Historical MRR is labelled
+an estimate because Phase 2 subscription state is unavailable. Refunded discount
+redemptions remain separate and conservatively consume cap slots. Manual orders
+and test licences are excluded from accounting.
+
+One-off order backfill uses a token only for the duration of the process:
+
+```text
+php backfill-orders.php --token-file=/secure/one-off-polar-token
+php backfill-orders.php --token-file=/secure/one-off-polar-token --apply
+php backfill-orders.php --token-file=/secure/one-off-polar-token --all --apply
+php backfill-orders.php --sandbox --token-file=/secure/sandbox-token --apply
+```
+
+Dry-run uses a temporary SQLite copy, including migrations, and never writes the
+source. `--all` paginates all paid/refunded orders; otherwise only missing licence
+orders are fetched. Options: `--limit=N`, `--delay-ms=N` (150), `--backoff-ms=N`
+(1000), `--api-base=URL` (official Polar API or literal http loopback for tests).
+`POLAR_TOKEN` / `POLAR_TOKEN_SANDBOX` are also accepted. No token appears in arguments
+or output. Apply is idempotent.
+
+`/update-status` accepts optional `module`, `current`, `core_version`, boolean
+`install`, and a canonical IPv4 /24 or IPv6 /64 `net` prefix. Invalid optional fields
+are discarded. The response bytes are unchanged, emitted before telemetry; under
+FPM `fastcgi_finish_request()` releases the response first. Pings are lossy and use
+a 250 ms busy timeout. Only an HMAC prefix identifier is persisted, never an IP or
+raw prefix. The example update server supplies these fields; root must update the
+private deployed copy and keep its URI-only nginx logs.
+
+`LicenseMailer`'s optional fourth constructor argument records send results and
+Resend provider IDs, without a mail-body copy. All request and reminder call sites
+provide it. POST `/webhook/resend` validates Svix signatures and handles delivered,
+bounced, complained and delayed events. Unknown provider IDs are ACKed. Licence
+mail bounces enqueue alerts. Failed Polar bodies are compressed, retained only for
+unmapped/unmatched/error outcomes for seven days, and never returned by the API.
+Resolve clears the body. Bad signatures aggregate by hour/reason with no trusted
+payload fields. Recording failures never change Polar's existing response codes.
+
+Retention: history, licences and orders forever; webhook metadata 180 days, bodies
+7 days; mail 365 days; audit 730 days; pings 90 days; health and completed outbox
+30 days. The worker triggers pruning daily and webhook writes sample it 1 in 50.
+
+### Ops worker and Telegram
+
+Run `php ops/ops-worker.php run` as the separate ops user from a one-minute systemd
+timer. It takes a nonblocking file lock, uses atomic 0600 state files, and has a
+53-second application budget plus a 55-second systemd timeout. No signing-key or
+licence-DB env is passed. It only calls its own loopback API, Telegram and configured
+health targets. Health URLs use HTTPS (literal HTTP loopback is allowed for tests),
+with no redirects; do not configure any URL that starts an update-status call.
+
+| Worker setting | Default / purpose |
+|---|---|
+| `FLUXFILES_ADMIN_API` | Same per-instance loopback URL as UI |
+| `FLUXFILES_LICENSE_OPS_TOKEN_FILE` | Own 0400 copy; `FLUXFILES_LICENSE_OPS_TOKEN` is also supported |
+| `FLUXFILES_OPS_STATE_DIR` | `/var/lib/fluxfiles-license-ops`, sandbox `/var/lib/fluxfiles-license-sbx-ops`; never shared across instances |
+| `FLUXFILES_OPS_HEALTH_TARGETS` | `[]`; JSON `[{"name":"license","url":"https://…/health","expect_status":200}]`; operator sets licence, update, demo and landing targets |
+| `FLUXFILES_OPS_DISK_PATHS` | `/`, comma-separated traversable mount points |
+| `FLUXFILES_TELEGRAM_BOT_TOKEN_FILE` | Unset, Telegram off |
+| `FLUXFILES_TELEGRAM_CHAT_ID` | Unset, Telegram off |
+| `FLUXFILES_TELEGRAM_THREAD_ID` | Unset, optional forum topic ID |
+| `FLUXFILES_TELEGRAM_TAG` | `FluxFiles`, sandbox `FluxFiles SANDBOX`; sandbox suffix cannot be removed |
+| `FLUXFILES_TELEGRAM_SANDBOX` | `0`; explicit `1` enables sandbox critical alerts only |
+| `FLUXFILES_TELEGRAM_COMMANDS` | `0`; `1` enables read-only `/stats`, `/today`, `/help` |
+| `FLUXFILES_TELEGRAM_ADMIN_USER_ID` | Required to accept commands in a supergroup |
+| `FLUXFILES_TELEGRAM_API_BASE` | `https://api.telegram.org`; override only to literal http loopback (tests) |
+| `FLUXFILES_RESEND_API_BASE` | `https://api.resend.com`; override only to literal http loopback (tests) |
+| `FLUXFILES_ADMIN_TEST_CLOCK` | `0`; only `cli-server` with value `1` accepts `X-FluxFiles-Test-Time`; never deploy enabled |
+
+Create **one bot per product** using BotFather; FluxFiles' production and sandbox
+may share that product's bot/chat. Keep privacy enabled, then disable joining new
+groups. Install the token as 0400 ops-owned, send `/start` privately, and discover
+the chat ID using the operator's CLI `telegram-setup` command (one `getUpdates`
+call during setup). The runtime never calls `setWebhook`. When commands are off it
+never calls `getUpdates` or `getMe`. In groups, use `/stats@<bot>` and configure the
+admin user ID and optional thread ID. Other chats, authors, topics and commands are
+ignored; the update offset advances. Command replies share the alert budget.
+
+Alerts are plain text (`parse_mode` is absent), prefixed with the instance's tag.
+Buyer emails are masked; checkout IDs, keys and tokens never enter alerts. Both the
+outbox and worker refuse unmasked text. Claims lease rows for 120 seconds, with at
+most 20 rows per call. A flood collapses into 19 messages plus a digest; all sends
+and command replies share a persisted 60/hour and 20/run budget with 1.1 seconds
+between attempts. HTTP 429 honours retry_after; other failures back off 1/2/4…60
+minutes and drop after ten attempts. Errors are status-only and never provider
+bodies, curl messages or token URLs. Queued alerts remain available when Telegram
+is disabled. Health checks run every five minutes: two failures trigger down, then
+recovery; TLS under 14 days, disk under 10%, and backups older than 26 hours alert.
+The heartbeat reports Telegram's token fingerprint, never its token.
+
+MVP intentionally excludes Phase 2/3 tables and endpoints: CSV/export, replay,
+mail-log screen, customers, subscription webhooks, public counters, inbox ingest,
+weekly reports, notices and full system health/backup UI. See
+[ADMIN-PR.md](ADMIN-PR.md) for the exact ordered server-change checklist, deviations
+and validation. No server configuration or deployment is changed by this branch.
+
+Chromium sends `Origin: null` for native POST navigations under the required
+`Referrer-Policy: no-referrer`. `admin.js` submits forms through same-origin fetch
+in CORS mode, preserving the actual Origin and the strict policy. The server does
+not weaken its Origin check to accommodate native POSTs; browsers with that
+behaviour require JS for sign-in and mutations. Read-only pages and server-rendered
+confirmation forms remain available. This browser-policy conflict is recorded in
+the PR deviations.

@@ -107,6 +107,7 @@ final class PolarWebhook
         $plan = (string) ($plans[$productId] ?? '');
 
         return [
+            'product_id' => self::cleanId($productId),
             'email' => $email,
             'plan' => $plan,
             'customer' => (string) ($d['customer']['name'] ?? $d['customer']['email'] ?? $email),
@@ -128,10 +129,42 @@ final class PolarWebhook
     }
 
     /** An opaque Polar id / enum word, kept only if it is a plain token (it is stored and used as a lookup key). */
-    private static function cleanId(string $v): string
+    public static function cleanId(string $v): string
     {
         $v = trim($v);
         return preg_match('/^[A-Za-z0-9_.:-]{1,100}$/', $v) === 1 ? $v : '';
+    }
+
+    /** Strict accounting facts; unknown amounts stay NULL rather than turning into zero. */
+    public static function orderFacts(array $body): ?array
+    {
+        $type = $body['type'] ?? '';
+        $d = $body['data'] ?? null;
+        if (!in_array($type, ['order.paid','order.refunded'], true) || !is_array($d)) { return null; }
+        $id = self::cleanId(is_string($d['id'] ?? null) ? $d['id'] : '');
+        if ($id === '') { return null; }
+        $currency = is_string($d['currency'] ?? null) && preg_match('/^[a-zA-Z]{3}$/D', $d['currency']) ? strtolower($d['currency']) : 'unknown';
+        $stamp = static function ($v): ?int {
+            if (!is_string($v) || !preg_match('/^\d{4}-\d{2}-\d{2}T/', $v)) { return null; }
+            try { return (new \DateTimeImmutable($v))->getTimestamp(); } catch (\Throwable $e) { return null; }
+        };
+        $out = ['order_id'=>$id,'gateway'=>'polar','currency'=>$currency,'status'=>$type === 'order.paid' ? 'paid' : (($d['status'] ?? '') === 'refunded' ? 'refunded' : 'partially_refunded')];
+        foreach (['customer_id','product_id','subscription_id','billing_reason','discount_id'] as $k) {
+            $v=$d[$k] ?? ($d[str_replace('_id','',$k)]['id'] ?? null);
+            $out[$k]=is_string($v) && self::cleanId($v) !== '' ? self::cleanId($v) : null;
+        }
+        $email=$d['customer']['email'] ?? $d['customer_email'] ?? null;
+        $out['email_lower']=is_string($email) && filter_var($email,FILTER_VALIDATE_EMAIL) ? strtolower($email) : null;
+        $code=$d['discount']['code'] ?? $d['discount_code'] ?? null;
+        $out['discount_code']=is_string($code) && preg_match('/^[a-zA-Z0-9_-]{1,100}$/D',$code) ? $code : null;
+        foreach (['subtotal_amount','discount_amount','net_amount','tax_amount','total_amount','refunded_amount','refunded_tax_amount'] as $k) {
+            if (is_int($d[$k] ?? null) && $d[$k]>=0) { $out[$k]=$d[$k]; }
+            elseif (!str_starts_with($k,'refunded_')) { $out[$k]=null; }
+        }
+        $out['created_at']=$stamp($d['created_at'] ?? null);
+        if ($type === 'order.paid') { $out['paid_at']=$stamp($d['paid_at'] ?? null) ?? $out['created_at'] ?? time(); }
+        else { $out['refunded_at']=$stamp($d['refunded_at'] ?? null) ?? time(); }
+        return $out;
     }
 
     /**
