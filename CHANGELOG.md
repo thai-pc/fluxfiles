@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.26] — 2026-11-08
+
+> Released: `mcp-v1.1.1` (dependency security refresh).
+
 ### Security
 - `@fluxfiles/mcp` 1.1.1: refreshed the lockfile so the runtime dependency tree no longer carries known advisories (`npm audit --omit=dev` is clean). Transitive through `@modelcontextprotocol/sdk` / `express`: `body-parser` (high, fixed in 2.4.0), `qs` (medium, 6.16.1+; now 6.17.1), `fast-uri` (medium and low, 3.1.9). Dev-only: `vitest` 2.x to 4.1.12 (critical `vitest`, `tinypool` RCE gadgets, moderate `@vitest/mocker` and `vite` dev-server issues). No source or API change. One low dev-only `esbuild` advisory (dev-server on Windows) remains until `tsup` allows esbuild 0.28.
 
