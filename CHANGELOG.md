@@ -5,7 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
-> Will release: `core-v1.2.1` (first), then `wordpress-v1.1.3` (first WordPress.org submission build, bundles core 1.2.1).
+## [1.0.27] — 2026-11-08
+
+> Released: `core-v1.2.1`, `wordpress-v1.1.3` (first WordPress.org submission build, bundles core 1.2.1).
 
 ### Security
 - WordPress plugin: the file-content editor (`allow_code_edit`), `chmod` (`allow_chmod`) and the terminal embed (`terminal_pty_url`) are disabled. No token minted by the plugin carries either flag as true or the terminal URL at all, whatever the role preset, override, raw `claims` entry or `fluxfiles_token_overrides` filter says, and `PUT /content` and `POST /chmod` answer 403, and the UI shows no terminal entry. Read-only preview of text files is unchanged.
