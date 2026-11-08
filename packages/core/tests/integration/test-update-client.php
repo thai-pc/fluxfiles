@@ -300,6 +300,49 @@ test('server: proven core gets the newest compatible release', function () use (
     assertEqual('1.3.0', fluxfiles_pick_release($entry, 'dev-master')['version'] ?? null, 'unparseable = unproven');
 });
 
+// ── plugin bundle entitlement (FluxFiles Pro for WordPress) ─────────────────
+
+$bundleKp = sodium_crypto_sign_keypair();
+$bundlePub = ['t1' => base64_encode(sodium_crypto_sign_publickey($bundleKp))];
+$bundleLm = static function (array $modules) use ($bundleKp, $bundlePub): \FluxFiles\LicenseManager {
+    $u = static fn (string $x): string => rtrim(strtr(base64_encode($x), '+/', '-_'), '=');
+    $h = $u((string) json_encode(['alg' => 'Ed25519', 'kid' => 't1']));
+    $p = $u((string) json_encode(['edition' => 'pro', 'modules' => $modules, 'jti' => str_repeat('a', 24), 'expires' => time() + 86400]));
+    $sig = $u(sodium_crypto_sign_detached($h . '.' . $p, sodium_crypto_sign_secretkey($bundleKp)));
+    return new \FluxFiles\LicenseManager("$h.$p.$sig", $bundlePub);
+};
+$bundles = ['fluxfiles-pro' => ['share', 'intake']];
+
+test('bundle: entitled when the licence covers ANY bundled module', function () use ($bundleLm, $bundles) {
+    assertTrue(fluxfiles_entitled('fluxfiles-pro', $bundleLm(['share', 'intake']), $bundles));
+    assertTrue(fluxfiles_entitled('fluxfiles-pro', $bundleLm(['intake']), $bundles));
+    assertTrue(fluxfiles_entitled('fluxfiles-pro', $bundleLm(['share', 'versioning', 'ai']), $bundles));
+});
+
+test('bundle: a licence with none of the bundled modules (support, versioning only, free) is refused', function () use ($bundleLm, $bundles) {
+    assertEqual(false, fluxfiles_entitled('fluxfiles-pro', $bundleLm([]), $bundles), 'support plan: modules []');
+    assertEqual(false, fluxfiles_entitled('fluxfiles-pro', $bundleLm(['versioning', 'webhooks']), $bundles));
+    assertEqual(false, fluxfiles_entitled('fluxfiles-pro', new \FluxFiles\LicenseManager('garbage'), $bundles));
+    assertEqual(false, fluxfiles_entitled('fluxfiles-pro', new \FluxFiles\LicenseManager(''), $bundles));
+});
+
+test('bundle: a plain module id behaves exactly as before, and the bundle id is not a module', function () use ($bundleLm, $bundles) {
+    assertTrue(fluxfiles_entitled('share', $bundleLm(['share']), $bundles));
+    assertEqual(false, fluxfiles_entitled('versioning', $bundleLm(['share']), $bundles));
+    assertEqual(false, fluxfiles_entitled('fluxfiles-pro', $bundleLm(['share']), []), 'no bundle map -> plain licensed(), false for a bundle id');
+});
+
+test('bundle map: the example server and the licence server ProDownload list the same modules', function () {
+    require_once __DIR__ . '/../../../../services/license-server/ProDownload.php';
+    assertEqual(fluxfiles_bundles()['fluxfiles-pro'], \FluxFiles\LicenseServer\ProDownload::BUNDLE_MODULES);
+});
+
+test('bundle: install mode serves the newest release regardless of the (unreported) core', function () {
+    $e = ['version' => '1.1.0', 'zip' => 'p-1.1.0.zip', 'sha256' => str_repeat('b', 64), 'requires_core' => '^1.1.3'];
+    assertEqual(null, fluxfiles_pick_release($e, null), 'default: unreported core = 1.0.3, floor above it');
+    assertEqual('1.1.0', fluxfiles_pick_release($e, null, true)['version'] ?? null);
+});
+
 // ── pack-modules: the catalogue carries requires_core ───────────────────────
 
 test('pack-modules reads require[fluxfiles/fluxfiles] from the tagged composer.json into the catalogue', function () {

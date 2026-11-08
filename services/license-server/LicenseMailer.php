@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles\LicenseServer;
 
+require_once __DIR__ . '/ProDownload.php';
+
 /**
  * Delivers a freshly issued licence key to the buyer.
  *
@@ -24,6 +26,8 @@ namespace FluxFiles\LicenseServer;
  */
 final class LicenseMailer
 {
+    private const SITE = 'https://fluxfiles.thai-pc.com';
+
     public function __construct(
         private string $transport = '',
         private string $from = '',
@@ -46,6 +50,17 @@ final class LicenseMailer
      */
     public function sendLicense(array $record): bool
     {
+        try {
+            return $this->sendLicenseImpl($record);
+        } catch (\Throwable $e) {
+            error_log('license mail failed for jti ' . (string) ($record['jti'] ?? '?') . ': ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /** @param array<string,mixed> $record */
+    private function sendLicenseImpl(array $record): bool
+    {
         $to = (string) ($record['email'] ?? '');
         if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
             error_log('license mail: no valid recipient for jti ' . (string) ($record['jti'] ?? '?'));
@@ -54,20 +69,8 @@ final class LicenseMailer
 
         $isSupportOnly = trim((string) ($record['modules'] ?? '')) === '';
         $subject = $isSupportOnly ? 'Your FluxFiles Priority Support subscription' : 'Your FluxFiles licence key';
-        $body = $isSupportOnly ? $this->renderSupportBody($record) : $this->renderBody($record);
-
-        try {
-            return match ($this->transport) {
-                'resend' => $this->sendResend($to, $subject, $body),
-                'smtp' => $this->sendSmtp($to, $subject, $body),
-                'sendmail' => $this->sendMail($to, $subject, $body),
-                default => $this->sendLog($to, $subject, $body),
-            };
-        } catch (\Throwable $e) {
-            // The key is not lost — it is in the store, retrievable by the operator.
-            error_log('license mail failed for ' . $to . ': ' . $e->getMessage());
-            return false;
-        }
+        $content = $isSupportOnly ? $this->supportContent($record) : $this->licenseContent($record);
+        return $this->deliverContent($to, $subject, $content, 'license mail failed for ');
     }
 
     /**
@@ -76,20 +79,29 @@ final class LicenseMailer
      */
     public function sendRenewalUnmatched(string $email, string $plan, string $orderId): bool
     {
+        try {
+            return $this->sendRenewalUnmatchedImpl($email, $plan, $orderId);
+        } catch (\Throwable $e) {
+            error_log('unmatched-renewal mail failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function sendRenewalUnmatchedImpl(string $email, string $plan, string $orderId): bool
+    {
         $ok = true;
-        $buyerBody = <<<TXT
-        Thanks for your FluxFiles updates renewal ({$plan}).
-
-        We could not match it to a FluxFiles Lifetime licence under this email address
-        (or this customer account), so nothing has been extended yet and nothing is lost.
-
-        Please reply to this email with the address you used for your original Lifetime
-        purchase and we will apply the renewal, or refund it if you prefer. Order: {$orderId}.
-
-        — FluxFiles
-        TXT;
         if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $ok = $this->deliver($email, 'We could not match your FluxFiles renewal', $buyerBody);
+            $ok = $this->deliverContent($email, 'We could not match your FluxFiles renewal', [
+                'heading' => 'We could not match your renewal',
+                'preheader' => 'Nothing is lost: reply with your original purchase email.',
+                'intro' => [
+                    "Thanks for your FluxFiles updates renewal ({$plan}).",
+                    'We could not match it to a FluxFiles Lifetime licence under this email address '
+                    . '(or this customer account), so nothing has been extended yet and nothing is lost.',
+                    'Please reply to this email with the address you used for your original Lifetime '
+                    . "purchase and we will apply the renewal, or refund it if you prefer. Order: {$orderId}.",
+                ],
+            ], 'license mail failed for ');
         }
         $ops = (string) (getenv('FLUXFILES_OPS_EMAIL') ?: '');
         if ($ops !== '' && filter_var($ops, FILTER_VALIDATE_EMAIL)) {
@@ -100,7 +112,7 @@ final class LicenseMailer
         return $ok;
     }
 
-    /** Operator notice to FLUXFILES_OPS_EMAIL (no-op when unset). Never throws. */
+    /** Operator notice to FLUXFILES_OPS_EMAIL (no-op when unset). Plain text. Never throws. */
     public function sendOpsNotice(string $subject, string $body): bool
     {
         $ops = (string) (getenv('FLUXFILES_OPS_EMAIL') ?: '');
@@ -110,23 +122,185 @@ final class LicenseMailer
         return $this->deliver($ops, $subject, $body);
     }
 
-    private function deliver(string $to, string $subject, string $body): bool
+    /**
+     * Customer mail: the content model rendered as a text part plus an HTML part.
+     *
+     * @param array<string,mixed> $content see prepare()
+     */
+    private function deliverContent(string $to, string $subject, array $content, string $failPrefix): bool
+    {
+        $content['to'] = $to;
+        $content['subject'] = $subject;
+        $c = $this->prepare($content);
+        $text = $this->renderText($c);
+        // A broken HTML template (missing file, bad deploy) must not stop a paid order's
+        // key from being mailed: send the text part alone and say so loudly.
+        $html = null;
+        try {
+            $html = $this->renderHtml($c);
+            // An empty or truncated template must not replace the key with a blank mail body.
+            if (trim($html) === '') {
+                throw new \RuntimeException('template rendered empty');
+            }
+            $key = (string) ($c['key'] ?? '');
+            if ($key !== '' && !str_contains($html, htmlspecialchars($key, ENT_QUOTES | ENT_HTML5, 'UTF-8'))) {
+                throw new \RuntimeException('template output lacks the licence key');
+            }
+        } catch (\Throwable $e) {
+            $html = null;
+            error_log('LICENSE MAIL: HTML template failed (' . $e->getMessage() . ') — sending text-only; copy the whole services/license-server dir incl. templates/');
+        }
+        return $this->deliver($to, $subject, $text, $html, $failPrefix);
+    }
+
+    private function deliver(string $to, string $subject, string $body, ?string $html = null, string $failPrefix = 'license mail failed for '): bool
     {
         try {
             return match ($this->transport) {
-                'resend' => $this->sendResend($to, $subject, $body),
-                'smtp' => $this->sendSmtp($to, $subject, $body),
-                'sendmail' => $this->sendMail($to, $subject, $body),
+                'resend' => $this->sendResend($to, $subject, $body, $html),
+                'smtp' => $this->sendSmtp($to, $subject, $body, $html),
+                'sendmail' => $this->sendMail($to, $subject, $body, $html),
                 default => $this->sendLog($to, $subject, $body),
             };
         } catch (\Throwable $e) {
-            error_log('license mail failed for ' . $to . ': ' . $e->getMessage());
+            error_log($failPrefix . $to . ': ' . $e->getMessage());
             return false;
         }
     }
 
-    /** @param array<string,mixed> $record */
-    private function renderBody(array $record): string
+    // ── Content model ────────────────────────────────────────────────────────
+    //
+    // Every customer mail is described once as an array and rendered twice (text part
+    // and templates/email.php), so the two parts cannot drift apart:
+    //   heading, preheader, intro[] (paragraphs), plan?, key?, steps[]? ({text, code?}),
+    //   notes[] (paragraphs), wp? ({url, text}), button? ([label, url]), closing[].
+    // `to` and `subject` are added by deliverContent().
+
+    /**
+     * Text + HTML for one content model (the HTML throws if the template is unusable; the
+     * senders go through deliverContent(), which degrades to text-only instead).
+     *
+     * @param array<string,mixed> $c
+     * @return array{text:string,html:string}
+     */
+    private function build(array $c): array
+    {
+        $c = $this->prepare($c);
+        return ['text' => $this->renderText($c), 'html' => $this->renderHtml($c)];
+    }
+
+    /**
+     * @param array<string,mixed> $c
+     * @return array<string,mixed>
+     */
+    private function prepare(array $c): array
+    {
+        $c['site'] = self::SITE;
+        $origin = rtrim((string) getenv('FLUXFILES_LANDING_ORIGIN'), '/');
+        $base = ($origin !== '' && str_starts_with($origin, 'https://')) ? $origin : self::SITE;
+        $c['button'] = ['Read the docs', $base . '/docs'];
+        $c += ['intro' => [], 'notes' => [], 'closing' => [], 'preheader' => (string) ($c['heading'] ?? ''), 'to' => '', 'subject' => ''];
+        return $c;
+    }
+
+    /** @param array<string,mixed> $c */
+    private function renderText(array $c): string
+    {
+        $out = [(string) $c['heading'], ''];
+        foreach ($c['intro'] as $para) { $out[] = (string) $para; $out[] = ''; }
+        if (isset($c['key'])) {
+            $out[] = 'Plan: ' . (string) $c['plan'];
+            $out[] = '';
+            $out[] = 'Your licence key:';
+            $out[] = '';
+            $out[] = (string) $c['key'];
+            $out[] = '';
+        }
+        if (!empty($c['steps'])) {
+            $out[] = 'Next steps:';
+            $out[] = '';
+            foreach ($c['steps'] as $i => $s) {
+                $out[] = ($i + 1) . '. ' . (string) $s['text'];
+                if (isset($s['code'])) {
+                    foreach (explode("\n", (string) $s['code']) as $line) { $out[] = '       ' . $line; }
+                }
+                $out[] = '';
+            }
+        }
+        foreach ($c['notes'] as $para) { $out[] = (string) $para; $out[] = ''; }
+        if (isset($c['wp'])) {
+            $out[] = 'WordPress: get the FluxFiles Pro plugin here (paste the key above):';
+            $out[] = '';
+            $out[] = '    ' . (string) $c['wp']['url'];
+            $out[] = '';
+            $out[] = (string) $c['wp']['text'];
+            $out[] = '';
+        }
+        $out[] = $c['button'][0] . ': ' . $c['button'][1];
+        $out[] = '';
+        foreach ($c['closing'] as $para) { $out[] = (string) $para; $out[] = ''; }
+        $out[] = 'Questions? Write to fluxfiles@thai-pc.com or just reply to this email. Replies reach a real person.';
+        $out[] = 'Sent to ' . (string) $c['to'] . '.';
+        $out[] = '';
+        $out[] = '— FluxFiles by thai-pc · ' . self::SITE;
+        return implode("\n", $out);
+    }
+
+    /** @param array<string,mixed> $c */
+    private function renderHtml(array $c): string
+    {
+        $e = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // href is the one attribute a hostile value could turn into script: https only.
+        $href = static fn (string $u): ?string => (str_starts_with($u, 'https://') && preg_match('/[\s"\'<>]/', $u) !== 1) ? $u : null;
+        $tpl = __DIR__ . '/templates/email.php';
+        if (!is_file($tpl)) {
+            // A failed `require` is a fatal compile error that no catch can see.
+            throw new \RuntimeException('templates/email.php is missing');
+        }
+        ob_start();
+        try {
+            require $tpl;
+            return (string) ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
+    }
+
+    /** "Pro", "Studio Lifetime", "Pro updates renewal", "Studio Monthly" — for the plan line. */
+    private function planLabel(array $record): string
+    {
+        $edition = ucfirst((string) ($record['edition'] ?? 'pro'));
+        $plan = (string) ($record['plan'] ?? '');
+        if (str_ends_with($plan, '-renewal')) { return $edition . ' updates renewal'; }
+        if ($plan === 'lifetime' || $plan === 'pro-lifetime') { return $edition . ' Lifetime'; }
+        if (str_ends_with($plan, '-monthly')) { return $edition . ' Monthly'; }
+        return $edition;
+    }
+
+    /** @return string[] module ids of the record, e.g. ['share','intake'] */
+    private function modulesOf(array $record): array
+    {
+        $mods = array_filter(array_map('trim', explode(',', (string) ($record['modules'] ?? ''))), static fn (string $m): bool => $m !== '');
+        return array_values($mods);
+    }
+
+    /** The token claim (or env switch) that turns a module on. */
+    private function claimFor(string $module): string
+    {
+        return match ($module) {
+            'ai' => 'allow_ai_vision',
+            'virus' => 'allow_virus_scan',
+            'dlp' => 'allow_dlp_scan',
+            'sso' => 'FLUXFILES_SSO_ENABLED=true (env, not a claim)',
+            default => 'allow_' . str_replace('-', '_', $module),
+        };
+    }
+
+    /**
+     * @param array<string,mixed> $record
+     * @return array<string,mixed>
+     */
+    private function licenseContent(array $record): array
     {
         $key = (string) ($record['license_key'] ?? '');
         $edition = ucfirst((string) ($record['edition'] ?? 'pro'));
@@ -136,77 +310,113 @@ final class LicenseMailer
         $isLifetime = $plan === 'lifetime' || $plan === 'pro-lifetime';
         $date = $expires ? gmdate('Y-m-d', (int) $expires) : '';
         if (!$expires) {
-            $expiryLine = 'This licence includes lifetime use and lifetime updates.';
+            $notes = ['This licence includes lifetime use and lifetime updates.'];
         } elseif ($isRenewal) {
-            $expiryLine = "Your updates and priority support now run until: {$date}.\n\n"
-                . 'Replace the FLUXFILES_LICENSE_KEY on your server with the key above: only this key carries the extended update window. '
-                . 'Your previous key keeps running your modules, but its updates stop on its original date.';
+            $notes = ["Your updates and priority support now run until: {$date}.",
+                'Your previous key keeps running your modules, but its updates stop on its original date.'];
         } elseif ($isLifetime) {
-            $expiryLine = "This is a one-time purchase: you can use your paid modules forever.\n\n"
-                . "Updates and priority support are included for 12 months, until: {$date}. After that your modules keep running; "
-                . 'a one-time updates renewal (12 more months) restores new releases and support.';
+            $notes = ["This is a one-time purchase: you can use your paid modules forever.",
+                "Updates and priority support are included for 12 months, until: {$date}. After that your modules keep running; "
+                . 'a one-time updates renewal (12 more months) restores new releases and support.'];
         } else {
-            $expiryLine = "Updates and priority support are included until: {$date}.\n\n"
-                . 'Your installed paid modules keep running after that date; renewal only restores new releases and support.';
+            $notes = ["Updates and priority support are included until: {$date}.",
+                'Your installed paid modules keep running after that date; renewal only restores new releases and support.'];
+        }
+
+        // Activation order matters: the key must be in place BEFORE `fluxfiles update`
+        // (which authenticates with it), and a claim does nothing until the module exists.
+        $mods = $this->modulesOf($record);
+        $steps = [];
+        $steps[] = $isRenewal
+            ? ['text' => 'Replace the FLUXFILES_LICENSE_KEY on your server with the key above: only this key carries the extended update window.',
+               'code' => 'FLUXFILES_LICENSE_KEY=<the key above>']
+            : ['text' => 'Set the key in your .env (or export it in the environment your PHP process reads). It is verified offline: FluxFiles never phones home.',
+               'code' => 'FLUXFILES_LICENSE_KEY=<the key above>'];
+        $steps[] = [
+            'text' => $isRenewal ? 'Pull the new releases of your modules:' : 'Install your paid modules (one command per module):',
+            'code' => implode("\n", array_map(static fn (string $m): string => 'php vendor/bin/fluxfiles update ' . $m, $mods)),
+        ];
+        if (!$isRenewal) {
+            $steps[] = [
+                'text' => 'Enable the modules in the token claims your app mints (for example allow_share):',
+                'code' => implode("\n", array_map(fn (string $m): string => $this->claimFor($m), $mods)),
+            ];
+        }
+
+        // WordPress Pro plugin zip: no bearer URL in the mail. The landing /download page takes
+        // the key and hands out a fresh short-lived link (nothing to expire in the inbox).
+        $wp = null;
+        $origin = rtrim((string) getenv('FLUXFILES_LANDING_ORIGIN'), '/');
+        // Only when the page can actually work: it needs the update-server URL on this server too.
+        if ($origin !== '' && str_starts_with($origin, 'https://') && ProDownload::configured() && ProDownload::eligible($record)) {
+            $wp = ['url' => "{$origin}/download",
+                'text' => 'Upload it in Plugins > Add New > Upload Plugin (the free FluxFiles plugin must be active), then paste the key in Settings > FluxFiles. Later updates arrive in wp-admin.'];
         }
         $thanks = $isRenewal
             ? "Thanks for renewing FluxFiles {$edition} updates."
             : "Thanks for buying FluxFiles {$edition}" . ($isLifetime ? ' Lifetime' : '') . '.';
 
-        // Plain text on purpose: a licence key is a long opaque string, and HTML mail
-        // clients are the reason keys arrive with smart quotes or a soft line break in
-        // the middle. Plain text is also what survives forwarding into a ticket.
-        return <<<TXT
-        {$thanks}
-
-        Your licence key:
-
-        {$key}
-
-        To activate, set it on your server:
-
-            FLUXFILES_LICENSE_KEY={$key}
-
-        …in your .env, or export it in the environment your PHP process reads. The key is
-        verified offline — FluxFiles never phones home — so nothing else is required.
-
-        {$expiryLine}
-
-        Keep this email: it is the copy of the key you own. If you lose it, reply and we
-        can look it up.
-
-        — FluxFiles
-        TXT;
+        $c = [
+            'heading' => $isRenewal ? 'Your renewed licence key' : 'Your FluxFiles licence key',
+            'preheader' => $thanks . ' Your licence key and activation steps are inside.',
+            'intro' => [$thanks],
+            'plan' => $this->planLabel($record),
+            'key' => $key,
+            'steps' => $steps,
+            'notes' => $notes,
+            'closing' => ['Keep this email: it is the copy of the key you own. If you lose it, reply and we can look it up.'],
+        ];
+        if ($wp !== null) { $c['wp'] = $wp; }
+        return $c;
     }
 
     /**
-     * Body for a Support-only subscription (modules=[], nothing to activate).
-     * No `FLUXFILES_LICENSE_KEY=` line — a support purchase unlocks no software, so
-     * that instruction would be actively wrong for this record.
+     * Text part of the licence mail (kept as a method so tests and previews can render it).
      *
      * @param array<string,mixed> $record
      */
-    private function renderSupportBody(array $record): string
+    private function renderBody(array $record): string
+    {
+        return $this->contentText($this->licenseContent($record));
+    }
+
+    /** @param array<string,mixed> $content */
+    private function contentText(array $content): string
+    {
+        return $this->renderText($this->prepare($content));
+    }
+
+    /**
+     * Content for a Support-only subscription (modules=[], nothing to activate).
+     * No `FLUXFILES_LICENSE_KEY=` line: a support purchase unlocks no software, so
+     * that instruction would be actively wrong for this record.
+     *
+     * @param array<string,mixed> $record
+     * @return array<string,mixed>
+     */
+    private function supportContent(array $record): array
     {
         $expires = $record['expires'] ?? null;
         $expiryLine = $expires
             ? 'Renews/expires: ' . gmdate('Y-m-d', (int) $expires)
             : 'No expiry on file.';
 
-        return <<<TXT
-        Thanks for subscribing to FluxFiles Priority Support.
+        return [
+            'heading' => 'Welcome to Priority Support',
+            'preheader' => 'Reply to this email any time you need help.',
+            'intro' => [
+                'Thanks for subscribing to FluxFiles Priority Support.',
+                "This purchase does not unlock any module or feature. It's a support subscription for faster, prioritized responses on the free MIT core (or any paid modules you already run separately).",
+                "Just reply to this email any time you need help, and it'll be flagged as priority.",
+            ],
+            'notes' => [$expiryLine],
+        ];
+    }
 
-        This purchase does not unlock any module or feature — it's a support
-        subscription for faster, prioritized responses on the free MIT core (or any
-        paid modules you already run separately).
-
-        Just reply to this email any time you need help, and it'll be flagged as
-        priority.
-
-        {$expiryLine}
-
-        — FluxFiles
-        TXT;
+    /** @param array<string,mixed> $record */
+    private function renderSupportBody(array $record): string
+    {
+        return $this->contentText($this->supportContent($record));
     }
 
     /**
@@ -224,6 +434,17 @@ final class LicenseMailer
      */
     public function sendReminder(array $record, string $bucket): bool
     {
+        try {
+            return $this->sendReminderImpl($record, $bucket);
+        } catch (\Throwable $e) {
+            error_log('license reminder mail failed for jti ' . (string) ($record['jti'] ?? '?') . ': ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /** @param array<string,mixed> $record */
+    private function sendReminderImpl(array $record, string $bucket): bool
+    {
         $to = (string) ($record['email'] ?? '');
         if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
             error_log('license reminder mail: no valid recipient for jti ' . (string) ($record['jti'] ?? '?'));
@@ -237,41 +458,30 @@ final class LicenseMailer
             $subject = $isSupportOnly
                 ? 'Your FluxFiles Priority Support subscription has expired'
                 : 'Your FluxFiles licence has expired';
-            $body = $isSupportOnly
-                ? $this->renderExpirySupportBody($record, $bucket)
-                : $this->renderExpiryBody($record, $bucket);
+            $content = $isSupportOnly
+                ? $this->expirySupportContent($record, $bucket)
+                : $this->expiryContent($record, $bucket);
         } else {
             $subject = $isSupportOnly
                 ? 'Your FluxFiles Priority Support subscription renews soon'
                 : 'Your FluxFiles licence renews soon';
-            $body = $isSupportOnly
-                ? $this->renderRenewalSupportBody($record, $bucket)
-                : $this->renderRenewalBody($record, $bucket);
+            $content = $isSupportOnly
+                ? $this->renewalSupportContent($record, $bucket)
+                : $this->renewalContent($record, $bucket);
         }
 
-        try {
-            return match ($this->transport) {
-                'resend' => $this->sendResend($to, $subject, $body),
-                'smtp' => $this->sendSmtp($to, $subject, $body),
-                'sendmail' => $this->sendMail($to, $subject, $body),
-                default => $this->sendLog($to, $subject, $body),
-            };
-        } catch (\Throwable $e) {
-            // Same recovery story as sendLicense(): the row stays at its previous
-            // reminder_stage, so the next scheduled run retries it.
-            error_log('license reminder mail failed for ' . $to . ': ' . $e->getMessage());
-            return false;
-        }
+        // Same recovery story as sendLicense(): on failure the row stays at its previous
+        // reminder_stage, so the next scheduled run retries it.
+        return $this->deliverContent($to, $subject, $content, 'license reminder mail failed for ');
     }
 
     /**
-     * "Renewal approaching" body for a module licence. Plain text for the same
-     * reason renderBody() is: this is exactly the kind of message that gets
-     * forwarded into a support ticket.
+     * "Renewal approaching" content for a module licence.
      *
      * @param array<string,mixed> $record
+     * @return array<string,mixed>
      */
-    private function renderRenewalBody(array $record, string $bucket): string
+    private function renewalContent(array $record, string $bucket): array
     {
         $edition = ucfirst((string) ($record['edition'] ?? 'pro'));
         $expires = (int) ($record['expires'] ?? 0);
@@ -286,48 +496,58 @@ final class LicenseMailer
             // One-time plans do not renew by themselves: only the update window ends.
             $url = (string) (getenv('FLUXFILES_RENEWAL_URL') ?: '');
             $where = $url !== '' ? " at {$url}" : ' (reply to this email for the link)';
-            return <<<TXT
-        Your FluxFiles {$edition} updates and priority support end on {$date} ({$daysLeft} day(s) left).
-
-        Your modules keep running either way. To get 12 more months of updates, buy the
-        one-time updates renewal{$where}, using the SAME email address (and account) as your
-        original purchase, then replace FLUXFILES_LICENSE_KEY with the new key we email you.
-
-        — FluxFiles
-        TXT;
+            return [
+                'heading' => 'Your updates window ends soon',
+                'preheader' => "Updates and priority support end on {$date}.",
+                'intro' => [
+                    "Your FluxFiles {$edition} updates and priority support end on {$date} ({$daysLeft} day(s) left).",
+                    'Your modules keep running either way. To get 12 more months of updates, buy the '
+                    . "one-time updates renewal{$where}, using the SAME email address (and account) as your "
+                    . 'original purchase, then replace FLUXFILES_LICENSE_KEY with the new key we email you.',
+                ],
+            ];
         }
 
-        return <<<TXT
-        Your FluxFiles {$edition} licence renews/expires on {$date} ({$daysLeft} day(s) left).
-
-        If you already renewed, you can ignore this — the update to your record can lag
-        a day or two behind payment. Otherwise, renew before the date above to keep your
-        update channel open (see the Notes below for what happens if it lapses).
-
-        — FluxFiles
-        TXT;
+        return [
+            'heading' => 'Your licence renews soon',
+            'preheader' => "Your FluxFiles {$edition} licence renews/expires on {$date}.",
+            'intro' => [
+                "Your FluxFiles {$edition} licence renews/expires on {$date} ({$daysLeft} day(s) left).",
+                'If you already renewed, you can ignore this — the update to your record can lag '
+                . 'a day or two behind payment. Otherwise, renew before the date above to keep your '
+                . 'update channel open (see the Notes below for what happens if it lapses).',
+            ],
+        ];
     }
 
     /** @param array<string,mixed> $record */
-    private function renderRenewalSupportBody(array $record, string $bucket): string
+    private function renderRenewalBody(array $record, string $bucket): string
+    {
+        return $this->contentText($this->renewalContent($record, $bucket));
+    }
+
+    /**
+     * @param array<string,mixed> $record
+     * @return array<string,mixed>
+     */
+    private function renewalSupportContent(array $record, string $bucket): array
     {
         $expires = (int) ($record['expires'] ?? 0);
         $date = gmdate('Y-m-d', $expires);
         $daysLeft = max(0, (int) floor(($expires - time()) / 86400));
 
-        return <<<TXT
-        Your FluxFiles Priority Support subscription renews on {$date} ({$daysLeft} day(s) left).
-
-        This purchase doesn't unlock any module — it's your priority-response support
-        subscription. Renew before the date above to keep priority handling on your
-        tickets.
-
-        — FluxFiles
-        TXT;
+        return [
+            'heading' => 'Your Priority Support renews soon',
+            'preheader' => "Your Priority Support subscription renews on {$date}.",
+            'intro' => [
+                "Your FluxFiles Priority Support subscription renews on {$date} ({$daysLeft} day(s) left).",
+                "This purchase doesn't unlock any module — it's your priority-response support subscription. Renew before the date above to keep priority handling on your tickets.",
+            ],
+        ];
     }
 
     /**
-     * "Past expiry" body for a module licence, worded per `enforcement` — this is
+     * "Past expiry" content for a module licence, worded per `enforcement` — this is
      * the one place the copy must differ, not just the subject. `perpetual`
      * (annual/lifetime-use self-host) keeps running past expiry, only the update
      * channel stops; `subscription` (hosted/monthly) genuinely stops working past
@@ -335,8 +555,9 @@ final class LicenseMailer
      * customer their software is broken, or a broken customer that it's fine.
      *
      * @param array<string,mixed> $record
+     * @return array<string,mixed>
      */
-    private function renderExpiryBody(array $record, string $bucket): string
+    private function expiryContent(array $record, string $bucket): array
     {
         $edition = ucfirst((string) ($record['edition'] ?? 'pro'));
         $expires = (int) ($record['expires'] ?? 0);
@@ -351,17 +572,24 @@ final class LicenseMailer
             $consequence = "Your update access ended on {$date}; the software keeps working exactly as before — you just won't receive new releases or security patches until you renew.";
         }
 
-        return <<<TXT
-        Your FluxFiles {$edition} licence has passed its expiry date.
-
-        {$consequence}
-
-        — FluxFiles
-        TXT;
+        return [
+            'heading' => 'Your licence has expired',
+            'preheader' => "Your FluxFiles {$edition} licence passed its expiry date ({$date}).",
+            'intro' => ["Your FluxFiles {$edition} licence has passed its expiry date.", $consequence],
+        ];
     }
 
     /** @param array<string,mixed> $record */
-    private function renderExpirySupportBody(array $record, string $bucket): string
+    private function renderExpiryBody(array $record, string $bucket): string
+    {
+        return $this->contentText($this->expiryContent($record, $bucket));
+    }
+
+    /**
+     * @param array<string,mixed> $record
+     * @return array<string,mixed>
+     */
+    private function expirySupportContent(array $record, string $bucket): array
     {
         $expires = (int) ($record['expires'] ?? 0);
         $date = gmdate('Y-m-d', $expires);
@@ -369,22 +597,43 @@ final class LicenseMailer
             ? "You're in a short grace period before priority handling on your tickets ends."
             : 'Priority handling on your tickets has now ended — you can still reach us through normal support channels.';
 
-        return <<<TXT
-        Your FluxFiles Priority Support subscription lapsed on {$date}.
-
-        {$consequence} Renew any time to restore priority handling.
-
-        — FluxFiles
-        TXT;
+        return [
+            'heading' => 'Your Priority Support has lapsed',
+            'preheader' => "Your Priority Support subscription lapsed on {$date}.",
+            'intro' => [
+                "Your FluxFiles Priority Support subscription lapsed on {$date}.",
+                "{$consequence} Renew any time to restore priority handling.",
+            ],
+        ];
     }
 
-    private function headers(): array
+    /** @param array<string,mixed> $record */
+    private function renderExpirySupportBody(array $record, string $bucket): string
     {
+        return $this->contentText($this->expirySupportContent($record, $bucket));
+    }
+
+    /**
+     * Message headers + body for the wire. With an HTML part this is multipart/alternative
+     * (text first, HTML last: the last part is the preferred one) with a random boundary
+     * and quoted-printable parts, so no line exceeds the 998-octet SMTP limit. Without
+     * one it is the original single text/plain message.
+     *
+     * @return array{headers:string[],body:string}
+     */
+    private function mime(string $text, ?string $html): array
+    {
+        $from = 'From: ' . $this->encodeName($this->fromName) . ' <' . $this->from . '>';
+        if ($html === null) {
+            return ['headers' => [$from, 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: 8bit'], 'body' => $text];
+        }
+        $b = 'ff_' . bin2hex(random_bytes(16));
+        $part = static fn (string $type, string $content): string =>
+            "--{$b}\r\nContent-Type: {$type}; charset=UTF-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n"
+            . quoted_printable_encode((string) preg_replace('/\r?\n/', "\r\n", $content)) . "\r\n";
         return [
-            'From: ' . $this->encodeName($this->fromName) . ' <' . $this->from . '>',
-            'MIME-Version: 1.0',
-            'Content-Type: text/plain; charset=UTF-8',
-            'Content-Transfer-Encoding: 8bit',
+            'headers' => [$from, 'MIME-Version: 1.0', "Content-Type: multipart/alternative; boundary=\"{$b}\""],
+            'body' => $part('text/plain', $text) . $part('text/html', $html) . "--{$b}--\r\n",
         ];
     }
 
@@ -412,9 +661,28 @@ final class LicenseMailer
         return true;
     }
 
-    private function sendMail(string $to, string $subject, string $body): bool
+    private function sendMail(string $to, string $subject, string $body, ?string $html = null): bool
     {
-        return @mail($to, $subject, $body, implode("\r\n", $this->headers()));
+        $m = $this->mime($body, $html);
+        return @mail($to, $subject, $m['body'], implode("\r\n", $m['headers']));
+    }
+
+    /** @return array<string,mixed> the JSON body of Resend's POST /emails: both `text` and `html` */
+    private function resendPayload(string $to, string $subject, string $body, ?string $html, string $replyTo): array
+    {
+        $payload = [
+            'from' => $this->fromName !== '' ? "{$this->fromName} <{$this->from}>" : $this->from,
+            'to' => [$to],
+            'subject' => $subject,
+            'text' => $body,
+        ];
+        if ($html !== null) {
+            $payload['html'] = $html;
+        }
+        if ($replyTo !== '') {
+            $payload['reply_to'] = $replyTo;
+        }
+        return $payload;
     }
 
     /**
@@ -424,7 +692,7 @@ final class LicenseMailer
      * `from` reuses the constructor's $from/$fromName — Resend requires that address
      * to be on a domain verified in the Resend account, or the send is rejected.
      */
-    private function sendResend(string $to, string $subject, string $body): bool
+    private function sendResend(string $to, string $subject, string $body, ?string $html = null): bool
     {
         $apiKey = (string) (getenv('FLUXFILES_RESEND_API_KEY') ?: '');
         if ($apiKey === '') {
@@ -432,15 +700,7 @@ final class LicenseMailer
         }
         $replyTo = (string) (getenv('FLUXFILES_MAIL_REPLY_TO') ?: '');
 
-        $payload = [
-            'from' => $this->fromName !== '' ? "{$this->fromName} <{$this->from}>" : $this->from,
-            'to' => [$to],
-            'subject' => $subject,
-            'text' => $body,
-        ];
-        if ($replyTo !== '') {
-            $payload['reply_to'] = $replyTo;
-        }
+        $payload = $this->resendPayload($to, $subject, $body, $html, $replyTo);
 
         $ch = curl_init('https://api.resend.com/emails');
         curl_setopt_array($ch, [
@@ -473,7 +733,7 @@ final class LicenseMailer
      *
      * Env: FLUXFILES_SMTP_HOST / _PORT / _USER / _PASS / _TLS (tls|ssl|none)
      */
-    private function sendSmtp(string $to, string $subject, string $body): bool
+    private function sendSmtp(string $to, string $subject, string $body, ?string $html = null): bool
     {
         $host = (string) (getenv('FLUXFILES_SMTP_HOST') ?: '');
         $port = (int) (getenv('FLUXFILES_SMTP_PORT') ?: 587);
@@ -527,13 +787,14 @@ final class LicenseMailer
             $cmd('RCPT TO:<' . $to . '>', '250');
             $cmd('DATA', '354');
 
-            $headers = implode("\r\n", array_merge($this->headers(), [
+            $mime = $this->mime($body, $html);
+            $headers = implode("\r\n", array_merge($mime['headers'], [
                 'To: <' . $to . '>',
                 'Subject: ' . $subject,
                 'Date: ' . gmdate('D, d M Y H:i:s') . ' +0000',
             ]));
             // Dot-stuffing: a line that is just "." would end DATA early.
-            $safeBody = preg_replace('/^\./m', '..', str_replace("\n", "\r\n", $body));
+            $safeBody = preg_replace('/^\./m', '..', preg_replace('/\r?\n/', "\r\n", $mime['body']));
             $cmd($headers . "\r\n\r\n" . $safeBody . "\r\n.", '250');
             $cmd('QUIT', '221');
             return true;

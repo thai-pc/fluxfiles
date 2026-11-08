@@ -5,8 +5,9 @@
  *
  * The whole "license → auto-download/update" channel without any third-party
  * platform fee. Pair it with:
- *   - WordPress: yahnis-elsts/plugin-update-checker (send the license in an
- *     Authorization header) → updates show up in wp-admin with a one-click "Update now".
+ *   - WordPress: the FluxFiles Pro plugin's in-house updater (ProUpdater) calls
+ *     /update/fluxfiles-pro with the license in the Authorization header and verifies the
+ *     signed manifest + sha256 → updates show up in wp-admin with a one-click "Update now".
  *   - Laravel / standalone: `php vendor/bin/fluxfiles update <module>` (UpdateClient).
  *
  * Flow:
@@ -48,11 +49,14 @@ use FluxFiles\LicenseManager;
  *     cannot host. A release whose floor is
  *     above `^1.0.3` (e.g. share 1.4.0 needing `^1.0.4`) is NEVER offered to it.
  *   - A release with no `requires_core` is compatible with everyone.
+ *   - `$latest` (a first install of a plugin bundle, see $BUNDLES): there is no installed core
+ *     to compare against yet, so the newest release is served and the signed manifest's
+ *     `requires_core` is what the client's own boot guard / updater checks.
  *
  * @param array<string,mixed> $entry
  * @return array<string,mixed>|null
  */
-function fluxfiles_pick_release(array $entry, ?string $coreVersion): ?array
+function fluxfiles_pick_release(array $entry, ?string $coreVersion, bool $latest = false): ?array
 {
     $assumed = $coreVersion !== null && CoreVersion::normalize($coreVersion) !== null
         ? $coreVersion
@@ -64,7 +68,7 @@ function fluxfiles_pick_release(array $entry, ?string $coreVersion): ?array
             continue;
         }
         $need = (string) ($c['requires_core'] ?? '');
-        if ($need !== '' && !CoreVersion::satisfies($assumed, $need)) {
+        if (!$latest && $need !== '' && !CoreVersion::satisfies($assumed, $need)) {
             continue;
         }
         if ($best === null || version_compare(ltrim((string) $c['version'], 'vV'), ltrim((string) $best['version'], 'vV'), '>')) {
@@ -72,6 +76,43 @@ function fluxfiles_pick_release(array $entry, ?string $coreVersion): ?array
         }
     }
     return $best;
+}
+
+/**
+ * Plugin bundle id => the module ids it ships. The ONE place this lives on the server side;
+ * services/license-server ProDownload::BUNDLE_MODULES must agree (a test asserts it).
+ * Phase 2 of the Pro add-on adds 'versioning','webhooks','ai','ocr'.
+ *
+ * @return array<string,list<string>>
+ */
+function fluxfiles_bundles(): array
+{
+    return ['fluxfiles-pro' => ['share', 'intake']];
+}
+
+/**
+ * Is this licence entitled to `$module`?
+ *
+ * A plugin BUNDLE (one zip that carries several modules, e.g. the FluxFiles Pro WordPress
+ * add-on) is not a licence module: no plan grants 'fluxfiles-pro', so `licensed()` is false
+ * for every real key. A bundle is entitled when the licence covers ANY bundled module;
+ * the updatesAllowed() window and the /update-status revocation check stay the caller's
+ * and apply to a bundle exactly as they do to a module. A plan with `modules: []`
+ * (support) covers nothing, so it is never entitled.
+ *
+ * @param array<string,list<string>> $bundles bundle id => the module ids it ships
+ */
+function fluxfiles_entitled(string $module, LicenseManager $lm, array $bundles): bool
+{
+    if (!isset($bundles[$module])) {
+        return $lm->licensed($module);
+    }
+    foreach ($bundles[$module] as $bundled) {
+        if ($lm->licensed($bundled)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 if (defined('FLUXFILES_UPDATE_SERVER_FUNCTIONS_ONLY')) {
@@ -109,6 +150,11 @@ $CATALOGUE = is_file($CATALOGUE_FILE)
 // not verification.
 $FREE_MODULES = ['wordpress'];
 
+// Plugin bundles: entitled when the licence covers ANY bundled module (same
+// updatesAllowed() and /update-status revocation checks as a module). See
+// fluxfiles_entitled(). Phase 2 of the Pro add-on adds 'versioning','webhooks','ai','ocr'.
+$BUNDLES = fluxfiles_bundles();
+
 // ── request ─────────────────────────────────────────────────────────────────
 $module  = preg_replace('/[^a-z0-9-]/', '', (string) ($_GET['module'] ?? basename($_SERVER['PATH_INFO'] ?? '')));
 // The licence arrives as a bearer credential in the header, never as a query
@@ -131,7 +177,7 @@ if ($module === '' || !isset($CATALOGUE[$module])) {
 //    signed manifest.
 if (!in_array($module, $FREE_MODULES, true)) {
     $lm = new LicenseManager($license);
-    if (!$lm->licensed($module)) {
+    if (!fluxfiles_entitled($module, $lm, $BUNDLES)) {
         http_response_code(402);
         exit('license does not entitle this module');
     }
@@ -170,7 +216,9 @@ if (!in_array($module, $FREE_MODULES, true)) {
 // 3. Pick a release this client's core can host, then build + sign the manifest.
 //    `core_version` is advisory (the client reports it); it only narrows what we offer.
 $coreVersion = is_string($_GET['core_version'] ?? null) ? CoreVersion::normalize($_GET['core_version']) : null;
-$entry = fluxfiles_pick_release($CATALOGUE[$module], $coreVersion);
+// `install=1` (bundles only): a first install has no core to report, so offer the newest.
+$latest = isset($BUNDLES[$module]) && ($_GET['install'] ?? '') === '1';
+$entry = fluxfiles_pick_release($CATALOGUE[$module], $coreVersion, $latest);
 if ($entry === null) {
     http_response_code(409);
     exit('no release of this module is compatible with core ' . ($coreVersion ?? '(unreported, assumed 1.0.3)') . ' - update core first');
