@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Security
+- `@fluxfiles/mcp` 1.1.1: refreshed the lockfile so the runtime dependency tree no longer carries known advisories (`npm audit --omit=dev` is clean). Transitive through `@modelcontextprotocol/sdk` / `express`: `body-parser` (high, fixed in 2.4.0), `qs` (medium, 6.16.1+; now 6.17.1), `fast-uri` (medium and low, 3.1.9). Dev-only: `vitest` 2.x to 4.1.12 (critical `vitest`, `tinypool` RCE gadgets, moderate `@vitest/mocker` and `vite` dev-server issues). No source or API change. One low dev-only `esbuild` advisory (dev-server on Windows) remains until `tsup` allows esbuild 0.28.
+
 ## [1.0.25] — 2026-11-08
 
 > Released: `wordpress-v1.1.2` (bundles core 1.2.0; first WordPress.org submission build). The licence-server sandbox support below is deployed separately (no package tag).
