@@ -50,6 +50,17 @@ final class LicenseMailer
      */
     public function sendLicense(array $record): bool
     {
+        try {
+            return $this->sendLicenseImpl($record);
+        } catch (\Throwable $e) {
+            error_log('license mail failed for jti ' . (string) ($record['jti'] ?? '?') . ': ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /** @param array<string,mixed> $record */
+    private function sendLicenseImpl(array $record): bool
+    {
         $to = (string) ($record['email'] ?? '');
         if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
             error_log('license mail: no valid recipient for jti ' . (string) ($record['jti'] ?? '?'));
@@ -67,6 +78,16 @@ final class LicenseMailer
      * optional FLUXFILES_OPS_EMAIL) so a paid order is never silent. Never throws.
      */
     public function sendRenewalUnmatched(string $email, string $plan, string $orderId): bool
+    {
+        try {
+            return $this->sendRenewalUnmatchedImpl($email, $plan, $orderId);
+        } catch (\Throwable $e) {
+            error_log('unmatched-renewal mail failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function sendRenewalUnmatchedImpl(string $email, string $plan, string $orderId): bool
     {
         $ok = true;
         if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -104,14 +125,23 @@ final class LicenseMailer
     /**
      * Customer mail: the content model rendered as a text part plus an HTML part.
      *
-     * @param array<string,mixed> $content see build()
+     * @param array<string,mixed> $content see prepare()
      */
     private function deliverContent(string $to, string $subject, array $content, string $failPrefix): bool
     {
         $content['to'] = $to;
         $content['subject'] = $subject;
-        $msg = $this->build($content);
-        return $this->deliver($to, $subject, $msg['text'], $msg['html'], $failPrefix);
+        $c = $this->prepare($content);
+        $text = $this->renderText($c);
+        // A broken HTML template (missing file, bad deploy) must not stop a paid order's
+        // key from being mailed: send the text part alone and say so loudly.
+        $html = null;
+        try {
+            $html = $this->renderHtml($c);
+        } catch (\Throwable $e) {
+            error_log('LICENSE MAIL: HTML template failed (' . $e->getMessage() . ') — sending text-only; copy the whole services/license-server dir incl. templates/');
+        }
+        return $this->deliver($to, $subject, $text, $html, $failPrefix);
     }
 
     private function deliver(string $to, string $subject, string $body, ?string $html = null, string $failPrefix = 'license mail failed for '): bool
@@ -139,16 +169,16 @@ final class LicenseMailer
 
     /**
      * @param array<string,mixed> $c
-     * @return array{text:string,html:string}
+     * @return array<string,mixed>
      */
-    private function build(array $c): array
+    private function prepare(array $c): array
     {
         $c['site'] = self::SITE;
         $origin = rtrim((string) getenv('FLUXFILES_LANDING_ORIGIN'), '/');
         $base = ($origin !== '' && str_starts_with($origin, 'https://')) ? $origin : self::SITE;
         $c['button'] = ['Read the docs', $base . '/docs'];
         $c += ['intro' => [], 'notes' => [], 'closing' => [], 'preheader' => (string) ($c['heading'] ?? ''), 'to' => '', 'subject' => ''];
-        return ['text' => $this->renderText($c), 'html' => $this->renderHtml($c)];
+        return $c;
     }
 
     /** @param array<string,mixed> $c */
@@ -200,9 +230,14 @@ final class LicenseMailer
         $e = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         // href is the one attribute a hostile value could turn into script: https only.
         $href = static fn (string $u): ?string => (str_starts_with($u, 'https://') && preg_match('/[\s"\'<>]/', $u) !== 1) ? $u : null;
+        $tpl = __DIR__ . '/templates/email.php';
+        if (!is_file($tpl)) {
+            // A failed `require` is a fatal compile error that no catch can see.
+            throw new \RuntimeException('templates/email.php is missing');
+        }
         ob_start();
         try {
-            require __DIR__ . '/templates/email.php';
+            require $tpl;
             return (string) ob_get_contents();
         } finally {
             ob_end_clean();
@@ -326,7 +361,7 @@ final class LicenseMailer
     /** @param array<string,mixed> $content */
     private function contentText(array $content): string
     {
-        return $this->build($content)['text'];
+        return $this->renderText($this->prepare($content));
     }
 
     /**
@@ -376,6 +411,17 @@ final class LicenseMailer
      * @param array<string,mixed> $record a row as returned by LicenseStore::record()/needingReminder()
      */
     public function sendReminder(array $record, string $bucket): bool
+    {
+        try {
+            return $this->sendReminderImpl($record, $bucket);
+        } catch (\Throwable $e) {
+            error_log('license reminder mail failed for jti ' . (string) ($record['jti'] ?? '?') . ': ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /** @param array<string,mixed> $record */
+    private function sendReminderImpl(array $record, string $bucket): bool
     {
         $to = (string) ($record['email'] ?? '');
         if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
