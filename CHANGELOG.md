@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.25] — 2026-11-08
+
+> Released: `wordpress-v1.1.2` (bundles core 1.2.0; first WordPress.org submission build). The licence-server sandbox support below is deployed separately (no package tag).
+
 ### Added
 - Licence server: **sandbox instance support** for running Polar sandbox on its own deployment. `FLUXFILES_MAIL_SUBJECT_PREFIX` (prepended to every subject, control characters stripped, max 32), `FLUXFILES_MAIL_ALLOW_TO` (exact addresses / `@domain` suffixes; other recipients are not sent, logged masked, and reported as handled so `mailed_at` is stamped and Polar never retries), and `FLUXFILES_LICENSE_INSTANCE` (adds `"instance"` to `/health`; the body is unchanged when unset). All default off. README "Sandbox instance" covers the separate test signing key, Polar sandbox org and webhook secret.
 
