@@ -283,14 +283,17 @@ final class LicenseStore
     /**
      * Licences that were issued but never reached the buyer — the backlog a mail
      * outage leaves behind. Revoked/refunded rows are excluded: re-sending a key to
-     * someone whose order was reversed is worse than not sending it.
+     * someone whose order was reversed is worse than not sending it. Manual rows
+     * (POST /issue: comp, enterprise, test keys) are excluded too: /issue never mails,
+     * so a NULL mailed_at there is not a delivery failure and /redeliver must not
+     * e-mail those keys.
      *
      * @return array<int,array<string,mixed>>
      */
     public function undelivered(int $limit = 100): array
     {
         $s = $this->db->prepare(
-            "SELECT * FROM licenses WHERE mailed_at IS NULL AND status = 'active'
+            "SELECT * FROM licenses WHERE mailed_at IS NULL AND status = 'active' AND gateway != 'manual'
              ORDER BY created_at ASC LIMIT ?"
         );
         $s->bindValue(1, $limit, PDO::PARAM_INT);

@@ -134,6 +134,16 @@ test('store: a new licence starts undelivered', function () use ($secretB64) {
     assertTrue(empty($rec['mailed_at']), 'mailed_at is not set at issue time');
 });
 
+test('store: undelivered() lists a failed webhook row but never a manually issued one', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $man = $iss->issue(['email'=>'m@x.com','plan'=>'pro','gateway'=>'manual','order_id'=>'manual-1'])['record'];
+    $web = $iss->issue(['email'=>'w@x.com','plan'=>'pro','gateway'=>'polar','order_id'=>'DEL-W1'])['record'];
+    $jtis = array_column($store->undelivered(), 'jti');
+    assertEqual([(string) $web['jti']], $jtis, 'only the webhook row is redelivered');
+    assertTrue(!in_array((string) $man['jti'], $jtis, true), 'manual row is not re-mailed');
+});
+
 test('store: markMailed records delivery, and only for that licence', function () use ($secretB64) {
     // Hold ONE store: issuer() builds a fresh ':memory:' database per call, so a
     // separately constructed store would be a different database entirely.
