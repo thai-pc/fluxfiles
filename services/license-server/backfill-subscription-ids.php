@@ -13,7 +13,8 @@ declare(strict_types=1);
  * is already set. Mirrors backfill-supersede-duplicates.php.
  *
  * After the ids are written (--apply) it keeps only the newest live row of each
- * subscription `active` (the rest `superseded`), idempotently, so legacy duplicates stop
+ * subscription `active` (the rest `superseded`; a head that was wrongly superseded is
+ * set back to `active`), idempotently, so legacy duplicates stop
  * surfacing in the reminder cron. A new order also supersedes the buyer's NULL-id rows
  * itself, so the deploy-to-backfill gap is safe. Rows Polar cannot resolve stay NULL.
  *
@@ -102,12 +103,12 @@ $clean = static fn (string $v): string => preg_match('/^[A-Za-z0-9_.:-]{1,100}$/
 $store = new LicenseStore();
 $rows = $store->polarRowsNeedingSubscription($limit);
 $supersedeStep = static function () use ($store, $apply): void {
-    $sids = $store->subscriptionsWithMultipleActive();
+    $sids = $store->subscriptionsNeedingRepair();
     $n = 0;
     foreach ($sids as $sid) {
         if ($apply) { $n += $store->supersedeOlderInSubscription($sid); }
     }
-    echo '[backfill] ' . count($sids) . ' subscription(s) with more than one active row' . ($apply ? ": {$n} older row(s) superseded\n" : " (dry run — would supersede the older ones)\n");
+    echo '[backfill] ' . count($sids) . ' subscription(s) to repair (several active rows, or a wrongly superseded head)' . ($apply ? ": {$n} row(s) changed\n" : " (dry run — no changes)\n");
 };
 if ($rows === []) {
     echo "[backfill] no Polar rows need a subscription id\n";

@@ -64,8 +64,8 @@ $ADM = ['Authorization: Bearer adm-tok', 'Content-Type: application/json'];
 $refresh = fn (string $key, string $q = '', ?string &$h = null) => req($pSrv, 'POST', '/refresh' . $q, '{"v":1,"client":"core/1.2.0"}', ['Authorization: Bearer ' . $key, 'Content-Type: application/json'], $h);
 $db = null;
 $ordN = 0;
-$hook = function (string $product, string $email, string $sub, string $reason = 'subscription_cycle', string $cus = 'cus1') use ($pSrv, $WH, &$ordN, &$db, $dir): array {
-    $ordN++; $oid = "ord_rf_{$ordN}_0123456789";
+$hook = function (string $product, string $email, string $sub, string $reason = 'subscription_cycle', string $cus = 'cus1', ?string $oid = null) use ($pSrv, $WH, &$ordN, &$db, $dir): array {
+    $ordN++; $oid ??= "ord_rf_{$ordN}_0123456789";
     $data = ['id' => $oid, 'status' => 'paid', 'product_id' => $product, 'checkout_id' => "co_rf_$ordN" . '_0000', 'customer_id' => $cus, 'billing_reason' => $reason,
         'customer' => ['id' => $cus, 'email' => $email, 'name' => 'T']] + ($sub !== '' ? ['subscription_id' => $sub] : []);
     $raw = json_encode(['type' => 'order.paid', 'data' => $data]);
@@ -214,6 +214,29 @@ test('a paid order on an admin-revoked subscription is recorded revoked, not mai
     eq([404, $notAvailable], [$refresh($a['license_key'])[0], $refresh($b['license_key'])[2]]);
     req($pSrv, 'POST', '/revoke', json_encode(['subscription_id' => 'sub_rvm', 'status' => 'active']), $ADM);
     [$c, $r] = $refresh($a['license_key']); eq([200, $b['jti']], [$c, $r['jti'] ?? null], 'restored');
+});
+
+test('a REDELIVERED order of a revoked subscription, or one redelivered after a refund, is never mailed (B4)', function () use ($hook, $pSrv, $ADM, $dir) {
+    $db = new PDO("sqlite:$dir/l.sqlite");
+    $mailed = fn (string $jti) => $db->query("SELECT mailed_at FROM licenses WHERE jti=" . $db->quote($jti))->fetchColumn();
+    $hook('prod_pm', 'b4@example.test', 'sub_b4');
+    req($pSrv, 'POST', '/revoke', json_encode(['subscription_id' => 'sub_b4', 'status' => 'revoked']), $ADM);
+    $b = $hook('prod_pm', 'b4@example.test', 'sub_b4', 'subscription_cycle', 'cus1', 'ord_b4_revoked_0001');
+    eq(null, $mailed($b['jti']) ?: null, 'first delivery: recorded revoked, not mailed');
+    $again = $hook('prod_pm', 'b4@example.test', 'sub_b4', 'subscription_cycle', 'cus1', 'ord_b4_revoked_0001');   // Polar redelivers
+    eq($b['jti'], $again['jti'], 'same order');
+    eq(null, $mailed($b['jti']) ?: null, 'redelivery: still not mailed');
+    // refund, then a redelivered order.paid of the refunded order (mail marker cleared to model "never delivered")
+    $c = $hook('prod_pm', 'b4r@example.test', 'sub_b4r', 'subscription_cycle', 'cus1', 'ord_b4_refunded_0001');
+    $raw = json_encode(['type' => 'order.refunded', 'data' => ['id' => 'ord_b4_refunded_0001', 'status' => 'refunded']]);
+    $id = 'msg_' . bin2hex(random_bytes(6)); $ts = (string) time(); $sig = base64_encode(hash_hmac('sha256', "$id.$ts.$raw", 'test-webhook-secret-0123456789abcdef', true));
+    eq(200, req($pSrv, 'POST', '/webhook/polar', $raw, ["webhook-id: $id", "webhook-timestamp: $ts", "webhook-signature: v1,$sig"])[0]);
+    $db->exec("UPDATE licenses SET mailed_at = NULL WHERE jti = " . $db->quote($c['jti']));
+    $hook('prod_pm', 'b4r@example.test', 'sub_b4r', 'subscription_cycle', 'cus1', 'ord_b4_refunded_0001');
+    eq(null, $mailed($c['jti']) ?: null, 'refunded order redelivered: not mailed');
+    // un-revoke: the newest key was never mailed -> the response says so
+    [, $r] = req($pSrv, 'POST', '/revoke', json_encode(['subscription_id' => 'sub_b4', 'status' => 'active']), $ADM);
+    ok(str_contains((string) ($r['note'] ?? ''), 'POST /redeliver'), json_encode($r));
 });
 
 test('edition upgrade inside one subscription is followed (pro -> studio)', function () use ($hook, $refresh) {

@@ -45,5 +45,25 @@ test('with the template present the HTML part is still produced (fallback is not
     ok(!str_contains((string) $out, 'HTML template failed') && str_contains((string) $out, 'bool(true)'), (string) $out);
 });
 
+// Empty / truncated template: the child gets a template that renders nothing, resp. without the key.
+$variant = function (string $tpl) use ($dir): array {
+    $d = $dir . '/v' . bin2hex(random_bytes(3)); mkdir("$d/templates", 0777, true);
+    foreach (['LicenseMailer.php', 'ProDownload.php', 'Plans.php'] as $fl) { copy(dirname(__DIR__) . '/' . $fl, "$d/$fl"); }
+    file_put_contents("$d/templates/email.php", $tpl);
+    file_put_contents("$d/run.php", '<?php ini_set("error_log", ' . var_export("$d/err.log", true) . '); require ' . var_export("$d/LicenseMailer.php", true) . ';
+$m = new FluxFiles\LicenseServer\LicenseMailer("log");
+echo json_encode($m->sendLicense(["jti"=>"j1","email"=>"buyer@example.test","plan"=>"pro","edition"=>"pro","modules"=>"share","license_key"=>"KEY-XYZ-789","expires"=>time()+86400*20]));');
+    $r = json_decode((string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg("$d/run.php") . ' 2>/dev/null'), true);
+    return [$r, (string) @file_get_contents("$d/err.log")];
+};
+test('an EMPTY template falls back to text-only with the loud log line', function () use ($variant) {
+    [$r, $log] = $variant('');
+    ok($r === true && str_contains($log, 'KEY-XYZ-789') && str_contains($log, 'HTML template failed'), $log);
+});
+test('a TRUNCATED template (no licence key in the HTML) falls back to text-only', function () use ($variant) {
+    [$r, $log] = $variant('<html><body>Hello, thanks for your order.</body></html>');
+    ok($r === true && str_contains($log, 'KEY-XYZ-789') && str_contains($log, 'lacks the licence key'), $log);
+});
+
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f>0?1:0);

@@ -33,11 +33,12 @@ final class LicenseIssuer
      */
     public function issue(array $order): array
     {
-        $plan = Plans::get((string) ($order['plan'] ?? ''));
-        if ($plan !== null && isset($plan['renews'])) {
-            return $this->store->transaction(fn () => $this->issueNow($order));
-        }
-        return $this->issueNow($order);
+        // One write transaction (BEGIN IMMEDIATE) for every issue: renewals need lookup -> mint ->
+        // record -> supersede to be atomic, and a subscription order must read the
+        // revoked-subscription marker and record in the same transaction, or a revoke landing
+        // between the two would leave the paid order's key active. It also serialises
+        // issuance, which keeps `issued` monotonic per subscription under concurrent webhooks.
+        return $this->store->transaction(fn () => $this->issueNow($order));
     }
 
     /** @return array{key:string, record:array<string,mixed>, reused:bool} */

@@ -136,7 +136,9 @@ final class ProDownload
         $bin = @inet_pton($ip);
         // ::ffff:a.b.c.d is an IPv4 client on a dual-stack listener: bucket it as the IPv4
         // address, not as the shared /64 of every mapped client.
-        if ($bin !== false && strlen($bin) === 16 && str_starts_with($bin, str_repeat("\0", 10) . "\xff\xff")) {
+        // NAT64 (64:ff9b::/96) carries an IPv4 client the same way.
+        if ($bin !== false && strlen($bin) === 16
+            && (str_starts_with($bin, str_repeat("\0", 10) . "\xff\xff") || str_starts_with($bin, "\0\x64\xff\x9b" . str_repeat("\0", 8)))) {
             return (string) inet_ntop(substr($bin, 12));
         }
         if ($bin !== false && strlen($bin) === 16) {

@@ -193,13 +193,16 @@ try {
         // would skip sending, leaving a paying customer with no key and nothing in any
         // log to say so. Tracking mailed_at makes Polar's retry the recovery mechanism.
         $jti = (string) $res['record']['jti'];
-        if (!$res['reused'] && (string) ($res['record']['status'] ?? 'active') !== 'active') {
-            // A paid order of an admin-revoked subscription: recorded, NOT mailed. Tell ops, who
-            // should also cancel the subscription in Polar so it stops billing.
-            error_log("polar webhook: order {$order['order_id']} of revoked subscription {$order['subscription_id']} recorded as {$res['record']['status']}, not mailed (jti {$jti})");
-            (new LicenseMailer())->sendOpsNotice('FluxFiles: payment on a revoked subscription',
-                "Order {$order['order_id']} was paid on subscription {$order['subscription_id']}, which you revoked. It is recorded as {$res['record']['status']} (licence {$jti}) and was not mailed.\n\nCancel the subscription in Polar so it stops billing, or POST /revoke {\"subscription_id\":\"{$order['subscription_id']}\",\"status\":\"active\"} to restore it.");
-            respond(200, ['issued' => true, 'jti' => $jti, 'status' => (string) $res['record']['status']]);
+        if ((string) ($res['record']['status'] ?? 'active') !== 'active') {
+            // Never mail a key that is not active, new order or redelivery alike (a revoked or
+            // refunded subscription's order must not be sent by a Polar retry). Ops is told
+            // once, on the first delivery. Revoked subscription: also cancel it in Polar.
+            if (!$res['reused']) {
+                error_log("polar webhook: order {$order['order_id']} of revoked subscription {$order['subscription_id']} recorded as {$res['record']['status']}, not mailed (jti {$jti})");
+                (new LicenseMailer())->sendOpsNotice('FluxFiles: payment on a revoked subscription',
+                    "Order {$order['order_id']} was paid on subscription {$order['subscription_id']}, which you revoked. It is recorded as {$res['record']['status']} (licence {$jti}) and was not mailed.\n\nCancel the subscription in Polar so it stops billing, or POST /revoke {\"subscription_id\":\"{$order['subscription_id']}\",\"status\":\"active\"} to restore it.");
+            }
+            respond(200, ['issued' => !$res['reused'], 'jti' => $jti, 'status' => (string) $res['record']['status']]);
         }
         if (empty($res['record']['mailed_at'])) {
             $mailRec = $res['record'];   // the mail points at the landing /download page: no update-server call here
@@ -479,7 +482,15 @@ try {
             if (preg_match('/^[A-Za-z0-9_.:-]{1,100}$/', $sid) !== 1) { respond(400, ['error' => 'invalid subscription_id']); }
             $n = $store->setStatusForSubscription($sid, $status);
             error_log("license revoke: subscription {$sid} -> {$status} ({$n} row(s))");
-            respond($n > 0 ? 200 : 404, ['updated' => $n > 0, 'rows' => $n]);
+            $out = ['updated' => $n > 0, 'rows' => $n];
+            $head = $status === 'active' ? $store->newestForSubscription($sid) : null;
+            if ($head !== null && (string) $head['status'] === 'active' && empty($head['mailed_at'])) {
+                // Orders paid while it was revoked were recorded but never mailed.
+                $out['note'] = 'the newest key was never mailed: run POST /redeliver to send it';
+                (new LicenseMailer())->sendOpsNotice('FluxFiles: subscription restored, newest key not mailed',
+                    "Subscription {$sid} was restored. Its newest licence ({$head['jti']}) was recorded while revoked and never mailed: run POST /redeliver to send it.");
+            }
+            respond($n > 0 ? 200 : 404, $out);
         }
         $ok = $store->setStatusCascade((string) ($b['jti'] ?? ''), $status);
         reportCascade($store, "{$status} licence " . (string) ($b['jti'] ?? ''));

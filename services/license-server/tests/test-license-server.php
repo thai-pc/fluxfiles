@@ -1334,7 +1334,7 @@ test('refresh: legacy Polar rows fall back to email+plan; two distinct subscript
     $other = putRow($st, ['email'=>'l@x.com','issued'=>1500,'customer_id'=>'cX']);
     assertEqual('current', $st->newestRefreshable($l2, 1700000000)['outcome'], 'a different known customer is not offered');
     putRow($st, ['email'=>'l@x.com','issued'=>1200,'subscription_id'=>'S1','customer_id'=>'c1']);
-    assertEqual('refreshed', $st->newestRefreshable($l1, 1700000000)['outcome'], 'one subscription id is still unambiguous');
+    assertEqual(['refused','ambiguous'], array_values(array_intersect_key($st->newestRefreshable($l1, 1700000000), ['outcome'=>1,'reason'=>1])), 'one subscription id plus newer id-less rows is ambiguous (A/B cross)');
     putRow($st, ['email'=>'l@x.com','issued'=>1300,'subscription_id'=>'S2','customer_id'=>'c1']);
     $r = $st->newestRefreshable($l1, 1700000000);
     assertEqual(['refused','ambiguous'], [$r['outcome'], $r['reason']]);
@@ -1508,6 +1508,43 @@ test('ipBucket: an IPv4-mapped IPv6 client is bucketed as its IPv4 address, plai
     assertTrue($b('::ffff:203.0.113.7') !== $b('::ffff:203.0.113.8'), 'two mapped clients do not share a bucket');
     assertEqual('203.0.113.7', $b('203.0.113.7'));
     assertTrue(str_ends_with($b('2001:db8::1'), '/64'));
+});
+
+
+test('A/B cross: legacy L1 -> id-less L2 -> sub A row is refused; a clean legacy -> sub row still refreshes', function () {
+    $st = new LicenseStore(':memory:');
+    $l1 = putRow($st, ['email'=>'ab@x.com','issued'=>1000,'status'=>'superseded']);
+    putRow($st, ['email'=>'ab@x.com','issued'=>1100,'status'=>'superseded']);
+    putRow($st, ['email'=>'ab@x.com','issued'=>1200,'subscription_id'=>'A']);
+    assertEqual('ambiguous', $st->newestRefreshable($l1, 1700000000)['reason']);
+    $c1 = putRow($st, ['email'=>'cl@x.com','issued'=>1000,'status'=>'superseded']);
+    $c2 = putRow($st, ['email'=>'cl@x.com','issued'=>1100,'subscription_id'=>'C']);
+    assertEqual($c2['jti'], $st->newestRefreshable($c1, 1700000000)['row']['jti']);
+});
+
+test('backfill repair: a wrongly superseded head is set back to active; revoked subscriptions are left alone (N-b)', function () {
+    $st = new LicenseStore(':memory:');
+    $a = putRow($st, ['subscription_id'=>'H','issued'=>1000,'status'=>'superseded']);
+    $b = putRow($st, ['subscription_id'=>'H','issued'=>1100,'status'=>'superseded']);
+    $r = putRow($st, ['subscription_id'=>'RV','issued'=>1000,'status'=>'revoked']);
+    assertEqual(['H'], $st->subscriptionsNeedingRepair());
+    $st->supersedeOlderInSubscription('H');
+    assertEqual(['superseded','active'], [$st->findByJti($a['jti'])['status'], $st->findByJti($b['jti'])['status']]);
+    assertEqual([], $st->subscriptionsNeedingRepair(), 'idempotent');
+});
+
+test('rateHit refuses a period longer than the 2 h sweep horizon (N-e)', function () {
+    $st = new LicenseStore(':memory:');
+    $threw = false;
+    try { $st->rateHit('x', 7201, 1); } catch (\InvalidArgumentException) { $threw = true; }
+    assertTrue($threw);
+    assertTrue($st->rateHit('x', 7200, 1));
+});
+
+test('ipBucket unwraps NAT64 64:ff9b::/96 like ::ffff: (N-f)', function () {
+    $b = fn ($ip) => \FluxFiles\LicenseServer\ProDownload::ipBucket($ip);
+    assertEqual('203.0.113.7', $b('64:ff9b::203.0.113.7'));
+    assertTrue($b('64:ff9b::203.0.113.7') !== $b('64:ff9b::203.0.113.8'));
 });
 
 

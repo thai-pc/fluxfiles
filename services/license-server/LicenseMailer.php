@@ -138,7 +138,16 @@ final class LicenseMailer
         $html = null;
         try {
             $html = $this->renderHtml($c);
+            // An empty or truncated template must not replace the key with a blank mail body.
+            if (trim($html) === '') {
+                throw new \RuntimeException('template rendered empty');
+            }
+            $key = (string) ($c['key'] ?? '');
+            if ($key !== '' && !str_contains($html, htmlspecialchars($key, ENT_QUOTES | ENT_HTML5, 'UTF-8'))) {
+                throw new \RuntimeException('template output lacks the licence key');
+            }
         } catch (\Throwable $e) {
+            $html = null;
             error_log('LICENSE MAIL: HTML template failed (' . $e->getMessage() . ') — sending text-only; copy the whole services/license-server dir incl. templates/');
         }
         return $this->deliver($to, $subject, $text, $html, $failPrefix);

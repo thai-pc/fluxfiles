@@ -225,6 +225,11 @@ final class LicenseStore
     {
         $now ??= time();
         $periodSec = max(1, $periodSec);
+        // The sweep below keeps 2 h of windows for EVERY bucket, so no bucket may use a longer
+        // period than that (or its live window would be swept by another caller's call).
+        if ($periodSec > 7200) {
+            throw new \InvalidArgumentException('rateHit: period must be at most 7200 s (the sweep horizon)');
+        }
         // `win` is the window's START as a unix timestamp, so every bucket's rows are
         // comparable no matter what period their caller uses. (It used to be intdiv(now, period):
         // the sweep below then compared one caller's window numbers with another's, and a
@@ -646,8 +651,8 @@ final class LicenseStore
     }
 
     /**
-     * Keep only the newest-issued live row of a subscription `active`: the rest of its
-     * `active` rows become `superseded`. Idempotent; used by the backfill once ids are known.
+     * Keep only the newest-issued live row of a subscription `active` (reviving it if it was
+     * wrongly superseded): the rest of its `active` rows become `superseded`. Idempotent; used by the backfill once ids are known.
      */
     public function supersedeOlderInSubscription(string $subscriptionId): int
     {
@@ -656,7 +661,35 @@ final class LicenseStore
         );
         $s->execute([$subscriptionId]);
         $head = $s->fetchColumn();
-        return $head === false ? 0 : $this->supersedeActiveForSubscription($subscriptionId, (string) $head);
+        if ($head === false) {
+            return 0;
+        }
+        // A head that was wrongly superseded (no `active` row left) is brought back first.
+        $this->db->prepare("UPDATE licenses SET status = 'active' WHERE jti = ? AND status = 'superseded'")->execute([$head]);
+        return $this->supersedeActiveForSubscription($subscriptionId, (string) $head);
+    }
+
+    /**
+     * Subscriptions the backfill must repair: more than one `active` row, or none while a
+     * live (`superseded`) row exists, i.e. a head that was wrongly superseded.
+     *
+     * @return string[]
+     */
+    public function subscriptionsNeedingRepair(): array
+    {
+        return $this->db->query(
+            "SELECT subscription_id FROM licenses WHERE subscription_id IS NOT NULL GROUP BY subscription_id
+             HAVING SUM(status = 'active') > 1 OR (SUM(status = 'active') = 0 AND SUM(status = 'superseded') > 0)"
+        )->fetchAll(\PDO::FETCH_COLUMN) ?: [];
+    }
+
+    /** The newest-issued row of a subscription, whatever its status. @return array<string,mixed>|null */
+    public function newestForSubscription(string $subscriptionId): ?array
+    {
+        $s = $this->db->prepare('SELECT * FROM licenses WHERE subscription_id = ? ORDER BY issued DESC, id DESC LIMIT 1');
+        $s->execute([$subscriptionId]);
+        $r = $s->fetch();
+        return $r === false ? null : $r;
     }
 
     /** @return string[] subscription ids that have more than one `active` row */
@@ -772,6 +805,15 @@ final class LicenseStore
                 }
                 if (count($sids) >= 2) {
                     return $no('ambiguous');
+                }
+                if (count($sids) === 1) {
+                    // One subscription id plus NEWER id-less rows of the same buyer/plan: those
+                    // may belong to a second subscription (A/B cross), so refuse.
+                    foreach ($chain as $r) {
+                        if ((string) ($r['subscription_id'] ?? '') === '' && $r['jti'] !== $jti && (int) $r['issued'] > (int) $presented['issued']) {
+                            return $no('ambiguous');
+                        }
+                    }
                 }
             }
         }
