@@ -62,6 +62,10 @@ final class LicenseStore
         // Small, short-lived rows; pruned on write.
         $this->db->exec('CREATE TABLE IF NOT EXISTS rate_hits (bucket TEXT NOT NULL, win INTEGER NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (bucket, win))');
         $this->db->exec('CREATE TABLE IF NOT EXISTS dl_cache (jti TEXT PRIMARY KEY, url TEXT NOT NULL, version TEXT, expires_at INTEGER NOT NULL)');
+        // Subscriptions an admin revoked/refunded by id. A later order.paid of the same
+        // subscription is still issued (the buyer paid) but stays in that status, so
+        // revoke-by-subscription outlives the next billing cycle.
+        $this->db->exec('CREATE TABLE IF NOT EXISTS revoked_subscriptions (subscription_id TEXT PRIMARY KEY, status TEXT NOT NULL, at INTEGER NOT NULL)');
         $this->db->exec('CREATE INDEX IF NOT EXISTS idx_email ON licenses(email)');
         $this->db->exec('CREATE INDEX IF NOT EXISTS idx_order ON licenses(gateway, order_id)');
 
@@ -220,13 +224,20 @@ final class LicenseStore
     public function rateHit(string $bucket, int $periodSec, int $limit, ?int $now = null): bool
     {
         $now ??= time();
-        $win = intdiv($now, max(1, $periodSec));
+        $periodSec = max(1, $periodSec);
+        // `win` is the window's START as a unix timestamp, so every bucket's rows are
+        // comparable no matter what period their caller uses. (It used to be intdiv(now, period):
+        // the sweep below then compared one caller's window numbers with another's, and a
+        // /pro-download call (600 s) wiped every hourly /refresh window.) Rows written by the
+        // old format are small integers, far below the sweep horizon: the first sweep after
+        // deploy drops them, which only forgives the current window's hits once.
+        $win = intdiv($now, $periodSec) * $periodSec;
         $this->db->prepare('INSERT INTO rate_hits (bucket, win, n) VALUES (?, ?, 1) ON CONFLICT(bucket, win) DO UPDATE SET n = n + 1')->execute([$bucket, $win]);
         $s = $this->db->prepare('SELECT n FROM rate_hits WHERE bucket = ? AND win = ?');
         $s->execute([$bucket, $win]);
         if (random_int(1, 50) === 1) {
-            // prune windows older than an hour
-            $this->db->prepare('DELETE FROM rate_hits WHERE win < ?')->execute([intdiv($now - 3600, max(1, $periodSec))]);
+            // Prune windows that started more than 2 h ago: longer than any period used (<= 1 h).
+            $this->db->prepare('DELETE FROM rate_hits WHERE win < ?')->execute([$now - 7200]);
         }
         return (int) $s->fetchColumn() <= $limit;
     }
@@ -306,7 +317,7 @@ final class LicenseStore
     public function undelivered(int $limit = 100): array
     {
         $s = $this->db->prepare(
-            "SELECT * FROM licenses WHERE mailed_at IS NULL AND status = 'active' AND gateway != 'manual'
+            "SELECT * FROM licenses WHERE mailed_at IS NULL AND status = 'active' AND gateway IS NOT 'manual'
              ORDER BY created_at ASC LIMIT ?"
         );
         $s->bindValue(1, $limit, PDO::PARAM_INT);
@@ -577,24 +588,81 @@ final class LicenseStore
         if ($subscriptionId === '') {
             return 0;
         }
-        if ($status === 'active') {
-            return $this->transaction(function () use ($subscriptionId): int {
-                $rows = $this->db->prepare("SELECT jti FROM licenses WHERE subscription_id = ? ORDER BY issued DESC, id DESC");
-                $rows->execute([$subscriptionId]);
-                $jtis = $rows->fetchAll(\PDO::FETCH_COLUMN);
+        return $this->transaction(function () use ($subscriptionId, $status): int {
+            if ($status === 'active') {
+                $this->db->prepare('DELETE FROM revoked_subscriptions WHERE subscription_id = ?')->execute([$subscriptionId]);
+                // Only `revoked` rows come back: a `refunded` row stays refunded. The newest
+                // non-refunded row becomes the active head, the revived older ones superseded.
+                $q = $this->db->prepare("SELECT jti, status FROM licenses WHERE subscription_id = ? AND status != 'refunded' ORDER BY issued DESC, id DESC");
+                $q->execute([$subscriptionId]);
                 $n = 0;
-                $up = $this->db->prepare('UPDATE licenses SET status = ? WHERE jti = ? AND status IN (\'revoked\',\'refunded\',\'active\',\'superseded\') AND status != ?');
-                foreach ($jtis as $i => $jti) {
-                    $want = $i === 0 ? 'active' : 'superseded';
-                    $up->execute([$want, $jti, $want]);
+                $up = $this->db->prepare("UPDATE licenses SET status = ? WHERE jti = ? AND status = 'revoked'");
+                foreach ($q->fetchAll() as $i => $r) {
+                    if ($r['status'] !== 'revoked') { continue; }
+                    $up->execute([$i === 0 ? 'active' : 'superseded', $r['jti']]);
                     $n += $up->rowCount();
                 }
                 return $n;
-            });
+            }
+            $this->db->prepare('INSERT INTO revoked_subscriptions (subscription_id, status, at) VALUES (?, ?, ?) ON CONFLICT(subscription_id) DO UPDATE SET status = excluded.status, at = excluded.at')
+                ->execute([$subscriptionId, $status, time()]);
+            $s = $this->db->prepare("UPDATE licenses SET status = ? WHERE subscription_id = ? AND status IN ('active','superseded')");
+            $s->execute([$status, $subscriptionId]);
+            return $s->rowCount();
+        });
+    }
+
+    /** The status an admin revoked this subscription with ('revoked'/'refunded'), or null when it is not revoked. */
+    public function revokedSubscriptionStatus(string $subscriptionId): ?string
+    {
+        if ($subscriptionId === '') {
+            return null;
         }
-        $s = $this->db->prepare("UPDATE licenses SET status = ? WHERE subscription_id = ? AND status IN ('active','superseded')");
-        $s->execute([$status, $subscriptionId]);
+        $s = $this->db->prepare('SELECT status FROM revoked_subscriptions WHERE subscription_id = ?');
+        $s->execute([$subscriptionId]);
+        $r = $s->fetchColumn();
+        return $r === false ? null : (string) $r;
+    }
+
+    /**
+     * Retire the buyer's `active` legacy Polar rows (no subscription id yet) for this plan,
+     * with a compatible customer id (equal, or either unknown). A new subscription-linked key
+     * is the newest of what those legacy rows were; without this they linger as `active` and
+     * the reminder cron mails a paying customer "your subscription lapsed".
+     */
+    public function supersedeLegacyForBuyerPlan(string $email, string $plan, string $customerId, string $exceptJti): int
+    {
+        if (trim($email) === '' || $plan === '') {
+            return 0;
+        }
+        $s = $this->db->prepare(
+            "UPDATE licenses SET status = 'superseded'
+             WHERE lower(email) = lower(?) AND plan = ? AND status = 'active' AND gateway = 'polar'
+               AND subscription_id IS NULL AND jti != ?
+               AND (? = '' OR customer_id IS NULL OR customer_id = '' OR customer_id = ?)"
+        );
+        $s->execute([trim($email), $plan, $exceptJti, $customerId, $customerId]);
         return $s->rowCount();
+    }
+
+    /**
+     * Keep only the newest-issued live row of a subscription `active`: the rest of its
+     * `active` rows become `superseded`. Idempotent; used by the backfill once ids are known.
+     */
+    public function supersedeOlderInSubscription(string $subscriptionId): int
+    {
+        $s = $this->db->prepare(
+            "SELECT jti FROM licenses WHERE subscription_id = ? AND status IN ('active','superseded') ORDER BY issued DESC, id DESC LIMIT 1"
+        );
+        $s->execute([$subscriptionId]);
+        $head = $s->fetchColumn();
+        return $head === false ? 0 : $this->supersedeActiveForSubscription($subscriptionId, (string) $head);
+    }
+
+    /** @return string[] subscription ids that have more than one `active` row */
+    public function subscriptionsWithMultipleActive(): array
+    {
+        return $this->db->query("SELECT subscription_id FROM licenses WHERE subscription_id IS NOT NULL AND status = 'active' GROUP BY subscription_id HAVING COUNT(*) > 1")->fetchAll(\PDO::FETCH_COLUMN) ?: [];
     }
 
     /** Highest `issued` among a subscription's rows (0 when none): the floor for the next key's `issued`. */
@@ -675,6 +743,7 @@ final class LicenseStore
         }
 
         $jti = (string) $presented['jti'];
+        $renewChain = false;
         $sid = (string) ($presented['subscription_id'] ?? '');
         if ($sid !== '') {
             $q = $this->db->prepare('SELECT * FROM licenses WHERE subscription_id = ?');
@@ -682,7 +751,12 @@ final class LicenseStore
             $chain = $q->fetchAll();
         } else {
             $chain = $this->renewalDescendants($jti);
+            $renewChain = $chain !== [];
+            // email+plan fallback: ONLY for unclassified legacy rows (no subscription id and
+            // no billing_reason). A classified one-time purchase (two `lifetime` orders by one
+            // buyer) must never be offered another order's key.
             if ($chain === [] && (string) ($presented['gateway'] ?? '') === 'polar' && empty($presented['renews_jti'])
+                && ($presented['billing_reason'] ?? null) === null
                 && !isset((Plans::get((string) ($presented['plan'] ?? '')) ?? [])['renews'])) {
                 $q = $this->db->prepare("SELECT * FROM licenses WHERE gateway = 'polar' AND lower(email) = lower(?) AND plan = ?");
                 $q->execute([trim((string) $presented['email']), (string) $presented['plan']]);
@@ -692,6 +766,7 @@ final class LicenseStore
                 foreach ($q->fetchAll() as $r) {
                     $rc = (string) ($r['customer_id'] ?? '');
                     if ($cid !== '' && $rc !== '' && $rc !== $cid) { continue; }
+                    if ((string) ($r['subscription_id'] ?? '') === '' && ($r['billing_reason'] ?? null) !== null) { continue; }
                     $chain[] = $r;
                     if ((string) ($r['subscription_id'] ?? '') !== '') { $sids[(string) $r['subscription_id']] = true; }
                 }
@@ -704,6 +779,9 @@ final class LicenseStore
         // The chain's newest row, whatever its status: if that is revoked/refunded the chain is dead.
         $newest = null;
         foreach ($chain as $r) {
+            // renews_jti chains: a cancelled tail (R2 refunded) does not kill the chain, the
+            // cascade already brought R1 back; the presented key just refreshes to R1.
+            if ($renewChain && in_array((string) $r['status'], ['revoked', 'refunded'], true)) { continue; }
             if ($newest === null || (int) $r['issued'] > (int) $newest['issued']
                 || ((int) $r['issued'] === (int) $newest['issued'] && (int) $r['id'] > (int) $newest['id'])) {
                 $newest = $r;

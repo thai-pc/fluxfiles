@@ -91,7 +91,7 @@ test('the server migrates a pre-existing old-schema DB; the legacy row survives 
 
 test('legacy row (no subscription id) refreshes through the email+plan fallback after its next cycle', function () use ($hook, $refresh, $legacy) {
     [$c, $b] = $refresh($legacy['key']); eq(200, $c); eq('current', $b['status'], 'nothing newer yet');
-    $n = $hook('prod_pm', 'legacy@example.test', '');         // renewal webhook without a subscription id
+    $n = $hook('prod_pm', 'legacy@example.test', '', '');         // renewal webhook without a subscription id
     [$c, $b] = $refresh($legacy['key']); eq(200, $c, json_encode($b));
     eq(['refreshed', $n['license_key'], $n['jti']], [$b['status'], $b['license_key'], $b['jti']]);
     eq([(int) $n['issued'], (int) $n['expires']], [$b['issued'], $b['expires']]);
@@ -173,7 +173,7 @@ test('every refusal is one byte-identical 404: revoked, refunded, support, stale
     $sig2 = $b64(sodium_crypto_sign_detached("$hh.$pl2", $rawSecret));
     $bodies['mismatch (valid sig, other bytes)'] = $refresh("$hh.$pl2.$sig2");
     // ambiguous: a legacy row plus rows of two distinct subscriptions for the same email+plan
-    $a0 = $hook('prod_pm', 'amb@example.test', '');
+    $a0 = $hook('prod_pm', 'amb@example.test', '', '');
     $hook('prod_pm', 'amb@example.test', 'sub_amb1'); $hook('prod_pm', 'amb@example.test', 'sub_amb2');
     $bodies['ambiguous'] = $refresh($a0['license_key']);
 
@@ -196,6 +196,24 @@ test('/revoke {subscription_id} stops every key of that subscription from refres
     eq(404, req($pSrv, 'POST', '/revoke', json_encode(['subscription_id' => 'sub_nope', 'status' => 'revoked']), $ADM)[0]);
     eq(400, req($pSrv, 'POST', '/revoke', json_encode(['subscription_id' => 'bad id!', 'status' => 'revoked']), $ADM)[0]);
     eq(401, req($pSrv, 'POST', '/revoke', json_encode(['subscription_id' => 'sub_rs']), ['Content-Type: application/json'])[0], 'admin only');
+});
+
+test('the Bearer scheme is matched case-insensitively (N13)', function () use ($pSrv, $hook) {
+    $k = $hook('prod_pm', 'case@example.test', 'sub_case')['license_key'];
+    foreach (['bearer', 'BEARER', 'Bearer'] as $scheme) {
+        eq(200, req($pSrv, 'POST', '/refresh', '{}', ["Authorization: $scheme $k"])[0], $scheme);
+    }
+});
+
+test('a paid order on an admin-revoked subscription is recorded revoked, not mailed, and cannot refresh (N4)', function () use ($hook, $refresh, $pSrv, $ADM, $notAvailable, $dir) {
+    $a = $hook('prod_pm', 'rvm@example.test', 'sub_rvm');
+    req($pSrv, 'POST', '/revoke', json_encode(['subscription_id' => 'sub_rvm', 'status' => 'revoked']), $ADM);
+    $b = $hook('prod_pm', 'rvm@example.test', 'sub_rvm');
+    $db = new PDO("sqlite:$dir/l.sqlite");
+    eq(['revoked', null], [$db->query("SELECT status FROM licenses WHERE jti='{$b['jti']}'")->fetchColumn(), $db->query("SELECT mailed_at FROM licenses WHERE jti='{$b['jti']}'")->fetchColumn() ?: null]);
+    eq([404, $notAvailable], [$refresh($a['license_key'])[0], $refresh($b['license_key'])[2]]);
+    req($pSrv, 'POST', '/revoke', json_encode(['subscription_id' => 'sub_rvm', 'status' => 'active']), $ADM);
+    [$c, $r] = $refresh($a['license_key']); eq([200, $b['jti']], [$c, $r['jti'] ?? null], 'restored');
 });
 
 test('edition upgrade inside one subscription is followed (pro -> studio)', function () use ($hook, $refresh) {
@@ -224,7 +242,7 @@ test('throttle: the 11th call in an hour for one licence is 429 with Retry-After
     ok(stripos($h, 'Retry-After:') !== false, 'Retry-After');
     $k2 = $hook('prod_pm', 'th2@example.test', 'sub_th2');
     eq(200, $refresh($k2['license_key'])[0], 'a different licence is not throttled');
-    $db->prepare("INSERT INTO rate_hits (bucket, win, n) VALUES ('refresh-ip:127.0.0.1', ?, 120) ON CONFLICT(bucket, win) DO UPDATE SET n = 120")->execute([intdiv(time(), 3600)]);
+    $db->prepare("INSERT INTO rate_hits (bucket, win, n) VALUES ('refresh-ip:127.0.0.1', ?, 120) ON CONFLICT(bucket, win) DO UPDATE SET n = 120")->execute([intdiv(time(), 3600) * 3600]);
     $k3 = $hook('prod_pm', 'th3@example.test', 'sub_th3');
     eq(429, $refresh($k3['license_key'])[0], 'IP bucket full');
     $db->exec('DELETE FROM rate_hits');
@@ -259,12 +277,15 @@ file_put_contents("$dir/polar.php", '<?php
 $p = parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH);
 if (($_SERVER["HTTP_AUTHORIZATION"] ?? "") !== "Bearer fake-polar-token-123") { http_response_code(401); echo "{}"; exit; }
 $map = json_decode(file_get_contents(' . var_export("$dir/orders.json", true) . '), true);
+if (preg_match("#^/v1/orders/ord-bf-rl$#", $p)) { $c = ' . var_export("$dir/rl.count", true) . '; $n = (int) @file_get_contents($c); file_put_contents($c, (string) ($n + 1)); if ($n < 2) { http_response_code(429); echo "{}"; exit; } }
 if (preg_match("#^/v1/orders/([^/]+)$#", $p, $m) && isset($map[$m[1]])) { header("Content-Type: application/json"); echo json_encode($map[$m[1]]); exit; }
 http_response_code(404); echo "{}";');
 file_put_contents("$dir/orders.json", json_encode([
     'ord-bf-sub'   => ['id' => 'ord-bf-sub', 'subscription_id' => 'sub_bf_1', 'billing_reason' => 'subscription_cycle'],
     'ord-bf-nest'  => ['id' => 'ord-bf-nest', 'subscription' => ['id' => 'sub_bf_2'], 'billing_reason' => 'subscription_create'],
     'ord-bf-once'  => ['id' => 'ord-bf-once', 'subscription_id' => null, 'billing_reason' => 'purchase'],
+    'ord-bf-old'   => ['id' => 'ord-bf-old', 'subscription_id' => 'sub_bf_1', 'billing_reason' => 'subscription_cycle'],
+    'ord-bf-rl'    => ['id' => 'ord-bf-rl', 'subscription_id' => 'sub_bf_3', 'billing_reason' => 'subscription_create'],
 ]));
 $start($pPolar, "$dir/polar.php", ['PATH' => getenv('PATH')]);
 $bfDb = "$dir/bf.sqlite";
@@ -275,6 +296,8 @@ $st = new \FluxFiles\LicenseServer\LicenseStore($bfDb);
 foreach ([['jti-bf-1', 'ord-bf-sub', 'polar'], ['jti-bf-2', 'ord-bf-nest', 'polar'], ['jti-bf-3', 'ord-bf-once', 'polar'], ['jti-bf-4', 'ord-bf-missing', 'polar'], ['jti-bf-5', 'ord-bf-manual', 'manual']] as [$j, $o, $g]) {
     $st->record(['jti' => $j, 'email' => "$j@example.test", 'plan' => 'pro-monthly', 'license_key' => "k-$j", 'gateway' => $g, 'order_id' => $o]);
 }
+$st->record(['jti' => 'jti-bf-7', 'email' => 'seven@example.test', 'plan' => 'pro-monthly', 'license_key' => 'k-7', 'gateway' => 'polar', 'order_id' => 'ord-bf-old', 'issued' => 100]);   // older legacy cycle of sub_bf_1, still active
+$st->record(['jti' => 'jti-bf-8', 'email' => 'eight@example.test', 'plan' => 'pro-monthly', 'license_key' => 'k-8', 'gateway' => 'polar', 'order_id' => 'ord-bf-rl']);
 $st->record(['jti' => 'jti-bf-6', 'email' => 'six@example.test', 'plan' => 'pro-monthly', 'license_key' => 'k-6', 'gateway' => 'polar', 'order_id' => 'ord-bf-done', 'subscription_id' => 'sub_existing']);
 $run = function (array $args, array $env = []) use ($bfDb, $pPolar): array {
     $cmd = array_merge([PHP_BINARY, dirname(__DIR__) . '/backfill-subscription-ids.php'], $args);
@@ -282,33 +305,41 @@ $run = function (array $args, array $env = []) use ($bfDb, $pPolar): array {
     $out = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
     return [proc_close($pr), $out];
 };
-$api = "--api-base=http://127.0.0.1:$pPolar/v1";
+$api = "--api-base=http://127.0.0.1:$pPolar/v1 --backoff-ms=10";
 $col = fn (string $c) => (new PDO("sqlite:$bfDb"))->query("SELECT jti || '=' || COALESCE($c, '~') FROM licenses ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
 
 test('backfill dry run reads Polar, reports, and changes nothing; the token is never printed', function () use ($run, $api, $col) {
     $before = $col('subscription_id');
-    [$code, $out] = $run([$api, '--delay-ms=0'], ['POLAR_TOKEN' => 'fake-polar-token-123']);
+    [$code, $out] = $run([...explode(' ', $api), '--delay-ms=0'], ['POLAR_TOKEN' => 'fake-polar-token-123']);
     eq(2, $code, 'one order is unknown to Polar -> non-zero so cron notices');
     ok(str_contains($out, 'dry run') && str_contains($out, 'subscription=sub_bf_1') && str_contains($out, 'subscription=sub_bf_2'), $out);
     ok(!str_contains($out, 'fake-polar-token-123'), 'token not printed');
     eq($before, $col('subscription_id'), 'DB untouched');
 });
 test('backfill without a token refuses (exit 1); a wrong token stops on the first 401; --api-base must be Polar or loopback', function () use ($run, $api) {
-    [$c, $o] = $run([$api]); eq(1, $c); ok(str_contains($o, 'no Polar token'));
-    [$c, $o] = $run([$api, '--delay-ms=0'], ['POLAR_TOKEN' => 'wrong-token-xyz']); eq(1, $c); ok(!str_contains($o, 'wrong-token-xyz'), 'token not printed');
+    [$c, $o] = $run([...explode(' ', $api)]); eq(1, $c); ok(str_contains($o, 'no Polar token'));
+    [$c, $o] = $run([...explode(' ', $api), '--delay-ms=0'], ['POLAR_TOKEN' => 'wrong-token-xyz']); eq(1, $c); ok(!str_contains($o, 'wrong-token-xyz'), 'token not printed');
     [$c] = $run(['--api-base=https://evil.example/v1'], ['POLAR_TOKEN' => 'x']); eq(1, $c, 'token cannot be sent elsewhere');
     [$c] = $run(['--api-base=http://evil.example/v1'], ['POLAR_TOKEN' => 'x']); eq(1, $c);
+    foreach (['http://127.0.0.1@evil.example/v1', 'http://user:pw@127.0.0.1/v1', 'http://127.0.0.1\\@evil.example/v1', 'https://api.polar.sh@evil.example/v1'] as $bad) {
+        [$c, $o] = $run(['--api-base=' . $bad], ['POLAR_TOKEN' => 'x']); eq(1, $c, $bad);
+    }
 });
 test('backfill --apply writes subscription ids (flat and nested), marks one-time orders, leaves manual / failed / already-set rows', function () use ($run, $api, $col, $dir) {
     file_put_contents("$dir/tok", "fake-polar-token-123\n");
-    [$code, $out] = $run([$api, '--delay-ms=0', '--apply', "--token-file=$dir/tok"]);
+    [$code, $out] = $run([...explode(' ', $api), '--delay-ms=0', '--apply', "--token-file=$dir/tok"]);
     eq(2, $code); ok(!str_contains($out, 'fake-polar-token-123'), 'token not printed (file mode)');
-    eq(['jti-bf-1=sub_bf_1', 'jti-bf-2=sub_bf_2', 'jti-bf-3=~', 'jti-bf-4=~', 'jti-bf-5=~', 'jti-bf-6=sub_existing'], $col('subscription_id'));
-    eq(['jti-bf-1=subscription_cycle', 'jti-bf-2=subscription_create', 'jti-bf-3=purchase', 'jti-bf-4=~', 'jti-bf-5=~', 'jti-bf-6=~'], $col('billing_reason'));
+    eq(['jti-bf-1=sub_bf_1', 'jti-bf-2=sub_bf_2', 'jti-bf-3=~', 'jti-bf-4=~', 'jti-bf-5=~', 'jti-bf-7=sub_bf_1', 'jti-bf-8=sub_bf_3', 'jti-bf-6=sub_existing'], $col('subscription_id'));
+    eq(['jti-bf-1=subscription_cycle', 'jti-bf-2=subscription_create', 'jti-bf-3=purchase', 'jti-bf-4=~', 'jti-bf-5=~', 'jti-bf-7=subscription_cycle', 'jti-bf-8=subscription_create', 'jti-bf-6=~'], $col('billing_reason'));
+});
+test('backfill --apply: a Polar 429 is retried with backoff; older active rows of a subscription are superseded (idempotently)', function () use ($bfDb, $dir) {
+    $db = new PDO("sqlite:$bfDb");
+    eq(['active', 'superseded'], [$db->query("SELECT status FROM licenses WHERE jti='jti-bf-1'")->fetchColumn(), $db->query("SELECT status FROM licenses WHERE jti='jti-bf-7'")->fetchColumn()]);
+    ok((int) file_get_contents("$dir/rl.count") >= 3, 'two 429s were retried, then a 200');
 });
 test('backfill is idempotent: a re-run only retries what failed', function () use ($run, $api, $col) {
     $before = $col('subscription_id');
-    [$code, $out] = $run([$api, '--delay-ms=0', '--apply'], ['POLAR_TOKEN' => 'fake-polar-token-123']);
+    [$code, $out] = $run([...explode(' ', $api), '--delay-ms=0', '--apply'], ['POLAR_TOKEN' => 'fake-polar-token-123']);
     ok(str_contains($out, '1 Polar row(s) to look up'), $out);
     eq($before, $col('subscription_id'));
 });

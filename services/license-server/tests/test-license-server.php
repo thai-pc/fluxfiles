@@ -1414,5 +1414,102 @@ test('refresh: rateHit buckets IPv6 by /64 via ProDownload::ipBucket (reused by 
 });
 
 
+// ── Review fixes: throttle sweep, legacy supersede, fallback scope, un-revoke, chains ───
+
+test('rateHit: hits on one bucket/period never reset another bucket\'s current window (B2)', function () {
+    $st = new LicenseStore(':memory:');
+    $now = 1800000000;
+    for ($i = 0; $i < 11; $i++) { $st->rateHit('refresh-jti:abc', 3600, 10, $now); }
+    assertEqual(false, $st->rateHit('refresh-jti:abc', 3600, 10, $now), 'throttled');
+    for ($i = 0; $i < 600; $i++) { $st->rateHit('dl-ip:1.2.3.4', 600, 10, $now + $i % 3); }   // many sweeps by a 600 s caller
+    assertEqual(false, $st->rateHit('refresh-jti:abc', 3600, 10, $now + 5), 'the hourly window survived');
+    // old-format rows (small window numbers) are swept harmlessly
+    for ($i = 0; $i < 300; $i++) { $st->rateHit('x', 600, 1000, $now + 7300); }
+    assertEqual(true, $st->rateHit('refresh-jti:abc', 3600, 10, $now + 7300), 'a later window starts fresh');
+});
+
+test('supersede: legacy NULL-subscription rows are retired by the first subscription-linked order (B3), before and after backfill', function () use ($secretB64) {
+    [$st, $iss] = refreshRig($secretB64);
+    $o1 = $iss->issue(polarOrder('lg@x.com','pro-monthly','lg-1','','cusL',''))['record'];
+    // o2 is another legacy cycle that the (old) code left active next to o1
+    $o2 = $iss->issue(polarOrder('lg@x.com','pro-monthly','lg-2','','cusL',''))['record'];
+    $st->setStatus($o1['jti'], 'active');
+    $o3 = $iss->issue(polarOrder('lg@x.com','pro-monthly','lg-3','sub_A','cusL'))['record'];
+    $active = fn () => array_values(array_column(array_filter($st->all(), fn ($r) => $r['status'] === 'active'), 'jti'));
+    assertEqual([$o3['jti']], $active(), 'only the new row is active (deploy -> backfill gap)');
+    $due = $st->needingReminder([30,14,7,1], (int) $o2['expires'] + 86400);
+    assertTrue(!in_array($o2['jti'], array_column($due, 'jti'), true), 'no grace/expired reminder for the legacy row');
+    // after backfill: legacy rows that survived (resurrected here) get ids, then the per-subscription pass
+    $st->setStatus($o1['jti'], 'active'); $st->setStatus($o2['jti'], 'active');
+    $st->setSubscription($o1['jti'], 'sub_A', 'subscription_cycle'); $st->setSubscription($o2['jti'], 'sub_A', 'subscription_cycle');
+    assertEqual(['sub_A'], $st->subscriptionsWithMultipleActive());
+    assertEqual(2, $st->supersedeOlderInSubscription('sub_A'));
+    assertEqual([$o3['jti']], $active());
+    assertEqual(0, $st->supersedeOlderInSubscription('sub_A'), 'idempotent');
+    $due = $st->needingReminder([30,14,7,1], (int) $o2['expires'] + 86400);
+    assertTrue(!in_array($o2['jti'], array_column($due, 'jti'), true), 'still no reminder after backfill');
+    // another customer's legacy row is not touched
+    $x = $iss->issue(polarOrder('lg@x.com','pro-monthly','lg-x','','cusOTHER',''))['record'];
+    $iss->issue(polarOrder('lg@x.com','pro-monthly','lg-4','sub_A','cusL'));
+    assertEqual('active', $st->findByJti($x['jti'])['status'], 'a different known customer is spared');
+});
+
+test('refresh fallback never crosses one-time purchases (two lifetime orders by one buyer) (N1)', function () {
+    $st = new LicenseStore(':memory:');
+    $a = putRow($st, ['email'=>'t@x.com','plan'=>'lifetime','enforcement'=>'perpetual','billing_reason'=>'purchase','issued'=>1000,'expires'=>2000000000]);
+    putRow($st, ['email'=>'t@x.com','plan'=>'lifetime','enforcement'=>'perpetual','billing_reason'=>'purchase','issued'=>1100,'expires'=>2000000100]);
+    assertEqual('current', $st->newestRefreshable($a, 1700000000)['outcome'], 'classified one-time row has no fallback');
+    $l1 = putRow($st, ['email'=>'u1@x.com','issued'=>1000,'status'=>'superseded']);              // unclassified legacy
+    putRow($st, ['email'=>'u1@x.com','issued'=>1100,'billing_reason'=>'purchase']);                // classified: not a candidate
+    assertEqual('current', $st->newestRefreshable($l1, 1700000000)['outcome'], 'classified rows are not offered to a legacy row');
+    $l2 = putRow($st, ['email'=>'u1@x.com','issued'=>1200]);
+    assertEqual($l2['jti'], $st->newestRefreshable($l1, 1700000000)['row']['jti'], 'unclassified legacy still chains');
+});
+
+test('un-revoking a subscription never resurrects refunded rows (N2)', function () {
+    $st = new LicenseStore(':memory:');
+    $a = putRow($st, ['subscription_id'=>'U','issued'=>1000,'status'=>'superseded']);
+    $b = putRow($st, ['subscription_id'=>'U','issued'=>1100,'status'=>'superseded']);
+    $c = putRow($st, ['subscription_id'=>'U','issued'=>1200]);
+    $st->setStatus($b['jti'], 'refunded');
+    $st->setStatusForSubscription('U', 'revoked');
+    assertEqual('refunded', $st->findByJti($b['jti'])['status'], 'revoke does not rewrite a refund');
+    $st->setStatusForSubscription('U', 'active');
+    assertEqual(['superseded','refunded','active'], array_map(fn ($r) => $st->findByJti($r['jti'])['status'], [$a,$b,$c]));
+});
+
+test('renewal chain L -> R1 -> R2 with R2 refunded: L refreshes to the reactivated R1 (N3)', function () {
+    $st = new LicenseStore(':memory:');
+    $l = putRow($st, ['plan'=>'pro-lifetime','enforcement'=>'perpetual','issued'=>1000,'expires'=>1800000000,'status'=>'superseded']);
+    $r1 = putRow($st, ['plan'=>'pro-renewal','enforcement'=>'perpetual','issued'=>2000,'expires'=>1900000000,'renews_jti'=>$l['jti'],'status'=>'superseded']);
+    $r2 = putRow($st, ['plan'=>'pro-renewal','enforcement'=>'perpetual','issued'=>3000,'expires'=>2000000000,'renews_jti'=>$r1['jti']]);
+    $st->setStatusCascade($r2['jti'], 'refunded');
+    assertEqual('active', $st->findByJti($r1['jti'])['status'], 'cascade reactivated R1');
+    $r = $st->newestRefreshable($st->findByJti($l['jti']), 1700000000);
+    assertEqual(['refreshed', $r1['jti']], [$r['outcome'], $r['row']['jti']]);
+});
+
+test('revoke-by-subscription outlives the next order.paid: the paid order is recorded but stays revoked (N4)', function () use ($secretB64) {
+    [$st, $iss] = refreshRig($secretB64);
+    $a = $iss->issue(polarOrder('rv@x.com','pro-monthly','rv-1','sub_R'))['record'];
+    $st->setStatusForSubscription('sub_R', 'revoked');
+    assertEqual('revoked', $st->revokedSubscriptionStatus('sub_R'));
+    $b = $iss->issue(polarOrder('rv@x.com','pro-monthly','rv-2','sub_R'));
+    assertEqual('revoked', $b['record']['status'], 'new key is recorded revoked');
+    assertEqual('refused', $st->newestRefreshable($st->findByJti($a['jti']), time())['outcome']);
+    $st->setStatusForSubscription('sub_R', 'active');
+    assertEqual(null, $st->revokedSubscriptionStatus('sub_R'), 'marker cleared on un-revoke');
+    assertEqual('active', $st->findByJti($b['record']['jti'])['status'], 'newest comes back active');
+});
+
+test('ipBucket: an IPv4-mapped IPv6 client is bucketed as its IPv4 address, plain IPv6 still by /64 (N5)', function () {
+    $b = fn ($ip) => \FluxFiles\LicenseServer\ProDownload::ipBucket($ip);
+    assertEqual('203.0.113.7', $b('::ffff:203.0.113.7'));
+    assertTrue($b('::ffff:203.0.113.7') !== $b('::ffff:203.0.113.8'), 'two mapped clients do not share a bucket');
+    assertEqual('203.0.113.7', $b('203.0.113.7'));
+    assertTrue(str_ends_with($b('2001:db8::1'), '/64'));
+});
+
+
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f>0?1:0);

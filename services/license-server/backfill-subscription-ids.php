@@ -12,9 +12,12 @@ declare(strict_types=1);
  * a re-run does not ask again. Idempotent, safe to re-run, never overwrites a value that
  * is already set. Mirrors backfill-supersede-duplicates.php.
  *
- * Run it BEFORE enabling /refresh, and before the next billing cycle: new subscription
- * rows supersede by subscription id, so rows still missing theirs would linger as
- * `active` next to the new one.
+ * After the ids are written (--apply) it keeps only the newest live row of each
+ * subscription `active` (the rest `superseded`), idempotently, so legacy duplicates stop
+ * surfacing in the reminder cron. A new order also supersedes the buyer's NULL-id rows
+ * itself, so the deploy-to-backfill gap is safe. Rows Polar cannot resolve stay NULL.
+ *
+ * Run it BEFORE enabling /refresh.
  *
  * Usage:
  *   POLAR_TOKEN=polar_oat_... php backfill-subscription-ids.php            # dry run (reads Polar, writes nothing)
@@ -22,7 +25,8 @@ declare(strict_types=1);
  *   php backfill-subscription-ids.php --token-file=/secure/polar-token --apply
  *   php backfill-subscription-ids.php --sandbox                            # sandbox-api.polar.sh, POLAR_TOKEN_SANDBOX
  *
- * Options: --delay-ms=N (pause between Polar calls, default 150), --limit=N (rows per run).
+ * Options: --delay-ms=N (pause between Polar calls, default 150), --backoff-ms=N (first wait
+ * after an HTTP 429, doubled up to 4 retries, default 1000), --limit=N (rows per run).
  * Env: FLUXFILES_LICENSE_DB (sqlite path, as every script here). The token is read from
  * the env or a file, never from argv, and is never printed.
  * --api-base=URL exists for tests; it must be Polar's own API or an http loopback URL, so
@@ -48,10 +52,16 @@ $opt = static function (string $name) use ($args): ?string {
 $apply = in_array('--apply', $args, true);
 $sandbox = in_array('--sandbox', $args, true);
 $delayMs = max(0, (int) ($opt('delay-ms') ?? 150));
+$backoffMs = max(0, (int) ($opt('backoff-ms') ?? 1000));
 $limit = max(1, (int) ($opt('limit') ?? 5000));
 
 $base = $opt('api-base') ?? ($sandbox ? 'https://sandbox-api.polar.sh/v1' : 'https://api.polar.sh/v1');
 $base = rtrim($base, '/');
+// The token is sent to this host: no userinfo / '@' / backslash tricks (http://127.0.0.1@evil/).
+if (str_contains($base, '@') || str_contains($base, '\\') || parse_url($base, PHP_URL_USER) !== null || parse_url($base, PHP_URL_PASS) !== null) {
+    fwrite(STDERR, "[backfill] refusing --api-base: credentials, '@' and backslashes are not allowed\n");
+    exit(1);
+}
 $host = (string) parse_url($base, PHP_URL_HOST);
 $scheme = (string) parse_url($base, PHP_URL_SCHEME);
 $polarOk = $scheme === 'https' && in_array($host, ['api.polar.sh', 'sandbox-api.polar.sh'], true);
@@ -91,8 +101,17 @@ $clean = static fn (string $v): string => preg_match('/^[A-Za-z0-9_.:-]{1,100}$/
 
 $store = new LicenseStore();
 $rows = $store->polarRowsNeedingSubscription($limit);
+$supersedeStep = static function () use ($store, $apply): void {
+    $sids = $store->subscriptionsWithMultipleActive();
+    $n = 0;
+    foreach ($sids as $sid) {
+        if ($apply) { $n += $store->supersedeOlderInSubscription($sid); }
+    }
+    echo '[backfill] ' . count($sids) . ' subscription(s) with more than one active row' . ($apply ? ": {$n} older row(s) superseded\n" : " (dry run — would supersede the older ones)\n");
+};
 if ($rows === []) {
-    echo "[backfill] no Polar rows need a subscription id — nothing to do\n";
+    echo "[backfill] no Polar rows need a subscription id\n";
+    $supersedeStep();
     exit(0);
 }
 echo '[backfill] ' . count($rows) . ' Polar row(s) to look up' . ($apply ? '' : ' (dry run — pass --apply to write)') . "\n";
@@ -101,6 +120,11 @@ $withSub = 0; $oneTime = 0; $failed = 0;
 foreach ($rows as $i => $row) {
     if ($i > 0 && $delayMs > 0) { usleep($delayMs * 1000); }
     [$st, $d] = $fetchOrder((string) $row['order_id']);
+    for ($try = 0, $wait = $backoffMs; $st === 429 && $try < 4; $try++, $wait *= 2) {
+        echo "[backfill] Polar rate limit — waiting {$wait} ms\n";
+        usleep($wait * 1000);
+        [$st, $d] = $fetchOrder((string) $row['order_id']);
+    }
     if ($st === 401 || $st === 403) {
         fwrite(STDERR, "[backfill] Polar rejected the token (HTTP {$st}) — stopping\n");
         exit(1);
@@ -120,6 +144,7 @@ foreach ($rows as $i => $row) {
     }
 }
 
+$supersedeStep();
 echo "[backfill] done: {$withSub} with a subscription, {$oneTime} one-time, {$failed} failed"
     . ($apply ? " — written\n" : " — dry run, no changes made\n");
 exit($failed > 0 ? 2 : 0);

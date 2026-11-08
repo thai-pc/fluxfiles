@@ -193,6 +193,14 @@ try {
         // would skip sending, leaving a paying customer with no key and nothing in any
         // log to say so. Tracking mailed_at makes Polar's retry the recovery mechanism.
         $jti = (string) $res['record']['jti'];
+        if (!$res['reused'] && (string) ($res['record']['status'] ?? 'active') !== 'active') {
+            // A paid order of an admin-revoked subscription: recorded, NOT mailed. Tell ops, who
+            // should also cancel the subscription in Polar so it stops billing.
+            error_log("polar webhook: order {$order['order_id']} of revoked subscription {$order['subscription_id']} recorded as {$res['record']['status']}, not mailed (jti {$jti})");
+            (new LicenseMailer())->sendOpsNotice('FluxFiles: payment on a revoked subscription',
+                "Order {$order['order_id']} was paid on subscription {$order['subscription_id']}, which you revoked. It is recorded as {$res['record']['status']} (licence {$jti}) and was not mailed.\n\nCancel the subscription in Polar so it stops billing, or POST /revoke {\"subscription_id\":\"{$order['subscription_id']}\",\"status\":\"active\"} to restore it.");
+            respond(200, ['issued' => true, 'jti' => $jti, 'status' => (string) $res['record']['status']]);
+        }
         if (empty($res['record']['mailed_at'])) {
             $mailRec = $res['record'];   // the mail points at the landing /download page: no update-server call here
             if ((new LicenseMailer())->sendLicense($mailRec)) {
@@ -349,7 +357,7 @@ try {
             respond(400, ['error' => 'request too large']);
         }
         $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
-        $key = preg_match('/^Bearer\s+(\S+)\s*$/', $auth, $bm) === 1 ? $bm[1] : '';
+        $key = preg_match('/^Bearer\s+(\S+)\s*$/i', $auth, $bm) === 1 ? $bm[1] : '';
         $payload = $key !== '' ? $signer->verify($key) : null;
         if ($payload === null) {
             respond(401, ['error' => 'invalid key']);

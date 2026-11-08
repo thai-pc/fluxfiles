@@ -88,7 +88,8 @@ final class LicenseIssuer
         if ($base !== null) {
             $floor = (int) $base['issued'];
         } elseif ($subId !== '') {
-            $floor = $this->store->maxIssuedForSubscription($subId);
+            // also above the buyer's legacy (id-less) cycles, which this subscription continues
+            $floor = max($this->store->maxIssuedForSubscription($subId), $this->store->maxIssuedForBuyerPlan($email, $planId));
         } elseif (($order['gateway'] ?? 'manual') !== 'manual') {
             $floor = $this->store->maxIssuedForBuyerPlan($email, $planId);
         }
@@ -109,6 +110,10 @@ final class LicenseIssuer
         // records the actual per-plan policy rather than duplicating it.
         $graceDays = isset($p['grace']) ? (int) round($p['grace'] / 86400) : 14;
 
+        // An admin revoked this whole subscription: the buyer still paid, so the order is
+        // recorded, but its key stays revoked (the caller logs and ops-notices it).
+        $initial = ($subId !== '' && $base === null) ? ($this->store->revokedSubscriptionStatus($subId) ?? 'active') : 'active';
+
         $record = $this->store->record([
             'jti'         => $p['jti'],
             'email'       => $email,
@@ -123,7 +128,7 @@ final class LicenseIssuer
             'gateway'     => (string) ($order['gateway'] ?? 'manual'),
             'order_id'    => (string) ($order['order_id'] ?? ''),
             'checkout_id' => (string) ($order['checkout_id'] ?? ''),
-            'status'      => 'active',
+            'status'      => $initial,
             'grace_days'  => $graceDays,
             'customer_id' => $customerId,
             'renews_jti'  => $base !== null ? (string) $base['jti'] : '',
@@ -142,10 +147,15 @@ final class LicenseIssuer
             // so that row stops reminding and a second lifetime under the same email
             // stays independently renewable.
             $this->store->supersedeJti((string) $base['jti']);
+        } elseif ($initial !== 'active') {
+            error_log("license issuer: order {$record['order_id']} belongs to revoked subscription {$subId} — recorded as {$initial}");
         } elseif ((string) $record['gateway'] !== 'manual' && $subId !== '') {
-            // The subscription is known: retire only ITS earlier keys, so a buyer's second
-            // subscription on the same plan keeps running.
+            // The subscription is known: retire ITS earlier keys, so a buyer's second
+            // subscription on the same plan keeps running, plus the buyer's still-active
+            // legacy rows (no subscription id yet) for this plan, which are the same
+            // subscription's earlier cycles until the backfill proves otherwise.
             $this->store->supersedeActiveForSubscription($subId, (string) $record['jti']);
+            $this->store->supersedeLegacyForBuyerPlan((string) $record['email'], (string) $record['plan'], $customerId, (string) $record['jti']);
         } elseif ((string) $record['gateway'] !== 'manual') {
             // No subscription id (legacy / one-time): A recurring subscription renewal is a NEW order (fresh order_id) but the
             // SAME buyer+plan — retire any other still-`active` gateway row for that pair

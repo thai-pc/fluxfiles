@@ -168,6 +168,19 @@ final class LicenseMailer
     // `to` and `subject` are added by deliverContent().
 
     /**
+     * Text + HTML for one content model (the HTML throws if the template is unusable; the
+     * senders go through deliverContent(), which degrades to text-only instead).
+     *
+     * @param array<string,mixed> $c
+     * @return array{text:string,html:string}
+     */
+    private function build(array $c): array
+    {
+        $c = $this->prepare($c);
+        return ['text' => $this->renderText($c), 'html' => $this->renderHtml($c)];
+    }
+
+    /**
      * @param array<string,mixed> $c
      * @return array<string,mixed>
      */

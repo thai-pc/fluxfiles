@@ -134,6 +134,11 @@ final class ProDownload
     public static function ipBucket(string $ip): string
     {
         $bin = @inet_pton($ip);
+        // ::ffff:a.b.c.d is an IPv4 client on a dual-stack listener: bucket it as the IPv4
+        // address, not as the shared /64 of every mapped client.
+        if ($bin !== false && strlen($bin) === 16 && str_starts_with($bin, str_repeat("\0", 10) . "\xff\xff")) {
+            return (string) inet_ntop(substr($bin, 12));
+        }
         if ($bin !== false && strlen($bin) === 16) {
             return bin2hex(substr($bin, 0, 8)) . '/64';
         }

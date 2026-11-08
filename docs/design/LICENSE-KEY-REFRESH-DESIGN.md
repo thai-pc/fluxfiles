@@ -1,6 +1,6 @@
 # Licence Key Refresh: Design
 
-Status: **Proposed** (not implemented). Code references point at branch
+Status: **Implemented (licence server); core client pending.** Code references point at branch
 `feat/update-server-pro-entitlement`, the newest version of `services/license-server`.
 
 ## 0. Summary
@@ -148,7 +148,7 @@ All of these return `404 {"error":"not available","hint":"paste the key from you
 - unknown jti, key mismatch, or ambiguous legacy linkage.
 
 Revoking a whole subscription: `POST /revoke` accepts `{"subscription_id":"…","status":"revoked"}`
-and applies the status to every row of that subscription, so its keys stop refreshing.
+and applies the status to every row of that subscription, so its keys stop refreshing. A `revoked_subscriptions` marker makes that outlive the next `order.paid`: the paid order is recorded but stays revoked, is not mailed, and ops is notified. Revoking does not stop Polar billing, so also cancel the subscription in Polar.
 
 ### 3.5 Responses
 
@@ -177,7 +177,8 @@ endpoint. `Cache-Control: no-store` is already global (`server.php:52`).
   `limit_req zone=ff_refresh burst=60 nodelay;` and `client_max_body_size 1k;`. The
   default `combined` log format does not log `Authorization`. Keep it that way, and never
   add `$http_authorization` to a log format.
-- The per-IP flood limit lives in nginx, not SQLite. Signature verification (step 2) is
+- **Implemented:** the server also keeps a DB per-IP bucket, `refresh-ip:<ip or /64>` at 120/hour (after the signature check, via `rateHit`), next to the per-jti 10/hour bucket. The nginx zone below is the first line; the DB bucket is the second.
+- The per-IP flood limit lives in nginx (see above), not only SQLite. Signature verification (step 2) is
   cheaper than a `rate_hits` write, so invalid keys never reach the DB. The DB limit is
   per jti only, so an agency with 50 sites behind one NAT is not throttled.
 - **Pools:** `/refresh` holds a public worker for one SQLite read and one `rate_hits`

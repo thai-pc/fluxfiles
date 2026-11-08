@@ -170,10 +170,19 @@ current key and receives the newest one. Design: `docs/design/LICENSE-KEY-REFRES
   host's clock steps back. An edition change inside a subscription is followed.
 - **Bounds.** A key stops refreshing `FLUXFILES_REFRESH_MAX_STALE_DAYS` (default 90) after
   `expires` + its grace, and `POST /revoke {"subscription_id":"...","status":"revoked"}` is
-  the kill switch. Keys are never logged; log lines carry the jti and an outcome.
+  the kill switch. It records the subscription, so a later paid order of it is still
+  recorded but stays revoked (not mailed, ops notified): **also cancel the subscription
+  in Polar**, revoking here does not stop billing. Keys are never logged; log lines carry the jti and an outcome.
 - **Exposure.** Public pool, public vhost, `location = /refresh` with its own
   `limit_req` zone and `client_max_body_size 1k`. Do not route it to the loopback/internal
   pool (sized for the update server), and never add `$http_authorization` to a log format.
+
+### Deploying
+
+Copy the **whole `services/license-server` directory** (minus `tests/`), including
+`templates/` and `LicenseMailer.php`. A missing `templates/email.php` no longer breaks
+mail (the text part is sent and a loud `LICENSE MAIL: HTML template failed` is logged),
+but customers then get plain-text mail only.
 
 ### Migration and backfill (existing server)
 
