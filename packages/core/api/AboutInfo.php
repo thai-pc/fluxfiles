@@ -77,7 +77,8 @@ final class AboutInfo
         // Where the key in $_ENV-style config comes from; null when no env key is configured
         // (e.g. WordPress Pro supplies its own licence through the resolver).
         $keySource = null;
-        if (trim((string) ($env['FLUXFILES_LICENSE_KEY'] ?? '')) !== '') {
+        // class_exists: the WordPress.org build ships without the licence classes.
+        if (class_exists(LicenseKeyFile::class) && trim((string) ($env['FLUXFILES_LICENSE_KEY'] ?? '')) !== '') {
             $r = LicenseKeyFile::resolve($env);
             $keySource = ['source' => $r['source'], 'fetched_at' => $r['fetched_at'], 'warning' => null];
             if ($r['source'] !== 'env' || is_file(LicenseKeyFile::path($env))) {

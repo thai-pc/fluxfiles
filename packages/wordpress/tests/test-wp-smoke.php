@@ -259,7 +259,7 @@ test('generateToken forwards download/zip claims and the overlay watermark confi
     $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
     assertEqual(false, $c->allowDownload, 'allow_download');
     assertEqual(false, $c->allowChmod, 'allow_chmod');
-    assertEqual(true, $c->allowCodeEdit, 'allow_code_edit');
+    assertEqual(false, $c->allowCodeEdit, 'allow_code_edit is forced off in WordPress even when requested');
     assertEqual(true, $c->allowOptimize, 'allow_optimize');
     assertEqual(false, $c->allowZip, 'allow_zip');
     assertEqual(false, $c->allowExtract, 'allow_extract');
@@ -355,9 +355,24 @@ test('generateToken forwards ai-vision gate', function () use ($secret) {
     assertEqual(true, ($p->allow_ai_vision ?? false), 'ai-vision gate forwarded');
 });
 
-test('terminal_pty_url still forwards (the UI embeds the operator\'s own ttyd)', function () use ($secret) {
-    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(61, ['terminal_pty_url' => 'https://ttyd.example.com/']), $secret);
-    assertEqual('https://ttyd.example.com/', $p->terminal_pty_url ?? '', 'terminal_pty_url forwarded');
+test('terminal_pty_url is never minted (no terminal in the WordPress plugin), whatever override, claims hatch or filter says', function () use ($secret) {
+    $keepFilters = $GLOBALS['WP_FILTERS'];
+    $url = 'https://ttyd.example.com/';
+    try {
+        foreach ([
+            FluxFilesPlugin::generateToken(61, ['terminal_pty_url' => $url]),
+            FluxFilesPlugin::generateToken(61, ['claims' => ['terminal_pty_url' => $url]]),
+            FluxFilesPlugin::generateToken(61, ['role' => 'admin', 'terminal_pty_url' => $url, 'claims' => ['terminal_pty_url' => $url]]),
+            FluxFilesPlugin::generateByobToken(61, [], ['terminal_pty_url' => $url, 'claims' => ['terminal_pty_url' => $url]]),
+        ] as $i => $t) {
+            assertTrue(!property_exists(\FluxFiles\JwtCompat::decode($t, $secret), 'terminal_pty_url'), "token #{$i} has no terminal_pty_url");
+        }
+        $GLOBALS['WP_FILTERS']['fluxfiles_token_overrides'][] = fn ($o) => array_merge((array) $o, ['terminal_pty_url' => $url, 'claims' => ['terminal_pty_url' => $url]]);
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+        assertTrue(!property_exists($p, 'terminal_pty_url'), 'filter cannot re-add it');
+    } finally {
+        $GLOBALS['WP_FILTERS'] = $keepFilters;
+    }
 });
 
 test('about / brand_name / brand_logo_url / accent_color are forwarded in the raw payload', function () use ($secret) {
@@ -529,8 +544,8 @@ test('role preset (docs/design/ACL-ROLE-PRESETS-DESIGN.md) sets the exact claim 
     assertEqual(['read', 'write', 'delete', 'audit'], (array) $admin->perms, 'admin perms');
     assertEqual(false, $admin->owner_only ?? false, 'admin is not owner-scoped');
     assertEqual(true, $admin->allow_extract ?? null, 'admin allow_extract');
-    assertEqual(true, $admin->allow_chmod ?? null, 'admin allow_chmod');
-    assertEqual(true, $admin->allow_code_edit ?? null, 'admin allow_code_edit');
+    assertEqual(false, $admin->allow_chmod ?? null, 'admin allow_chmod (forced off in WordPress)');
+    assertEqual(false, $admin->allow_code_edit ?? null, 'admin allow_code_edit (forced off in WordPress)');
     assertEqual(true, $admin->show_hidden ?? null, 'admin show_hidden');
 
     $viewer = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(61, ['role' => 'viewer']), $secret);
@@ -571,7 +586,8 @@ test('role preset (docs/design/ACL-ROLE-PRESETS-DESIGN.md) sets the exact claim 
         'my-s3' => ['driver' => 's3', 'bucket' => 'b', 'key' => 'k', 'secret' => 's'],
     ], ['role' => 'admin']), $secret);
     assertEqual(['read', 'write', 'delete', 'audit'], (array) $byob->perms, 'role reaches BYOB perms');
-    assertEqual(true, $byob->allow_chmod ?? null, 'role reaches BYOB power-user toggles');
+    assertEqual(true, $byob->allow_extract ?? null, 'role reaches BYOB power-user toggles');
+    assertEqual(false, $byob->allow_chmod ?? null, 'chmod stays forced off for BYOB (1.1.3)');
 });
 
 test('generateToken without a secret → throws', function () {
@@ -1627,7 +1643,6 @@ test('every mutating route logs audit + dispatches webhook (regression: legal-ho
         'handleOcr'             => 'ocr',
         'handleChunkComplete'   => 'chunk_upload',
         'handleChunkAbort'      => 'chunk_upload',
-        'handleSetChmod'        => 'chmod',
     ];
     foreach ($mustLog as $method => $action) {
         $body = $extractMethod($apiSrc, $method);
@@ -2802,9 +2817,15 @@ test('WordPress.org polish: translatable strings, block API v3, keyed toolbar bu
 // (module-engine settings moved to the FluxFiles Pro plugin; see the extension-API tests below)
 
 // ── 1.x proxy-parity fixes: X-Accel encoding, audit action names, 403 codes, asset caching ──
-test('audit: a code-editor save is logged as content_update (the name the UI labels), not content_edit', function () {
+test('the content-write and chmod routes are closed (403) even for a token that claims otherwise', function () {
     $keepAuth = $_SERVER['HTTP_AUTHORIZATION'];
-    $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken(7710, ['perms' => ['read', 'write'], 'allow_code_edit' => true, 'prefix' => 'cu-' . uniqid()]);
+    // Minted by hand with the site secret, bypassing generateToken()'s forced-off claims.
+    $now = time();
+    $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . \FluxFiles\JwtCompat::encode([
+        'sub' => '7710', 'iat' => $now, 'exp' => $now + 600, 'jti' => bin2hex(random_bytes(8)),
+        'perms' => ['read', 'write', 'delete'], 'disks' => ['local'], 'prefix' => 'cu-' . uniqid(),
+        'allow_code_edit' => true, 'allow_chmod' => true,
+    ], (string) get_option('fluxfiles_secret'));
     try {
         $api = new FluxFilesApi();
         $dir = 'cu-dir-' . uniqid();
@@ -2814,16 +2835,16 @@ test('audit: a code-editor save is logged as content_update (the name the UI lab
         $abs = $root . '/' . $claims->scopePath($dir) . '/conf.txt';
         file_put_contents($abs, 'old');
         $resp = $api->handlePutContent(new WP_REST_Request(['disk' => 'local', 'path' => $dir . '/conf.txt', 'content' => 'new']));
-        assertEqual(200, $resp->get_status(), 'save ok: ' . json_encode($resp->get_data()));
-        $actions = [];
-        foreach (array_filter(explode("\n", (string) @file_get_contents($root . '/_fluxfiles/audit.jsonl'))) as $line) {
-            $row = json_decode($line, true);
-            if (($row['context']['user_id'] ?? '') === '7710') {
-                $actions[] = $row['action'] ?? '';
-            }
-        }
-        assertTrue(in_array('content_update', $actions, true), 'content_update logged: ' . json_encode($actions));
-        assertTrue(!in_array('content_edit', $actions, true), 'legacy name gone');
+        assertEqual(403, $resp->get_status(), 'PUT /content refused');
+        assertEqual('edit_forbidden', $resp->get_data()['error_code'] ?? null, 'error code');
+        assertEqual('old', file_get_contents($abs), 'file untouched');
+        $resp = $api->handleSetChmod(new WP_REST_Request(['disk' => 'local', 'path' => $dir . '/conf.txt', 'mode' => '0777']));
+        assertEqual(403, $resp->get_status(), 'POST /chmod refused');
+        assertEqual('chmod_forbidden', $resp->get_data()['error_code'] ?? null, 'error code');
+        // Reading stays possible (preview only).
+        $resp = $api->handleGetContent(new WP_REST_Request(['disk' => 'local', 'path' => $dir . '/conf.txt']));
+        assertEqual(200, $resp->get_status(), 'read-only preview still works');
+        assertEqual('old', $resp->get_data()['data']['content'] ?? null, 'preview content');
     } finally {
         $_SERVER['HTTP_AUTHORIZATION'] = $keepAuth;
     }
@@ -3579,6 +3600,76 @@ test('bundled core version: the stamped constant feeds Site Health, and the buil
     assertEqual(0, $rc, 'stamp script succeeds');
     assertTrue(strpos($out, "define('FLUXFILES_CORE_VERSION', '7.8.9');") !== false, 'core version stamped');
     assertTrue(strpos($out, "define('FLUXFILES_VERSION', '9.9.9');") !== false, 'plugin version stamped');
+});
+
+// ── 1.1.3: no file-content editor, no chmod, no executable output from extraction ──
+test('1.1.3: no token FluxFiles mints ever carries allow_code_edit or allow_chmod true', function () use ($secret) {
+    $keepFilters = $GLOBALS['WP_FILTERS'];
+    $check = function (string $label, string $token) use ($secret) {
+        $p = \FluxFiles\JwtCompat::decode($token, $secret);
+        assertTrue(empty($p->allow_code_edit), "{$label}: allow_code_edit");
+        assertTrue(empty($p->allow_chmod), "{$label}: allow_chmod");
+        $c = \FluxFiles\Claims::fromJwtPayload($p);
+        assertEqual(false, $c->allowCodeEdit, "{$label}: decoded allowCodeEdit");
+        assertEqual(false, $c->allowChmod, "{$label}: decoded allowChmod");
+    };
+    try {
+        foreach ([null, 'viewer', 'editor', 'admin', 'superadmin'] as $role) {
+            $o = $role === null ? [] : ['role' => $role];
+            $check("role={$role}", FluxFilesPlugin::generateToken(81, $o));
+            $check("role={$role} + overrides", FluxFilesPlugin::generateToken(81, $o + ['allow_code_edit' => true, 'allow_chmod' => true]));
+            $check("role={$role} + claims", FluxFilesPlugin::generateToken(81, $o + ['claims' => ['allow_code_edit' => true, 'allow_chmod' => true]]));
+            $check("role={$role} BYOB", FluxFilesPlugin::generateByobToken(81, [], $o + ['claims' => ['allow_code_edit' => true, 'allow_chmod' => true]]));
+        }
+        // The documented filter feeds the same overrides; it cannot re-enable either.
+        $GLOBALS['WP_FILTERS']['fluxfiles_token_overrides'][] = fn ($o) => array_merge((array) $o, [
+            'role' => 'admin', 'allow_code_edit' => true, 'allow_chmod' => true,
+            'claims' => ['allow_code_edit' => true, 'allow_chmod' => true],
+        ]);
+        $check('tokenForCurrentUser + filter', FluxFilesPlugin::tokenForCurrentUser());
+    } finally {
+        $GLOBALS['WP_FILTERS'] = $keepFilters;
+    }
+});
+
+test('1.1.3: archive extraction cannot produce php/phtml/.htaccess/.user.ini (core guards every entry)', function () use ($ffFileManager, $ffPut, $ffUploads) {
+    if (!class_exists('ZipArchive')) { return; }
+    $bad = ['shell.php', 'a.phtml', 'x.phar', '.htaccess', '.user.ini', 'sub/web.config', 'dir/shell.php.jpg', 'dir/.htaccess'];
+    $keepCaps = $GLOBALS['WP_CAPS'];
+    try {
+        // Without unfiltered_html the allowed_ext list applies too; with it, only the built-in deny-lists stand between the archive and the disk.
+        foreach ([false, true] as $unfiltered) {
+            $GLOBALS['WP_CAPS']['unfiltered_html'] = $unfiltered;
+            foreach (['admin', 'editor'] as $role) {
+                $h = $ffFileManager(['role' => $role, 'perms' => ['read', 'write', 'delete'], 'owner_only' => false]);
+                foreach ($bad as $entry) {
+                    $dir = 'zdir-' . uniqid();
+                    $abs = $ffPut($dir . '/a.zip', '');
+                    $za = new ZipArchive();
+                    $za->open($abs, ZipArchive::OVERWRITE);
+                    $za->addFromString('ok.txt', 'fine');
+                    $za->addFromString($entry, 'payload');
+                    $za->close();
+                    $threw = null;
+                    try { $h->fm->extractZip('local', $dir . '/a.zip', $dir); }
+                    catch (\FluxFiles\ApiException $e) { $threw = $e->getErrorCode(); }
+                    $label = "{$role}/unfiltered=" . json_encode($unfiltered) . " '{$entry}'";
+                    // Refused outright, or (a dotfile for a token without show_hidden) silently skipped: either way it never lands.
+                    assertTrue($threw === null || in_array($threw, ['ext_dangerous', 'ext_not_allowed'], true), "{$label} (got " . json_encode($threw) . ')');
+                    $landed = [];
+                    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($ffUploads . '/' . $dir, FilesystemIterator::SKIP_DOTS)) as $f) {
+                        $landed[] = substr($f->getPathname(), strlen($ffUploads . '/' . $dir) + 1);
+                    }
+                    assertTrue(!in_array($entry, $landed, true), "{$label}: not written (landed: " . json_encode($landed) . ')');
+                    if ($threw !== null) {
+                        assertEqual(['a.zip'], $landed, "{$label}: nothing extracted (pass 1 validates before any write)");
+                    }
+                }
+            }
+        }
+    } finally {
+        $GLOBALS['WP_CAPS'] = $keepCaps;
+    }
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

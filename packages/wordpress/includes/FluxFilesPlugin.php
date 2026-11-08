@@ -817,8 +817,34 @@ HTACCESS;
         self::applyTenantOverrides($payload, $overrides, $roleDefaults);
         // Last, so neither `allowed_ext` nor the raw `claims` escape hatch can undo it.
         self::restrictActiveContent($payload, $userId);
+        self::disableFileEditing($payload);
 
         return \FluxFiles\JwtCompat::encode(self::sealWebhook($payload, (string) $secret), $secret);
+    }
+
+    /**
+     * The WordPress plugin is a sandboxed media/document library, never a code or
+     * file-content editor (WordPress.org guideline: no arbitrary code insertion or
+     * execution). Runs last on every token, after role presets, overrides, the raw
+     * `claims` escape hatch and the `fluxfiles_token_overrides` filter:
+     *
+     *  - `allow_code_edit`: core's putContent() deliberately skips the dangerous-
+     *    extension block (editing an existing .php is its job on a server you manage),
+     *    so it is forced false. Read-only previews (getContent) are unaffected.
+     *  - `allow_chmod`: only meaningful on SFTP disks, which exist in WordPress only
+     *    through a developer-minted BYOB token. Forced false everywhere rather than
+     *    per disk type: simpler, and nothing in the UI depends on it.
+     *
+     *  - `terminal_pty_url`: no terminal or shell entry in the WordPress plugin; the
+     *    claim is removed so the UI toolbar never shows one.
+     *
+     * @param array<string,mixed> $payload
+     */
+    private static function disableFileEditing(array &$payload): void
+    {
+        $payload['allow_code_edit'] = false;
+        $payload['allow_chmod']     = false;
+        unset($payload['terminal_pty_url']);
     }
 
     /**
@@ -937,9 +963,9 @@ HTACCESS;
             'editor'     => ['perms' => ['read', 'write'], 'owner_only' => true,
                               'allow_extract' => true, 'allow_chmod' => false],
             'admin'      => ['perms' => ['read', 'write', 'delete', 'audit'], 'owner_only' => false,
-                              'allow_extract' => true, 'allow_chmod' => true, 'allow_code_edit' => true, 'show_hidden' => true],
+                              'allow_extract' => true, 'allow_chmod' => false, 'show_hidden' => true],
             'superadmin' => ['perms' => ['read', 'write', 'delete', 'audit'], 'owner_only' => false,
-                              'allow_extract' => true, 'allow_chmod' => true, 'allow_code_edit' => true, 'show_hidden' => true],
+                              'allow_extract' => true, 'allow_chmod' => false, 'show_hidden' => true],
         ];
 
         if ($role === null || $role === '') {
@@ -1090,18 +1116,10 @@ HTACCESS;
         if (array_key_exists('allow_download', $overrides)) {
             $payload['allow_download'] = (bool) $overrides['allow_download'];
         }
-        if (array_key_exists('allow_chmod', $overrides)) {
-            $payload['allow_chmod'] = (bool) $overrides['allow_chmod'];
-        }
-        if (array_key_exists('allow_code_edit', $overrides)) {
-            $payload['allow_code_edit'] = (bool) $overrides['allow_code_edit'];
-        }
-        // Optional self-hosted PTY terminal URL (ttyd/gotty/wetty) — pure UI config:
-        // the UI embeds the operator's own instance, works in any mode like
-        // pdf_tools_url/office_url/esign_url below.
-        if (!empty($overrides['terminal_pty_url'])) {
-            $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
-        }
+        // `allow_chmod` / `allow_code_edit` are deliberately not overridable here:
+        // disableFileEditing() forces both off on every token (see below).
+        // `terminal_pty_url` is not forwarded either: the WordPress plugin has no
+        // terminal entry (disableFileEditing() strips it from every token).
         // PDF-tools + office embeds are pure UI (no core endpoint) → work in any mode.
         if (!empty($overrides['pdf_tools_url'])) {
             $payload['pdf_tools_url'] = (string) $overrides['pdf_tools_url'];
@@ -1408,6 +1426,7 @@ HTACCESS;
         self::applyTenantOverrides($payload, $overrides, $roleDefaults);
         // Last, so neither `allowed_ext` nor the raw `claims` escape hatch can undo it.
         self::restrictActiveContent($payload, $userId);
+        self::disableFileEditing($payload);
 
         return \FluxFiles\JwtCompat::encode(self::sealWebhook($payload, (string) $secret), $secret);
     }

@@ -2,8 +2,8 @@
 /**
  * Plugin Name: FluxFiles
  * Plugin URI:  https://fluxfiles.thai-pc.com
- * Description: Multi-storage file manager with Local/S3/R2 support (SFTP through BYOB tokens), image optimization, and full-text search.
- * Version:     1.1.2
+ * Description: Folder-based media and document library with Local/S3/R2 storage, image optimization and full-text search. Sandboxed: no access to WordPress files, no code uploads.
+ * Version:     1.1.3
  * Author:      thai-pc
  * Author URI:  https://github.com/thai-pc
  * License:     MIT
@@ -17,7 +17,7 @@
 
 defined('ABSPATH') || exit;
 
-define('FLUXFILES_VERSION', '1.1.2');
+define('FLUXFILES_VERSION', '1.1.3');
 // Release of the core bundled in this build; build-wordpress.sh stamps it from the latest core-v* tag.
 define('FLUXFILES_CORE_VERSION', 'unknown');
 // Extension API level for add-on plugins (FluxFiles Pro): bumped only when a hook breaks.
