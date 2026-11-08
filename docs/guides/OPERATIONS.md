@@ -289,6 +289,18 @@ README) — regenerate them after UI changes.
 
 ---
 
+## 6b. Licence key refresh on customer servers
+
+Customers on monthly plans run `fluxfiles license refresh` from cron. Two things decide
+whether it works: the user and the path. Run it as the web user
+(`17 4 * * * sudo -u www-data php vendor/bin/fluxfiles license refresh`, or
+`docker exec -u www-data ...`), because the overlay file must be readable by PHP-FPM; a
+root-owned 0600 file is ignored at runtime and the paid modules switch off at
+`expires + grace`. And cron and FPM must see the same `FLUXFILES_STORAGE_PATH` /
+`FLUXFILES_LICENSE_FILE` (outside `vendor/` on Composer and Laravel installs). The client's
+timeout is 5 s; `flock()` on NFS is unreliable, so keep the file on a local disk.
+`fluxfiles about` shows `Licence source` and warns when the file looks unreadable to FPM.
+
 ## 7. Check what a server is actually running
 
 `fluxfiles about` (`--json` for scripts) prints the exact core version and where it

@@ -332,6 +332,25 @@ FluxFiles::sdkUrl();                    // Get SDK script URL
 FluxFiles::licenseInfo();               // License status summary (no HTTP call)
 ```
 
+### Keeping a subscription key current
+
+Monthly keys are renewed by `fluxfiles license refresh` (core), which keeps the newest key in a
+server-local file that overlays `FLUXFILES_LICENSE_KEY`. Runtime goes through core's
+`LicenseManager::fromEnv()`, so no Laravel code is involved and it works under `config:cache`.
+Point the file outside `vendor/` (the default would live there and `composer install` wipes
+it) and schedule it as the web user:
+
+```env
+FLUXFILES_LICENSE_FILE=/var/www/app/storage/app/fluxfiles-license.json
+```
+
+```cron
+17 4 * * * cd /var/www/app && sudo -u www-data php vendor/bin/fluxfiles license refresh
+```
+
+`FLUXFILES_LICENSE_FILE` must be an absolute path (use `storage_path('app/fluxfiles-license.json')`
+to compute it when generating the `.env`). `FLUXFILES_LICENSE_REFRESH=false` disables the automatic call.
+
 ### License Status
 
 `FluxFiles::licenseInfo()` returns the same shape as `GET /api/fm/license`
