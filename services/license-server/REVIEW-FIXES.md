@@ -58,3 +58,8 @@ The first Linux CI run exposed two additional portability issues: trait constant
 inspects a consistent SQLite snapshot. Opening/closing the live DB file outside
 SQLite can release POSIX locks; the test also checks database integrity. These
 were fixed before the final CI rerun.
+
+The CSRF HTTP fixture also replaces its default Origin header when a test supplies
+an override, instead of sending two Origin headers. PHP 8.1's development server
+selects the first duplicate header; the test now sends the intended single hostile
+Origin consistently and still requires a 403 response.

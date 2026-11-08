@@ -47,11 +47,8 @@ $post = function (string $route, array $body = [], array $headers = []) use (
     &$csrf,
     &$extract,
 ): array {
-    $r = $h->request(
-        $ui,
-        'POST',
-        $route,
-        $body + ['_csrf' => $csrf],
+    $requestHeaders = [];
+    foreach (
         array_merge(
             [
                 'Cookie: ' . $cookie,
@@ -59,7 +56,17 @@ $post = function (string $route, array $body = [], array $headers = []) use (
                 'Content-Type: application/x-www-form-urlencoded',
             ],
             $headers,
-        ),
+        )
+        as $header
+    ) {
+        $requestHeaders[strtolower(explode(':', $header, 2)[0])] = $header;
+    }
+    $r = $h->request(
+        $ui,
+        'POST',
+        $route,
+        $body + ['_csrf' => $csrf],
+        array_values($requestHeaders),
         true,
     );
     $extract($r);
@@ -99,7 +106,7 @@ $h->test(
     'CSRF, exact Origin and Fetch-Site required even on login; generic wrong credentials',
     function () use ($h, $ui, $get, $post, &$cookie): void {
         $get('/login');
-        Harness::eq(403, $post('/login', ['_csrf' => 'wrong'])['code']);
+        Harness::eq(403, $post('/login', ['_csrf' => 'wrong'])['code'], 'invalid CSRF');
         Harness::eq(
             403,
             $h->request(
@@ -110,9 +117,18 @@ $h->test(
                 ['Cookie: ' . $cookie, 'Content-Type: application/x-www-form-urlencoded'],
                 true,
             )['code'],
+            'missing Origin and CSRF',
         );
-        Harness::eq(403, $post('/login', [], ['Origin: http://evil.example'])['code']);
-        Harness::eq(403, $post('/login', [], ['Sec-Fetch-Site: cross-site'])['code']);
+        Harness::eq(
+            403,
+            $post('/login', [], ['Origin: http://evil.example'])['code'],
+            'foreign Origin',
+        );
+        Harness::eq(
+            403,
+            $post('/login', [], ['Sec-Fetch-Site: cross-site'])['code'],
+            'cross-site fetch',
+        );
         $bad = $post('/login', ['username' => 'owner', 'password' => 'wrong', 'code' => '000000']);
         $unknown = $post('/login', [
             'username' => 'nobody',
