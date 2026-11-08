@@ -42,13 +42,20 @@ require_once __DIR__ . '/LicenseIssuer.php';
 require_once __DIR__ . '/PolarWebhook.php';
 require_once __DIR__ . '/LicenseMailer.php';
 require_once __DIR__ . '/ProDownload.php';
+require_once __DIR__ . '/MachineAuth.php';
+require_once __DIR__ . '/AdminApi.php';
+require_once __DIR__ . '/Webhooks.php';
 
-use FluxFiles\LicenseServer\LicenseMailer;
 use FluxFiles\LicenseServer\LicenseSigner;
 use FluxFiles\LicenseServer\LicenseStore;
 use FluxFiles\LicenseServer\LicenseIssuer;
 use FluxFiles\LicenseServer\PolarWebhook;
 use FluxFiles\LicenseServer\ProDownload;
+use FluxFiles\LicenseServer\MachineAuth;
+use FluxFiles\LicenseServer\AdminApi;
+use FluxFiles\LicenseServer\Webhooks;
+use FluxFiles\LicenseServer\Client\Mask;
+use FluxFiles\LicenseServer\Client\Config;
 
 header('Content-Type: application/json; charset=utf-8');
 // Responses can carry licence keys (/claim, /issue, /licenses): never cache them.
@@ -60,6 +67,15 @@ $raw = file_get_contents('php://input') ?: '';
 
 function respond(int $code, array $body): void
 {
+    if (isset($GLOBALS['store']) && $GLOBALS['store'] instanceof LicenseStore) {
+        $path = $GLOBALS['uri'] ?? '';
+        $kind = ['/claim'=>'claim','/pro-download'=>'pro_download','/refresh'=>'refresh'][$path] ?? null;
+        if ($kind !== null && ($GLOBALS['method'] ?? '') !== 'OPTIONS') {
+            $jti = (string) ($GLOBALS['activityJti'] ?? '');
+            $result = $code === 429 ? 'rate_limited' : ($code < 300 ? ($body['status'] ?? 'ok') : ($code === 410 ? 'expired' : ($code === 401 ? 'invalid' : 'refused')));
+            $GLOBALS['store']->recordActivity($kind, $result, $jti);
+        }
+    }
     http_response_code($code);
     echo json_encode($body);
     exit;
@@ -71,38 +87,12 @@ function respond(int $code, array $body): void
  */
 function reportCascade(LicenseStore $store, string $origin): void
 {
-    $rows = $store->lastCascade();
-    if ($rows === []) { return; }
-    $lines = [];
-    foreach ($rows as $r) {
-        $e = (string) $r['email'];
-        $at = strrpos($e, '@');
-        $masked = $at === false ? '***' : substr($e, 0, 1) . '***' . substr($e, $at);
-        $lines[] = "{$r['jti']} {$r['plan']} {$masked}";
-        error_log("license cascade: {$r['jti']} ({$r['plan']}, {$masked}) cancelled with {$origin}; its own order was not refunded");
-    }
-    (new LicenseMailer())->sendOpsNotice('FluxFiles: renewals cancelled by a cascade',
-        "Cancelling {$origin} also cancelled these renewals, whose own orders were not refunded:\n\n"
-        . implode("\n", $lines)
-        . "\n\nReissue the lost year if it was paid: POST /issue {\"plan\":\"<pro|studio>-renewal\",\"email\":\"<the lifetime email>\"}.");
+    (new Webhooks($store, static fn () => null))->cascadeNotice($store, $origin);
 }
 function env(string $k, string $d = ''): string { $v = getenv($k); return $v === false || $v === '' ? $d : $v; }
 
 /** How long after purchase /claim will still hand back the key (see the endpoint). */
 const CLAIM_WINDOW = 3600;
-function adminOk(): bool
-{
-    $token = env('FLUXFILES_LICENSE_ADMIN_TOKEN');
-    if ($token === '') { return false; }
-    $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-    return hash_equals('Bearer ' . $token, $hdr);
-}
-function updateStatusOk(): bool
-{
-    $token = env('FLUXFILES_UPDATE_STATUS_TOKEN');
-    if ($token === '') { return false; }
-    return hash_equals('Bearer ' . $token, (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
-}
 
 try {
     if ($uri === '/health') {
@@ -112,121 +102,42 @@ try {
         respond(200, $instance === '' ? ['ok' => true] : ['ok' => true, 'instance' => $instance]);
     }
 
-    $signer = new LicenseSigner();
-    $issuer = new LicenseIssuer($signer, new LicenseStore());
+    if (!MachineAuth::poolAllows($uri)) { respond(404, ['error' => 'not_found']); }
+    $protected = str_starts_with($uri, '/admin/') || in_array($uri, ['/issue','/licenses','/revoke','/redeliver','/update-status'], true);
+    $role = $protected ? MachineAuth::role($_SERVER) : '';
+    if ($protected && !MachineAuth::allowed($role, $uri)) {
+        respond($role === 'ops' ? 403 : 401, ['error' => $role === 'ops' ? 'forbidden_scope' : 'unauthorized']);
+    }
+    if ($protected && MachineAuth::viewerDenied($role,$method,$uri,$_SERVER)) { respond(403,['error'=>'forbidden_scope']); }
+    // The status and read-only routes boot without even reading the signing-key env.
+    $signer = static function (): LicenseSigner { static $instance; return $instance ??= new LicenseSigner(); };
+    $store = new LicenseStore();
+    if ($protected) { $store->setActor(MachineAuth::actor($role, $_SERVER)); }
+    $issuer = static fn (): LicenseIssuer => new LicenseIssuer($signer(), $store);
+    $api = new AdminApi($store, $role, $issuer);
+    if (str_starts_with($uri, '/admin/')) {
+        if (strlen($raw) > ($uri === '/admin/ops/ingest' ? 262144 : 65536)) { respond(400, ['error' => 'invalid_input']); }
+        $input = $raw === '' ? [] : json_decode($raw, true);
+        if (!is_array($input)) { respond(400, ['error' => 'invalid_input']); }
+        [$status, $out] = $api->handle($method, $uri, $input, $_GET);
+        if ($uri === '/admin/export/orders.csv' && $status === 200 && isset($out['csv'])) {
+            header('Content-Type: text/csv; charset=utf-8'); header('Content-Disposition: attachment; filename=fluxfiles-orders.csv');
+            echo Mask::safe($out['csv']); exit;
+        }
+        if (!str_ends_with($uri, '/reveal')) { $out = Mask::row($out); }
+        respond($status, $out);
+    }
 
     // ── Polar webhook (Standard Webhooks) ────────────────────────────────────
     if ($method === 'POST' && $uri === '/webhook/polar') {
-        [$ok, $why] = PolarWebhook::verify(
-            $raw,
-            env('FLUXFILES_POLAR_WEBHOOK_SECRET'),
-            PolarWebhook::headersFromServer($_SERVER)
-        );
-        if (!$ok) {
-            error_log('polar webhook rejected: ' . $why);
-            respond(401, ['error' => 'bad signature']);   // never echo $why to the caller
-        }
-
-        $body = json_decode($raw, true) ?: [];
-
-        // A full refund retires the licence for the update channel (the key keeps
-        // working offline — that is inherent to offline licensing — but stops
-        // receiving module updates). Idempotent: a redelivery finds it already done.
-        $refunded = PolarWebhook::refundedOrderId($body);
-        if ($refunded !== null) {
-            $store = new LicenseStore();
-            $rec = $store->findByOrder('polar', $refunded);
-            if ($rec !== null && in_array((string) $rec['status'], ['active', 'superseded'], true)) {
-                // Cascades: a refunded base takes its renewals with it; a refunded
-                // renewal gives its base back as `active` (renewable, reminded).
-                $store->setStatusCascade((string) $rec['jti'], 'refunded');
-                reportCascade($store, 'refunded licence ' . $rec['jti']);
-                error_log("polar webhook: order {$refunded} refunded — licence {$rec['jti']} marked refunded");
-            }
-            respond(200, ['refunded' => $rec !== null]);
-        }
-
-        $plans = json_decode(env('FLUXFILES_POLAR_PLAN_MAP', '{}'), true) ?: [];
-        $order = PolarWebhook::extract($body, $plans);
-
-        // Not an event we issue on. ACK it: a non-2xx makes Polar retry forever an
-        // event we will never act on.
-        if ($order === null) {
-            respond(200, ['ignored' => (string) ($body['type'] ?? '')]);
-        }
-
-        // A product nobody mapped. Say WHICH one, because the fix is a one-line change
-        // to FLUXFILES_POLAR_PLAN_MAP and the operator otherwise only sees "Unknown
-        // plan:" with an empty name. Answering 5xx is deliberate: Polar retries, so
-        // fixing the map inside the retry window delivers the licence automatically
-        // instead of leaving a paying customer to open a support ticket.
-        // Unlike a mail outage, this fails only orders of ONE product, so other
-        // products' 200s keep resetting Polar's consecutive-failure counter and the
-        // endpoint survives. Retrying is also the actual fix here: add the id to the
-        // map and the next attempt issues.
-        if (($order['plan'] ?? '') === '' || \FluxFiles\LicenseServer\Plans::get($order['plan']) === null) {
-            $productId = (string) ($body['data']['product_id'] ?? '');
-            error_log(sprintf(
-                'polar webhook: product %s is not in FLUXFILES_POLAR_PLAN_MAP (order %s, %s) — add it and redeliver',
-                $productId !== '' ? $productId : '(none)',
-                (string) ($order['order_id'] ?? '?'),
-                (string) ($order['email'] ?? '?')
-            ));
-            respond(503, ['error' => 'plan not configured for this product', 'product_id' => $productId]);
-        }
-
-        // Issuing is idempotent on (gateway, order_id), which is what makes Polar's
-        // at-least-once delivery safe — a retry returns the same key, never a second one.
-        try {
-            $res = $issuer->issue($order + ['gateway' => 'polar']);
-        } catch (\FluxFiles\LicenseServer\RenewalWithoutLicenceException $e) {
-            // Paid for an updates renewal but no lifetime licence matches (different
-            // email or Polar customer at checkout?). Nothing is granted, and a 5xx would
-            // only make Polar retry the same outcome until it disables the endpoint — so
-            // ACK, tell the buyer (and the ops address) and let the operator resolve it:
-            // POST /issue {plan:"pro-renewal"|"studio-renewal", email:<the LIFETIME email>}
-            // or refund in Polar.
-            error_log('polar webhook: RENEWAL WITHOUT LICENCE — ' . $e->getMessage() . ' (order ' . $order['order_id'] . ') — refund or issue manually');
-            (new LicenseMailer())->sendRenewalUnmatched((string) $order['email'], (string) $order['plan'], (string) $order['order_id']);
-            respond(200, ['ignored' => 'renewal_without_licence', 'order_id' => $order['order_id']]);
-        }
-
-        // Deliver the key, keyed on whether it has actually been delivered — NOT on
-        // whether this is a first delivery. Those differ in the case that matters: if
-        // the mail fails after the licence is stored, every later retry is `reused` and
-        // would skip sending, leaving a paying customer with no key and nothing in any
-        // log to say so. Tracking mailed_at makes Polar's retry the recovery mechanism.
-        $jti = (string) $res['record']['jti'];
-        if ((string) ($res['record']['status'] ?? 'active') !== 'active') {
-            // Never mail a key that is not active, new order or redelivery alike (a revoked or
-            // refunded subscription's order must not be sent by a Polar retry). Ops is told
-            // once, on the first delivery. Revoked subscription: also cancel it in Polar.
-            if (!$res['reused']) {
-                error_log("polar webhook: order {$order['order_id']} of revoked subscription {$order['subscription_id']} recorded as {$res['record']['status']}, not mailed (jti {$jti})");
-                (new LicenseMailer())->sendOpsNotice('FluxFiles: payment on a revoked subscription',
-                    "Order {$order['order_id']} was paid on subscription {$order['subscription_id']}, which you revoked. It is recorded as {$res['record']['status']} (licence {$jti}) and was not mailed.\n\nCancel the subscription in Polar so it stops billing, or POST /revoke {\"subscription_id\":\"{$order['subscription_id']}\",\"status\":\"active\"} to restore it.");
-            }
-            respond(200, ['issued' => !$res['reused'], 'jti' => $jti, 'status' => (string) $res['record']['status']]);
-        }
-        if (empty($res['record']['mailed_at'])) {
-            $mailRec = $res['record'];   // the mail points at the landing /download page: no update-server call here
-            if ((new LicenseMailer())->sendLicense($mailRec)) {
-                (new LicenseStore())->markMailed($jti);
-            } else {
-                // Answer 200 even though delivery failed, and this is the opposite of
-                // what it looks like it should be.
-                //
-                // Polar disables an endpoint after 10 CONSECUTIVE non-2xx replies. A
-                // mail outage fails every order at once, so replying 5xx would burn
-                // through those ten in ten sales and take the webhook down for every
-                // future customer — turning "one buyer wasn't emailed" into "no buyer
-                // is ever processed again". The licence is stored, so nothing is lost:
-                // `mailed_at` stays null and POST /redeliver sends the backlog once
-                // mail is working.
-                error_log("polar webhook: licence {$jti} issued but NOT delivered — run POST /redeliver once mail is fixed");
-            }
-        }
-        respond(200, ['issued' => !$res['reused'], 'jti' => $jti]);
+        if (strlen($raw) > 1048576) { respond(400, ['error' => 'invalid_input']); }
+        [$code, $out] = (new Webhooks($store, $issuer))->polar($raw, $_SERVER);
+        respond($code, $out);
+    }
+    if ($method === 'POST' && $uri === '/webhook/resend') {
+        if (strlen($raw) > 65536) { respond(400, ['error' => 'invalid_input']); }
+        [$code, $out] = (new Webhooks($store, $issuer))->resend($raw, $_SERVER);
+        respond($code, $out);
     }
 
     // ── Public: claim the key from the checkout success page ─────────────────
@@ -265,7 +176,6 @@ try {
         if (strlen($checkoutId) < 12 && strlen($orderId) < 12) {
             respond(404, ['error' => 'not found']);   // too short to be a real id
         }
-        $store = new LicenseStore();
         $rec = $checkoutId !== '' ? $store->findByCheckout($checkoutId) : $store->findByOrder('polar', $orderId);
         if ($rec === null || ($rec['status'] ?? '') !== 'active') {
             respond(404, ['error' => 'not found']);
@@ -277,6 +187,7 @@ try {
         if (!empty($rec['renews_jti']) || isset((\FluxFiles\LicenseServer\Plans::get($recPlan) ?? [])['renews']) || str_ends_with($recPlan, '-renewal')) {
             respond(404, ['error' => 'not found', 'hint' => 'renewal keys are emailed to the address of the licence they extend']);
         }
+        $activityJti = (string) $rec['jti'];
         $age = time() - (int) ($rec['created_at'] ?? 0);   // stored as a unix int
         if ($age > CLAIM_WINDOW) {
             respond(410, ['error' => 'claim window expired', 'hint' => 'the key was emailed to you']);
@@ -293,6 +204,7 @@ try {
         $dl = ProDownload::linkFor($rec, $store, ProDownload::TIMEOUT_CLAIM);
         if ($dl !== null) {
             $out['pro_download'] = $dl;
+            $store->recordDownload('fluxfiles-pro', 'pro_link_claim', (string) ($dl['version'] ?? ''));
         }
         respond(200, $out);
     }
@@ -318,7 +230,6 @@ try {
             header('Access-Control-Max-Age: 600');
             respond(204, []);
         }
-        $store = new LicenseStore();
         if (!$store->rateHit('dl-ip:' . ProDownload::ipBucket((string) ($_SERVER['REMOTE_ADDR'] ?? '')), 600, 10)) {
             header('Retry-After: 600');
             respond(429, ['error' => 'too many attempts']);
@@ -330,6 +241,7 @@ try {
         if ($rec === null) {
             $fail();
         }
+        $activityJti = (string) $rec['jti'];
         // Count the licence bucket for EVERY known key before judging it, so a revoked, a
         // superseded and a live key behave the same from outside.
         if (!$store->rateHit('dl-jti:' . $rec['jti'], 600, 5)) {
@@ -345,6 +257,7 @@ try {
         if ($dl === null) {
             $fail();
         }
+        $store->recordDownload('fluxfiles-pro', 'pro_link_download', (string) ($dl['version'] ?? ''));
         respond(200, ['pro_download' => $dl]);
     }
 
@@ -365,7 +278,8 @@ try {
         }
         $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
         $key = preg_match('/^Bearer\s+(\S+)\s*$/i', $auth, $bm) === 1 ? $bm[1] : '';
-        $payload = $key !== '' ? $signer->verify($key) : null;
+        $public = Config::get('FLUXFILES_LICENSE_K1_PUB');
+        $payload = $key !== '' ? ($public !== '' ? LicenseSigner::verifyPublic($key, $public) : $signer()->verify($key)) : null;
         if ($payload === null) {
             respond(401, ['error' => 'invalid key']);
         }
@@ -375,8 +289,8 @@ try {
         }
         $client = preg_match('/^[a-z0-9.\/-]{1,64}$/', (string) ($b['client'] ?? '')) === 1 ? (string) $b['client'] : '-';
 
-        $store = new LicenseStore();
         $jti = (string) $payload['jti'];
+        $activityJti = $jti;
         // Per IP (IPv6 as its /64) as well as per licence. The licence bucket is the tight one, so
         // an agency with many sites behind one NAT is bounded by the looser IP bucket only.
         if (!$store->rateHit('refresh-ip:' . ProDownload::ipBucket((string) ($_SERVER['REMOTE_ADDR'] ?? '')), 3600, 120)
@@ -416,35 +330,45 @@ try {
     // Runtime remains offline; this is solely the online update channel's revocation
     // check. Keep its credential narrower than the licence-server admin token.
     if ($method === 'POST' && $uri === '/update-status') {
-        if (!updateStatusOk()) { respond(401, ['error' => 'unauthorized']); }
         $b = json_decode($raw, true) ?: [];
         $jti = (string) ($b['jti'] ?? '');
         if (!preg_match('/^[a-f0-9]{24}$/', $jti)) { respond(400, ['error' => 'invalid jti']); }
-        respond(200, ['active' => (new LicenseStore())->isUpdateEligible($jti)]);
+        $active = $store->isUpdateEligible($jti);
+        echo json_encode(['active' => $active]);
+        if (function_exists('fastcgi_finish_request')) { fastcgi_finish_request(); }
+        $store->recordInstallPing($jti, $b, $active);
+        exit;
     }
 
     // ── Admin: manual issue ──────────────────────────────────────────────────
     if ($method === 'POST' && $uri === '/issue') {
-        if (!adminOk()) { respond(401, ['error' => 'unauthorized']); }
         $b = json_decode($raw, true) ?: [];
+        $delivery = $b['deliver'] ?? 'none';
+        if (!in_array($delivery, ['none','manual','mail'], true) || !is_string($b['note'] ?? '') || mb_strlen($b['note'] ?? '') > 500) { respond(400, ['error' => 'invalid_input']); }
+        Mask::safe((string) ($b['note'] ?? ''));
         try {
-            $res = $issuer->issue([
+            $res = $issuer()->issue([
                 'email' => (string) ($b['email'] ?? ''), 'plan' => (string) ($b['plan'] ?? ''),
                 'customer' => (string) ($b['customer'] ?? ''), 'gateway' => 'manual',
+                'is_test' => $b['is_test'] ?? false, 'note' => $b['note'] ?? null,
                 'order_id' => (string) ($b['order_id'] ?? ('manual-' . bin2hex(random_bytes(6)))),
             ]);
         } catch (\InvalidArgumentException $e) {
             respond(400, ['error' => $e->getMessage()]);   // bad email / unknown plan, for the admin
         }
-        respond(200, ['license_key' => $res['key'], 'record' => $res['record']]);
+        $mailed = $delivery === 'manual' || ($delivery === 'mail' && $api->mailer($res['record']['jti'])->sendLicense($res['record']));
+        if ($mailed) { $store->markMailed($res['record']['jti']); }
+        $store->audit('licence.issue', $res['record']['jti']);
+        $res['record'] = $store->findByJti($res['record']['jti']);
+        respond(200, $role === 'ui' ? ['record' => Mask::row($res['record']), 'mailed' => $mailed] : ['license_key' => $res['key'], 'record' => $res['record'], 'mailed' => $mailed]);
     }
 
     // ── Admin: list / lookup ─────────────────────────────────────────────────
     if ($method === 'GET' && $uri === '/licenses') {
-        if (!adminOk()) { respond(401, ['error' => 'unauthorized']); }
-        $store = new LicenseStore();
         $email = (string) ($_GET['email'] ?? '');
-        respond(200, ['licenses' => $email !== '' ? $store->findByEmail($email) : $store->all()]);
+        $rows = $email !== '' ? $store->findByEmail($email) : $store->all();
+        $store->audit('key.bulk_read');
+        respond(200, ['licenses' => $role === 'ui' ? array_map([Mask::class, 'row'], $rows) : $rows]);
     }
 
     // ── Admin: re-send undelivered licences ──────────────────────────────────
@@ -454,11 +378,13 @@ try {
     // outage fails every order), so the backlog lands here instead. Safe to run at any
     // time: it only touches licences with no mailed_at, and marks each as it goes.
     if ($method === 'POST' && $uri === '/redeliver') {
-        if (!adminOk()) { respond(401, ['error' => 'unauthorized']); }
-        $store = new LicenseStore();
-        $mailer = new LicenseMailer();
-        $sent = 0; $failed = 0;
-        foreach ($store->undelivered() as $rec) {
+        $mailer = $api->mailer();
+        $b = json_decode($raw, true) ?: [];
+        $limit = max(1, min($role === 'ui' ? 10 : 100, (int) ($b['limit'] ?? 100)));
+        $sent = 0; $failed = 0; $deliveryDeadline = microtime(true) + 20;
+        foreach ($store->undelivered($limit) as $rec) {
+            $remainingSeconds = (int)floor($deliveryDeadline-microtime(true)); if ($remainingSeconds < 1) { break; }
+            $mailer = $api->mailer((string) $rec['jti']); $mailer->setTimeout(min(15,$remainingSeconds));
             if ($mailer->sendLicense($rec)) {
                 $store->markMailed((string) $rec['jti']);
                 $sent++;
@@ -466,12 +392,13 @@ try {
                 $failed++;   // stays in the backlog for the next run
             }
         }
-        respond(200, ['sent' => $sent, 'failed' => $failed]);
+        $remaining = (int) $store->pdo()->query("SELECT COUNT(*) FROM licenses WHERE mailed_at IS NULL AND status='active' AND gateway IS NOT 'manual'")->fetchColumn();
+        $store->audit('mail.redeliver');
+        respond(200, ['sent' => $sent, 'failed' => $failed, 'remaining' => $remaining]);
     }
 
     // ── Admin: revoke / refund ───────────────────────────────────────────────
     if ($method === 'POST' && $uri === '/revoke') {
-        if (!adminOk()) { respond(401, ['error' => 'unauthorized']); }
         $b = json_decode($raw, true) ?: [];
         $status = (string) ($b['status'] ?? 'revoked');
         // `superseded` is the store's own bookkeeping and stays update-eligible, so
@@ -479,32 +406,43 @@ try {
         if (!in_array($status, ['revoked', 'refunded', 'active'], true)) {
             respond(400, ['error' => 'status must be revoked, refunded or active']);
         }
-        $store = new LicenseStore();
         // {"subscription_id": ...} revokes every key of one subscription, so none of them can refresh.
         $sid = (string) ($b['subscription_id'] ?? '');
         if ($sid !== '') {
             if (preg_match('/^[A-Za-z0-9_.:-]{1,100}$/', $sid) !== 1) { respond(400, ['error' => 'invalid subscription_id']); }
-            $n = $store->setStatusForSubscription($sid, $status);
+            $before = $store->pdo()->prepare('SELECT jti,plan,status FROM licenses WHERE subscription_id=?');
+            $before->execute([$sid]); $previous = $before->fetchAll();
+            $n = $store->transaction(function () use ($store, $sid, $status): int {
+                $n = $store->setStatusForSubscription($sid, $status);
+                $store->audit('subscription.revoke', $sid, 'ok', null, ['status' => $status]);
+                return $n;
+            });
             error_log("license revoke: subscription {$sid} -> {$status} ({$n} row(s))");
-            $out = ['updated' => $n > 0, 'rows' => $n];
+            $changed = [];
+            foreach ($previous as $row) { if (($store->findByJti($row['jti'])['status'] ?? null) !== $row['status']) { $changed[] = ['jti' => $row['jti'], 'plan' => $row['plan']]; } }
+            $out = ['updated' => $n > 0, 'rows' => $n, 'cascaded' => $changed];
             $head = $status === 'active' ? $store->newestForSubscription($sid) : null;
             if ($head !== null && (string) $head['status'] === 'active' && empty($head['mailed_at'])) {
                 // Orders paid while it was revoked were recorded but never mailed.
                 $out['note'] = 'the newest key was never mailed: run POST /redeliver to send it';
-                (new LicenseMailer())->sendOpsNotice('FluxFiles: subscription restored, newest key not mailed',
+                $api->mailer()->sendOpsNotice('FluxFiles: subscription restored, newest key not mailed',
                     "Subscription {$sid} was restored. Its newest licence ({$head['jti']}) was recorded while revoked and never mailed: run POST /redeliver to send it.");
             }
             respond($n > 0 ? 200 : 404, $out);
         }
-        $ok = $store->setStatusCascade((string) ($b['jti'] ?? ''), $status);
+        $ok = $store->transaction(function () use ($store, $b, $status): bool {
+            $ok = $store->setStatusCascade((string) ($b['jti'] ?? ''), $status);
+            $store->audit($status === 'active' ? 'licence.restore' : 'licence.revoke', (string) ($b['jti'] ?? ''), $ok ? 'ok' : 'not_found');
+            return $ok;
+        });
         reportCascade($store, "{$status} licence " . (string) ($b['jti'] ?? ''));
-        respond($ok ? 200 : 404, ['updated' => $ok]);
+        respond($ok ? 200 : 404, ['updated' => $ok, 'cascaded' => array_map(static fn (array $r): array => ['jti' => $r['jti'], 'plan' => $r['plan']], $store->lastCascade())]);
     }
 
     respond(404, ['error' => 'not found']);
 } catch (\Throwable $e) {
     // Log the detail for the operator; the caller (possibly unauthenticated) gets
     // nothing about the signer, the database or the input that broke.
-    error_log('license server: ' . $e);
+    error_log('license server: '.get_class($e).' · '.mb_substr(Mask::clean(str_replace(["\r","\n"], ' ', $e->getMessage())),0,400));
     respond(500, ['error' => 'internal error']);
 }

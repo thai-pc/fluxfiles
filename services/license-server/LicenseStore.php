@@ -6,13 +6,32 @@ namespace FluxFiles\LicenseServer;
 
 use PDO;
 
+require_once __DIR__ . '/AdminSchema.php';
+require_once __DIR__ . '/AdminStore.php';
+require_once __DIR__ . '/PhaseSchema.php';
+require_once __DIR__ . '/ReviewSchema.php';
+require_once __DIR__ . '/OperationsStore.php';
+
 /**
  * The vendor customer/license DB (SQLite). This is the stateful back-office — kept
  * OUTSIDE the stateless FluxFiles core. One row per issued license key.
  */
 final class LicenseStore
 {
+    public const EVENT_DAYS = 180;
+    public const BODY_DAYS = 7;
+    public const MAIL_DAYS = 365;
+    public const AUDIT_DAYS = 730;
+    public const PING_DAYS = 90;
+    public const OPS_DAYS = 30;
+
+    use AdminStore;
+    use OperationsStore;
+
     private PDO $db;
+    private string $actor = 'system';
+    private string $historyKind = '';
+    private ?string $historyRef = null;
     /** @var array<int,array{jti:string,plan:string,email:string}> rows the last cascade changed */
     private array $cascaded = [];
     private bool $inTx = false;   // own flag: PDO::inTransaction() ignores a hand-issued BEGIN on older PHP
@@ -27,7 +46,8 @@ final class LicenseStore
         // -wal/-shm files) owner-only, whatever the process umask is.
         $prevUmask = umask(0077);
         try {
-            $this->db = new PDO('sqlite:' . $path, null, null, [
+            $class=class_exists('Pdo\Sqlite') ? 'Pdo\Sqlite' : PDO::class;
+            $this->db = new $class('sqlite:' . $path, null, null, [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]);
@@ -37,6 +57,7 @@ final class LicenseStore
         $this->db->exec('PRAGMA journal_mode=WAL');
         $this->db->exec('PRAGMA busy_timeout=5000');   // a concurrent writer waits instead of failing
         $this->migrate();
+        $this->installHistoryTriggers();
     }
 
     private function migrate(): void
@@ -127,6 +148,9 @@ final class LicenseStore
         } catch (\PDOException $e) {
             error_log('license store: duplicate (gateway, order_id) rows exist; uniq_order not created — ' . $e->getMessage());
         }
+        AdminSchema::migrate($this->db);
+        PhaseSchema::migrate($this->db);
+        ReviewSchema::migrate($this->db);
     }
 
     /** ADD COLUMN that survives a concurrent first request adding it at the same moment. */
@@ -147,6 +171,10 @@ final class LicenseStore
     {
         $s = $this->db->prepare('UPDATE licenses SET mailed_at = ? WHERE jti = ?');
         $s->execute([$at ?? time(), $jti]);
+        if ($s->rowCount() > 0) {
+            try { $this->resolveOps('mail_failed', $jti); }
+            catch (\Throwable $e) { error_log('mail item resolution failed'); }
+        }
         return $s->rowCount() > 0;
     }
 
@@ -166,8 +194,8 @@ final class LicenseStore
             }
         }
         $stmt = $this->db->prepare('INSERT OR IGNORE INTO licenses
-            (jti,email,customer,plan,edition,modules,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at,grace_days,customer_id,renews_jti,subscription_id,billing_reason)
-            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at,:grace_days,:customer_id,:renews_jti,:subscription_id,:billing_reason)');
+            (jti,email,customer,plan,edition,modules,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at,grace_days,customer_id,renews_jti,subscription_id,billing_reason,is_test,note,product_id)
+            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at,:grace_days,:customer_id,:renews_jti,:subscription_id,:billing_reason,:is_test,:note,:product_id)');
         $row = [
             'jti'         => (string) $rec['jti'],
             'email'       => (string) $rec['email'],
@@ -191,6 +219,9 @@ final class LicenseStore
             'customer_id' => ($rec['customer_id'] ?? '') !== '' ? (string) $rec['customer_id'] : null,
             'renews_jti'  => ($rec['renews_jti'] ?? '') !== '' ? (string) $rec['renews_jti'] : null,
             'subscription_id' => ($rec['subscription_id'] ?? '') !== '' ? (string) $rec['subscription_id'] : null,
+            'is_test' => !empty($rec['is_test']) ? 1 : 0,
+            'note' => isset($rec['note']) ? mb_substr((string) $rec['note'], 0, 500) : null,
+            'product_id' => $rec['product_id'] ?? null,
             'billing_reason'  => ($rec['billing_reason'] ?? '') !== '' ? (string) $rec['billing_reason'] : null,
         ];
         $stmt->execute($row);
@@ -385,6 +416,7 @@ final class LicenseStore
             $graceDays = ($row['grace_days'] ?? null) !== null ? (int) $row['grace_days'] : 14;
             $stage = $row['reminder_stage'] ?? null;
 
+            if ($now <= $expires && $this->reminderSuppressed($row)) { continue; }
             if ($now <= $expires) {
                 // Still before expiry: find the most urgent configured threshold the
                 // remaining days have crossed, and only report it if that's more
@@ -963,7 +995,9 @@ final class LicenseStore
                 $cur = array_shift($queue);
                 $pick->execute([$cur]);
                 foreach ($pick->fetchAll() as $c) { $this->cascaded[] = $c; }
-                $up->execute([$status, $cur]);
+                $this->historyKind = 'cascade';
+                $this->historyRef = $jti;
+                try { $up->execute([$status, $cur]); } finally { $this->historyKind = ''; $this->historyRef = null; }
                 $kids->execute([$cur]);
                 foreach ($kids->fetchAll(\PDO::FETCH_COLUMN) as $k) {
                     if (!in_array($k, $seen, true)) { $seen[] = $k; $queue[] = $k; }

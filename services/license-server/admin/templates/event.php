@@ -1,0 +1,33 @@
+<h1><?= $v->e($v->t('events')) ?> #<?= $v->e($data['id']) ?></h1>
+<section class="card">
+    <?= $v->table([$data]) ?>
+    <p><?= $v->e($v->t('redeliver_polar')) ?></p>
+    <?php if ($data['jti']): ?>
+    <a href="/licences/<?= $v->e($data['jti']) ?>"><?= $v->e($v->t('licences')) ?></a>
+    <?php endif ?>
+    <?php if ($v->canWrite() && !$data['resolved_at']): ?>
+    <form method="post" action="/events/<?= $v->e($data['id']) ?>/resolve">
+        <?= $v->csrf() ?>
+        <button><?= $v->e($v->t('resolve')) ?></button>
+    </form>
+    <?php endif ?>
+</section>
+
+<?php if ($v->canWrite() && $data['source'] === 'polar' && $data['verify'] === 'ok' && $data['has_body']): ?>
+<section class="card">
+    <form method="post" action="/events/<?= $v->e($data['id']) ?>/replay">
+        <?= $v->csrf() ?>
+        <label>
+            <?= $v->e($v->t('code')) ?>
+            <input
+                name="code"
+                inputmode="numeric"
+                pattern="[0-9]{6}"
+                maxlength="6"
+                autocomplete="one-time-code"
+            />
+        </label>
+        <button><?= $v->e($v->t('replay')) ?></button>
+    </form>
+</section>
+<?php endif ?>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FluxFiles\LicenseServer;
 
 require_once __DIR__ . '/ProDownload.php';
+if (is_file(__DIR__ . '/client/Mask.php')) { require_once __DIR__ . '/client/Mask.php'; }
 
 /**
  * Delivers a freshly issued licence key to the buyer.
@@ -26,16 +27,38 @@ require_once __DIR__ . '/ProDownload.php';
  */
 final class LicenseMailer
 {
+    private ?\Closure $onResult;
+    private string $kind = 'licence';
+    private ?string $providerId = null;
+    private int $timeout = 15;
+    private string $idempotencyKey = '';
+    private float $deadline = 0;
+
     private const SITE = 'https://fluxfiles.thai-pc.com';
 
     public function __construct(
         private string $transport = '',
         private string $from = '',
-        private string $fromName = ''
+        private string $fromName = '',
+        ?callable $onResult = null
     ) {
+        $this->onResult = $onResult === null ? null : \Closure::fromCallable($onResult);
         $this->transport = $transport !== '' ? $transport : (string) (getenv('FLUXFILES_MAIL_TRANSPORT') ?: 'log');
         $this->from = $from !== '' ? $from : (string) (getenv('FLUXFILES_MAIL_FROM') ?: 'licenses@localhost');
         $this->fromName = $fromName !== '' ? $fromName : (string) (getenv('FLUXFILES_MAIL_FROM_NAME') ?: 'FluxFiles');
+    }
+
+    public function setTimeout(int $seconds): void { $this->timeout = max(1,min(30,$seconds)); }
+    public function setIdempotencyKey(string $value): void
+    {
+        if (!preg_match('/^[A-Za-z0-9_-]{1,100}$/D',$value)) { throw new \InvalidArgumentException('invalid_input'); }
+        $this->idempotencyKey=$value;
+    }
+    public function sendStructured(string $kind,string $to,string $subject,string $body): bool
+    {
+        if (!in_array($kind,['notice','report'],true) || !filter_var($to,FILTER_VALIDATE_EMAIL) || strpbrk($subject,"\r\n")!==false) { return false; }
+        $this->kind=$kind;
+        return $this->deliverContent($to,$subject,['heading'=>$subject,'intro'=>preg_split('/\n\n|\n/',$body)?:[$body]],'structured mail failed for ');
     }
 
     /**
@@ -50,6 +73,7 @@ final class LicenseMailer
      */
     public function sendLicense(array $record): bool
     {
+        $this->kind = trim((string) ($record['modules'] ?? '')) === '' ? 'support' : 'licence';
         try {
             return $this->sendLicenseImpl($record);
         } catch (\Throwable $e) {
@@ -79,6 +103,7 @@ final class LicenseMailer
      */
     public function sendRenewalUnmatched(string $email, string $plan, string $orderId): bool
     {
+        $this->kind = 'renewal_unmatched';
         try {
             return $this->sendRenewalUnmatchedImpl($email, $plan, $orderId);
         } catch (\Throwable $e) {
@@ -105,6 +130,7 @@ final class LicenseMailer
         }
         $ops = (string) (getenv('FLUXFILES_OPS_EMAIL') ?: '');
         if ($ops !== '' && filter_var($ops, FILTER_VALIDATE_EMAIL)) {
+            $this->kind = 'ops';
             $this->deliver($ops, "Unmatched renewal: {$plan} ({$orderId})",
                 "Order {$orderId} ({$plan}) by {$email} matched no active Lifetime licence.\n"
                 . "Fix: POST /issue {\"plan\":\"{$plan}\",\"email\":\"<the LIFETIME purchase email>\"}, or refund in Polar.");
@@ -115,6 +141,7 @@ final class LicenseMailer
     /** Operator notice to FLUXFILES_OPS_EMAIL (no-op when unset). Plain text. Never throws. */
     public function sendOpsNotice(string $subject, string $body): bool
     {
+        $this->kind = 'ops';
         $ops = (string) (getenv('FLUXFILES_OPS_EMAIL') ?: '');
         if ($ops === '' || !filter_var($ops, FILTER_VALIDATE_EMAIL)) {
             return false;
@@ -155,26 +182,50 @@ final class LicenseMailer
 
     private function deliver(string $to, string $subject, string $body, ?string $html = null, string $failPrefix = 'license mail failed for '): bool
     {
+        $ok = false; $error = null; $this->providerId = null; $this->deadline = microtime(true) + $this->timeout;
         try {
-            // Sandbox guard: a recipient outside FLUXFILES_MAIL_ALLOW_TO is NOT sent. It
-            // reports true ("handled") on purpose: sendLicense()'s result drives mailed_at,
-            // and false would leave the row unmailed so every Polar retry and /redeliver
-            // run would attempt (and fail to) deliver it again, forever.
             if (!$this->recipientAllowed($to)) {
                 error_log('mail suppressed by FLUXFILES_MAIL_ALLOW_TO (to=' . self::maskEmail($to) . ')');
-                return true;
+                return $ok = true;
             }
             $subject = self::subjectPrefix() . $subject;
-            return match ($this->transport) {
+            return $ok = match ($this->transport) {
                 'resend' => $this->sendResend($to, $subject, $body, $html),
                 'smtp' => $this->sendSmtp($to, $subject, $body, $html),
                 'sendmail' => $this->sendMail($to, $subject, $body, $html),
                 default => $this->sendLog($to, $subject, $body),
             };
         } catch (\Throwable $e) {
-            error_log($failPrefix . $to . ': ' . $e->getMessage());
+            $error = self::diagnostic($e->getMessage());
+            error_log($failPrefix . self::maskEmail($to) . ': ' . $error);
             return false;
+        } finally {
+            if ($this->onResult !== null) {
+                try { ($this->onResult)($this->kind, $to, $ok, $error, $this->providerId); }
+                catch (\Throwable $e) { error_log('mail result recording failed'); }
+            }
         }
+    }
+
+    private static function diagnostic(string $message): string
+    {
+        foreach (['FLUXFILES_RESEND_API_KEY','FLUXFILES_SMTP_PASS','FLUXFILES_SMTP_USER'] as $name) {
+            $secret=(string)getenv($name);if ($secret!=='') { $message=str_replace([$secret,base64_encode($secret)],'[redacted]',$message); }
+        }
+        $message=preg_replace('/Bearer\s+\S+/i','Bearer [redacted]',$message);
+        if (class_exists(\FluxFiles\LicenseServer\Client\Mask::class,false)) { $message=\FluxFiles\LicenseServer\Client\Mask::clean($message); }
+        else {
+            $message=preg_replace('/[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/','[redacted]',$message);
+            $message=preg_replace_callback('/[A-Z0-9.!#$%&\x27+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i',static fn(array $m):string=>self::maskEmail($m[0]),$message);
+        }
+        return mb_substr(str_replace(["\r","\n"],' ',(string)$message),0,400);
+    }
+
+    public function sendTest(): bool
+    {
+        $this->kind = 'test';
+        $to = (string) (getenv('FLUXFILES_OPS_EMAIL') ?: '');
+        return filter_var($to, FILTER_VALIDATE_EMAIL) !== false && $this->deliver($to, 'FluxFiles admin test', 'Licence server mail test.');
     }
 
     /**
@@ -484,6 +535,7 @@ final class LicenseMailer
      */
     public function sendReminder(array $record, string $bucket): bool
     {
+        $this->kind = 'reminder:' . $bucket;
         try {
             return $this->sendReminderImpl($record, $bucket);
         } catch (\Throwable $e) {
@@ -697,16 +749,13 @@ final class LicenseMailer
 
     private function sendLog(string $to, string $subject, string $body): bool
     {
-        // Server logs are read by more people and kept longer than a mailbox: show
-        // the message, but not the working key in it — unless the operator asks
-        // (FLUXFILES_MAIL_LOG_FULL=1, e.g. while testing a setup).
-        if (getenv('FLUXFILES_MAIL_LOG_FULL') !== '1') {
-            $body = (string) preg_replace_callback(
-                '/[A-Za-z0-9_-]{16,}(?:\.[A-Za-z0-9_+\/=-]{16,})+/',
-                static fn (array $m): string => substr($m[0], 0, 12) . '…[redacted]',
-                $body
-            );
-        }
+        // A diagnostic transport is still a log: no opt-in can expose a working key.
+        $redact = static function (string $value): string {
+            $value = (string) preg_replace_callback('/[A-Za-z0-9_-]{16,}(?:\.[A-Za-z0-9_+\/=-]{16,})+/', static fn(array $m):string=>substr($m[0],0,12).'…[redacted]', $value);
+            if (class_exists(\FluxFiles\LicenseServer\Client\Mask::class,false)) { return \FluxFiles\LicenseServer\Client\Mask::clean($value); }
+            return (string) preg_replace_callback('/[A-Z0-9.!#$%&\x27+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i',static fn(array $m):string=>self::maskEmail($m[0]),$value);
+        };
+        $to = self::maskEmail($to); $subject=$redact($subject); $body=$redact($body);
         error_log("license mail [log transport] to={$to} subject={$subject}\n{$body}");
         return true;
     }
@@ -752,15 +801,19 @@ final class LicenseMailer
 
         $payload = $this->resendPayload($to, $subject, $body, $html, $replyTo);
 
-        $ch = curl_init('https://api.resend.com/emails');
+        $base = (string) (getenv('FLUXFILES_RESEND_API_BASE') ?: 'https://api.resend.com');
+        if ($base !== 'https://api.resend.com' && !preg_match('~^http://127\.0\.0\.1(?::[0-9]{1,5})?(?:/[A-Za-z0-9_/-]*)?$~D', $base)) { throw new \RuntimeException('invalid Resend API base'); }
+        $ch = curl_init($base . '/emails');
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
+            CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT => 15,
+            CURLOPT_CONNECTTIMEOUT => min(2,$this->timeout),
+            CURLOPT_TIMEOUT => $this->timeout,
             CURLOPT_HTTPHEADER => [
                 'Authorization: Bearer ' . $apiKey,
                 'Content-Type: application/json',
+                'Idempotency-Key: ' . ($this->idempotencyKey !== '' ? $this->idempotencyKey : bin2hex(random_bytes(16))),
             ],
             CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_SLASHES),
         ]);
@@ -775,6 +828,8 @@ final class LicenseMailer
         if ($status < 200 || $status >= 300) {
             throw new \RuntimeException('Resend API returned ' . $status . ': ' . (string) $responseBody);
         }
+        $decoded = is_string($responseBody) ? json_decode($responseBody, true) : null;
+        $this->providerId = is_string($decoded['id'] ?? null) ? mb_substr($decoded['id'], 0, 100) : null;
         return true;
     }
 
@@ -795,15 +850,19 @@ final class LicenseMailer
         }
 
         $target = ($tls === 'ssl' ? 'ssl://' : '') . $host . ':' . $port;
-        $fp = @stream_socket_client($target, $errno, $errstr, 15);
+        $fp = @stream_socket_client($target, $errno, $errstr, $this->timeout);
         if ($fp === false) {
             throw new \RuntimeException("connect {$target}: {$errstr}");
         }
-        stream_set_timeout($fp, 15);
-
-        $read = static function () use ($fp): string {
+        stream_set_timeout($fp, $this->timeout);
+        $deadline = $this->deadline;
+        $read = static function () use ($fp, $deadline): string {
             $out = '';
-            while (($line = fgets($fp, 515)) !== false) {
+            while (true) {
+                $remaining = $deadline - microtime(true);
+                if ($remaining <= 0 || strlen($out)>65536) { throw new \RuntimeException("mail timeout"); }
+                stream_set_timeout($fp, max(0,(int)floor($remaining)), max(1,(int)(($remaining-floor($remaining))*1000000)));
+                $line=fgets($fp,515);if ($line===false) { break; }
                 $out .= $line;
                 // A multi-line reply keeps a '-' in the 4th column until the last line.
                 if (strlen($line) < 4 || $line[3] !== '-') { break; }

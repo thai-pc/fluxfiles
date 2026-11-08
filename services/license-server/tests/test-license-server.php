@@ -11,7 +11,10 @@
 declare(strict_types=1);
 
 $core = __DIR__ . '/../../../packages/core/vendor/autoload.php';
-if (!is_file($core)) { fwrite(STDERR, "skip: core vendor not installed\n"); exit(0); }
+if (!is_file($core)) {
+    fwrite(STDERR, "core vendor not installed; run composer install -d packages/core\n");
+    exit(filter_var(getenv('CI'), FILTER_VALIDATE_BOOLEAN) ? 1 : 0);
+}
 require_once $core;
 require_once __DIR__ . '/../LicenseSigner.php';
 require_once __DIR__ . '/../LicenseStore.php';
@@ -196,15 +199,16 @@ function captureMail(callable $fn): string {
 
 test('mail: the key and the activation line reach the body', function () use ($secretB64) {
     $rec = issuer($secretB64)->issue(['email'=>'buyer@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'MAIL-1'])['record'];
-    putenv('FLUXFILES_MAIL_LOG_FULL=1');   // the log transport shows the key only when asked
-    try {
-        $out = captureMail(fn () => assertTrue((new LicenseMailer('log'))->sendLicense($rec), 'send reports success'));
-    } finally {
-        putenv('FLUXFILES_MAIL_LOG_FULL');
-    }
-    assertTrue(str_contains($out, (string) $rec['license_key']), 'the key itself is in the mail');
-    assertTrue(str_contains($out, 'FLUXFILES_LICENSE_KEY='), 'tells them how to activate it');
-    assertTrue(str_contains($out, 'buyer@acme.com'), 'addressed to the buyer');
+    $mailer = new LicenseMailer('log');
+    $method = new ReflectionMethod($mailer, 'renderBody'); $method;
+    $body = $method->invoke($mailer, $rec);
+    assertTrue(str_contains($body, (string) $rec['license_key']), 'rendered mail contains the key');
+    assertTrue(str_contains($body, 'FLUXFILES_LICENSE_KEY='), 'tells them how to activate it');
+    putenv('FLUXFILES_MAIL_LOG_FULL=1');
+    try { $out = captureMail(fn () => assertTrue($mailer->sendLicense($rec), 'send reports success')); }
+    finally { putenv('FLUXFILES_MAIL_LOG_FULL'); }
+    assertTrue(!str_contains($out, (string) $rec['license_key']), 'even the retired diagnostic flag cannot expose keys');
+    assertTrue(str_contains($out, 'b***@acme.com'), 'logged recipient is masked');
 });
 
 test('mail: a bad recipient fails soft, never throws', function () use ($secretB64) {
@@ -245,7 +249,7 @@ test('mail: a Support-only record gets no activation line', function () use ($se
     $out = captureMail(fn () => assertTrue((new LicenseMailer('log'))->sendLicense($rec), 'send reports success'));
     assertTrue(str_contains($out, 'Priority Support'), 'subject reflects the support subscription');
     assertTrue(!str_contains($out, 'FLUXFILES_LICENSE_KEY='), 'no activation instruction for a support-only purchase');
-    assertTrue(str_contains($out, 'sup@acme.com'), 'addressed to the buyer');
+    assertTrue(str_contains($out, 's***@acme.com'), 'addressed to the buyer');
 });
 
 // ── Renewal/expiry reminders (LICENSE-EXPIRY-NOTIFICATIONS-DESIGN.md §6) ─────
@@ -688,7 +692,7 @@ test('renewal: an already-expired licence restarts from now, not from the old da
     $iss = renewIssuer($secretB64, $store);
     $base = $iss->issue(['email'=>'old@x.com','plan'=>'lifetime','gateway'=>'polar','order_id'=>'L-OLD'])['record'];
     $past = time() - 400 * 86400;
-    $pdo = (new ReflectionProperty($store, 'db')); $pdo->setAccessible(true);
+    $pdo = (new ReflectionProperty($store, 'db')); $pdo;
     $pdo->getValue($store)->prepare('UPDATE licenses SET expires = ? WHERE jti = ?')->execute([$past, $base['jti']]);
     $lm = new LicenseManager($iss->issue(['email'=>'old@x.com','plan'=>'studio-renewal','gateway'=>'polar','order_id'=>'SR-OLD'])['key'], $keys);
     assertEqual('studio', $lm->edition());
@@ -747,7 +751,7 @@ test('mail: lifetime says use-forever + 12 months of updates; renewal says exten
     $iss = renewIssuer($secretB64);
     $life = $iss->issue(['email'=>'m@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'M-1'])['record'];
     $ren = $iss->issue(['email'=>'m@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'M-2'])['record'];
-    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
+    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render;
     $m = new LicenseMailer('log');
     $a = $render->invoke($m, $life);
     assertTrue(str_contains($a, 'Pro Lifetime') && str_contains($a, 'forever') && str_contains($a, '12 months'), 'lifetime wording');
@@ -773,7 +777,7 @@ test('polar-setup: default catalogue is the 6 current products; lifetime/renewal
     foreach (array_merge($lm[1], $rm[1]) as $pid) { assertTrue(\FluxFiles\LicenseServer\Plans::get($pid) !== null, "$pid has a plan"); }
 });
 
-function rdb(LicenseStore $s): PDO { $p = new ReflectionProperty($s, 'db'); $p->setAccessible(true); return $p->getValue($s); }
+function rdb(LicenseStore $s): PDO { $p = new ReflectionProperty($s, 'db'); $p; return $p->getValue($s); }
 
 test('renewal is bound to Polar customer_id when both sides know it', function () use ($secretB64) {
     $store = new LicenseStore(':memory:'); $iss = renewIssuer($secretB64, $store);
@@ -847,19 +851,19 @@ test('mail: renewal text is truthful (key above, old key updates end on its date
     $iss = renewIssuer($secretB64);
     $iss->issue(['email'=>'t@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'T-1']);
     $ren = $iss->issue(['email'=>'t@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'T-2'])['record'];
-    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
+    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render;
     $b = $render->invoke(new LicenseMailer('log'), $ren);
     assertTrue(str_contains($b, 'the key above') && str_contains($b, 'only this key carries the extended update window') && str_contains($b, 'updates stop on its original date'), 'truthful');
     assertTrue(!str_contains($b, 'keeps working until then') && !str_contains($b, 'key below'), 'old false claims gone');
     putenv('FLUXFILES_OPS_EMAIL=ops@x.com');
     $out = captureMail(fn () => (new LicenseMailer('log'))->sendRenewalUnmatched('nobody@x.com', 'pro-renewal', 'ORD-9'));
     putenv('FLUXFILES_OPS_EMAIL');
-    assertTrue(str_contains($out, 'nobody@x.com') && str_contains($out, 'ops@x.com'), 'buyer and ops notified');
+    assertTrue(str_contains($out, 'n***@x.com') && str_contains($out, 'o***@x.com'), 'buyer and ops notified');
 });
 
 test('mail: reminders for one-time plans point at the renewal and the same-email rule', function () use ($secretB64) {
     $rec = renewIssuer($secretB64)->issue(['email'=>'rm@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'RM-1'])['record'];
-    $m = new ReflectionMethod(LicenseMailer::class, 'renderRenewalBody'); $m->setAccessible(true);
+    $m = new ReflectionMethod(LicenseMailer::class, 'renderRenewalBody'); $m;
     $t = $m->invoke(new LicenseMailer('log'), $rec, '30');
     assertTrue(str_contains($t, 'SAME email') && str_contains($t, 'modules keep running') && !str_contains($t, 'renews/expires'), 'one-time wording');
 });
@@ -912,7 +916,7 @@ test('mail: the renewal text does not repeat the modules-keep-running sentence',
     $iss = renewIssuer($secretB64);
     $iss->issue(['email'=>'d@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'D-1']);
     $ren = $iss->issue(['email'=>'d@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'D-2'])['record'];
-    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
+    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render;
     assertEqual(1, substr_count($render->invoke(new LicenseMailer('log'), $ren), 'running'), 'said once');
 });
 
@@ -963,7 +967,7 @@ test('pro download: fails soft (null) on unset base, support plan, non-200, wron
 test('mail: points at the landing /download page (never a bearer URL), only for plans with Pro modules', function () use ($secretB64) {
     $iss = issuer($secretB64);
     $rec = $iss->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-m'])['record'];
-    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
+    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render;
     putenv('FLUXFILES_LANDING_ORIGIN');
     assertTrue(!str_contains($render->invoke(new LicenseMailer('log'), $rec), 'WordPress:'), 'no origin configured: no block');
     putenv('FLUXFILES_LANDING_ORIGIN=https://fluxfiles.example');
@@ -1030,7 +1034,7 @@ test('pro download: secondsLeft reads the URL expiry; no expiry -> fallback', fu
 
 /** Call a private LicenseMailer method. */
 function mailerCall(string $method, ...$args) {
-    $r = new ReflectionMethod(LicenseMailer::class, $method); $r->setAccessible(true);
+    $r = new ReflectionMethod(LicenseMailer::class, $method); $r;
     return $r->invoke(new LicenseMailer('log'), ...$args);
 }
 /** @return array{text:string,html:string} for a licence record, as sendLicense would build it */
