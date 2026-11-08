@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Licence server: **sandbox instance support** for running Polar sandbox on its own deployment. `FLUXFILES_MAIL_SUBJECT_PREFIX` (prepended to every subject, control characters stripped, max 32), `FLUXFILES_MAIL_ALLOW_TO` (exact addresses / `@domain` suffixes; other recipients are not sent, logged masked, and reported as handled so `mailed_at` is stamped and Polar never retries), and `FLUXFILES_LICENSE_INSTANCE` (adds `"instance"` to `/health`; the body is unchanged when unset). All default off. README "Sandbox instance" covers the separate test signing key, Polar sandbox org and webhook secret.
+
 ### Changed
 - WordPress plugin 1.1.2 (the first WordPress.org submission build; 1.1.1 was never submitted): bundles core 1.2.0 (licence-file hardening, dev router path normalisation, `LicenseKeyFile`/`LicenseRefresh` groundwork for the FluxFiles Pro add-on's licence key renewal). The free plugin never calls the licence server itself: `LicenseManager` is not bundled, nothing in the plugin invokes `/refresh`, and `LicenseRefresh` only issues a request when a caller supplies an HTTP transport. No behaviour change for free users.
 
