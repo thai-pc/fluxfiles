@@ -407,4 +407,6 @@ return [
     'empty_notices' => 'Chưa gửi thông báo bảo mật. Chọn khuyến cáo và xem trước danh sách người nhận.',
     'label' => 'Nhãn',
     'uptime' => 'Kiểm tra thành công (%)',
+    'empty_founding' => 'Chưa cấu hình mã giảm giá theo dõi. Thêm mã và hạn mức trong cấu hình để hiện tiến độ.',
+    'empty_timeline' => 'Chưa có lịch sử được ghi nhận. Lịch sử bắt đầu từ khi triển khai; thực hiện một kiểm tra cập nhật hoặc thao tác quản trị.',
 ];

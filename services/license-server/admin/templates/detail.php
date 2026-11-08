@@ -113,6 +113,9 @@ $base = '/licences/' . rawurlencode($r['jti']); ?>
 </section>
 <section class="card">
     <h2><?= $v->e($v->t('timeline')) ?></h2>
+    <?php if ($data['timeline'] === []): ?>
+    <p class="empty"><?= $v->e($v->t('empty_timeline')) ?></p>
+    <?php endif ?>
     <?php foreach ($data['timeline'] as $item): ?>
     <details>
         <summary><?= $v->time($item['at']) ?> · <?= $v->e($v->t($item['source'])) ?> · <?= $v->e(

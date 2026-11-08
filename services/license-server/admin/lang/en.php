@@ -407,4 +407,6 @@ return [
     'empty_notices' => 'No security notices yet. Choose an advisory and preview its recipients.',
     'label' => 'Label',
     'uptime' => 'Successful checks (%)',
+    'empty_founding' => 'No tracked discounts configured. Add codes and caps in configuration to show progress.',
+    'empty_timeline' => 'No recorded history yet. History starts at deployment; perform an update check or admin action.',
 ];

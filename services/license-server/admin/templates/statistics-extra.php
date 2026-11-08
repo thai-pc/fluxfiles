@@ -56,7 +56,7 @@
 <section class="card">
     <h2><?= $v->e($v->t('advisories')) ?></h2>
     <p><?= $v->e($v->t('unknown_affected')) ?></p>
-    <?= $v->table($data['advisories']) ?>
+    <?= $v->table($data['advisories'], [], null, 'empty_advisories') ?>
     <a href="/advisories"><?= $v->e($v->t('advisories')) ?></a>
 </section>
 <?php elseif ($kind === 'downloads'): ?>
@@ -86,6 +86,9 @@
     <?= $v->table($data['checks']) ?>
 </section>
 <?php elseif ($kind === 'growth'): ?>
+<?php if ($data['subjects'] === []): ?>
+<p class="empty"><?= $v->e($v->t('empty_growth')) ?></p>
+<?php endif ?>
 <p>
     <a class="button" href="<?= $v->e($data['analytics_url']) ?>" target="_blank" rel="noreferrer noopener">
         Cloudflare Web Analytics ↗

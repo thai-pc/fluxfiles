@@ -44,4 +44,11 @@ amount and the order's latest modified time, not the earlier partial-refund even
 history. Original retained webhook snapshots can refine the per-increment ledger;
 missing historical events are not fabricated.
 
-Validation results and commit IDs are recorded in the PR reply after final checks.
+Final local verification: 19 scripts / 288 checks each on PHP 8.2.35, 8.3.36,
+8.4.27 and 8.5.12, with no warnings/deprecations in captured output. HTTP fixture
+servers also enable E_ALL/display_errors. Chromium and 96 service PHP lints pass.
+The clock-boundary replay test captures the exact login OTP instead of generating
+a possibly new OTP after hashing. CI adds PHP 8.1 and the privileged collector smoke.
+
+Commits: `622b81a` contains behavior fixes; `ca04a66` is formatting only. The final
+validation/empty-guidance follow-up and CI results are listed in the PR reply.

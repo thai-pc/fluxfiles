@@ -61,12 +61,13 @@ $h->test(
             ->prepare('INSERT INTO users(name,pass_hash,totp_secret,created_at) VALUES(?,?,?,?)')
             ->execute(['owner', $hash, $secret, time()]);
         $a->create();
+        $loginCode = Totp::code($secret, intdiv(time(), 30));
         Harness::ok(
-            $a->login('owner', 'review-password-long', Totp::code($secret, intdiv(time(), 30))),
+            $a->login('owner', 'review-password-long', $loginCode),
         );
         Harness::eq(null, $a->session['stepup_at']);
         Harness::ok(!$a->stepup(''));
-        Harness::ok(!$a->stepup(Totp::code($secret, intdiv(time(), 30))));
+        Harness::ok(!$a->stepup($loginCode));
         $r = new ReflectionClass(Auth::class);
         $dummy = $r->getConstant(defined('PASSWORD_ARGON2ID') ? 'DUMMY_ARGON' : 'DUMMY_BCRYPT');
         Harness::eq(password_get_info($hash)['algoName'], password_get_info($dummy)['algoName']);

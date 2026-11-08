@@ -34,16 +34,37 @@ for f in services/license-server/tests/*.php; do php "$f" || exit; done
 node services/license-server/tests/browser-admin.cjs
 ```
 
-The review baseline passed 249 checks on PHP 8.2. The review fixes add dedicated
-data, HTTP, UI and worker regressions; the final supported-PHP and browser results
-are recorded in the PR reply and [REVIEW-FIXES.md](REVIEW-FIXES.md).
+After the consolidated review, **all 19 PHP scripts pass: 288 checks per PHP
+version**, locally on **8.2.35, 8.3.36, 8.4.27 and 8.5.12** (1,152 passing checks
+across the four runs). E_ALL/display_errors are enabled in the test process and
+the self-booting HTTP servers. PHP 8.1 is included in the dedicated CI matrix.
 
-New coverage includes historical/cumulative refunds, key-rotation install identity,
-stage isolation, global Telegram backoff, host-only cookies, fresh step-up,
-poisoned CSV, same-origin downloads, bounded JWKS, failure/backoff receipts,
-collector hostile lines/permissions, portable browser execution and PHP 8.5
-with deprecations visible. A dedicated workflow covers PHP 8.1–8.5 and Chromium,
-including a privileged collector smoke only on the disposable CI runner.
+| Suite | Passed |
+|---|---:|
+| Existing licence / sandbox mail / fallback | 119 / 8 / 5 |
+| Pro download / refresh / renewal / concurrent renewal | 8 / 22 / 9 / 6 |
+| Admin API / UI HTTP / UI security unit | 12 / 12 / 8 |
+| Statistics-backfill / ops-Telegram-health | 5 / 7 |
+| Phase API / phase unit / operations HTTP | 15 / 7 / 6 |
+| Review data / HTTP / worker / UI | 10 / 10 / 11 / 8 |
+
+PHP lint passes for **96 service PHP files** plus the update example; JavaScript
+syntax, workflow YAML parsing and `git diff --check` pass. Chromium passes desktop
+and 375px screens, header wrapping, 44px controls, explicit empty guidance, chart
+legend/axis/currency tables, fresh step-up, CSV BOM, notices, viewer, sandbox and
+host-only cookie isolation. No page errors or viewport overflow.
+
+The review regressions cover historical/cumulative refunds, key-rotation install
+identity, observation grace, stage isolation, global Telegram 429, host-only
+cookies, fresh step-up, poisoned CSV, same-origin downloads, bounded JWKS,
+report failure/backoff receipts, collector hostile lines/permissions, localization
+on fake-provider wires and portable browser execution. See
+[REVIEW-FIXES.md](REVIEW-FIXES.md) for the A/B/C mapping.
+
+A dedicated workflow runs PHP 8.1–8.5 and Chromium and checks actual collector
+privilege drop only on a disposable CI runner. Local non-root tests verify CLI
+permissions, hostile lines and symlink refusal. No real provider, user database,
+mail, Telegram account, server configuration, merge, tag or deployment was used.
 
 ## Ordered server changes (operator applies; repeat per instance)
 
@@ -124,7 +145,8 @@ including a privileged collector smoke only on the disposable CI runner.
    with `always`, including CSP/no-store on errors. Other paths must never expose
    PHP source, state, config or the parent directory. Keep URI-only access logs
    (`$uri`, no query string or Authorization). Add public exact POST
-   `/webhook/resend`, 64 KiB body cap and the Polar webhook rate zone. Preserve
+   `/webhook/resend`, 64 KiB body cap and the Polar webhook rate zone. Set public `/webhook/polar` to a **1 MiB** body cap (only retained/replayed
+   bodies stay 64 KiB). Preserve
    public `/refresh`, `/claim`, `/pro-download` and `/webhook/polar` routing.
 
 7. **Migrate and verify isolation.** With new code installed, run a controlled
@@ -248,8 +270,8 @@ including a privileged collector smoke only on the disposable CI runner.
   revoke automatically. Optional Polar token is runtime-only, not persisted.
 - Existing mail tests now assert mandatory masking rather than the retired
   `FLUXFILES_MAIL_LOG_FULL` bypass. Existing stats tests expect migration v4;
-  other buyer contracts remain covered. Local validation uses PHP 8.2.35;
-  PHP 8.1 and 8.3–8.5 have not been executed locally.
+  other buyer contracts remain covered. Local validation covers PHP 8.2–8.5;
+  PHP 8.1 is covered by the dedicated CI matrix.
 - All Unix users, ACLs/nginx/FPM/systemd, bootstrap allow-lists, root timers,
   provider setup, initial user/TOTP enrolment, real-instance smokes and landing
   Terms remain operator deployment work listed above. No automated deploy.

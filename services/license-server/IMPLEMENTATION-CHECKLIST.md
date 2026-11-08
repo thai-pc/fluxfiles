@@ -40,3 +40,8 @@ Executed on PHP 8.2.35; other supported PHP versions still need CI/operator chec
 Review follow-up: all A/B/C items map to `REVIEW-FIXES.md`. The v4 migration adds
 refund increments and observation grace without rewriting signed keys. Formatting
 is committed separately; final matrix/browser results are recorded in the PR reply.
+
+Post-review validation: 19 scripts / 288 checks each on PHP 8.2.35, 8.3.36, 8.4.27
+and 8.5.12; 96 service PHP lints; workflow YAML; desktop/mobile Chromium including
+instance-host cookies, fresh step-up, CSV, notices, viewer and accessibility checks.
+PHP 8.1 and actual root collector privilege drop run in the dedicated CI workflow.

@@ -106,7 +106,16 @@ final class Harness
         $port = (int) substr(strrchr(stream_socket_get_name($sock, false), ':'), 1);
         fclose($sock);
         $this->processes[] = proc_open(
-            [PHP_BINARY, '-S', '127.0.0.1:' . $port, $script],
+            [
+                PHP_BINARY,
+                '-d',
+                'error_reporting=-1',
+                '-d',
+                'display_errors=1',
+                '-S',
+                '127.0.0.1:' . $port,
+                $script,
+            ],
             [
                 0 => ['pipe', 'r'],
                 1 => ['file', $this->dir . '/server-' . $port . '.log', 'a'],

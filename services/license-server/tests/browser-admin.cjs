@@ -113,6 +113,22 @@ const start = async (file, env) => {
         (await page.locator("main").innerText()),
     );
   await page.waitForURL("http://127.0.0.1:" + ui + "/");
+  const shortControl = await page
+    .locator(".brand, button, .button")
+    .evaluateAll((nodes) =>
+      nodes.some(
+        (node) =>
+          node.getBoundingClientRect().width > 0 &&
+          node.getBoundingClientRect().height < 44,
+      ),
+    );
+  if (shortControl) throw Error("Interactive controls below 44px");
+  if (
+    !(await page.locator("main").innerText()).includes(
+      "Chưa cấu hình mã giảm giá theo dõi",
+    )
+  )
+    throw Error("Missing discount empty guidance");
   await page.screenshot({
     path: path.join(output, "ff-admin-desktop.png"),
     fullPage: true,

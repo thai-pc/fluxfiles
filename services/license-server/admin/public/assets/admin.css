@@ -857,3 +857,9 @@ input[type="checkbox"] {
   min-height: 44px;
   margin: 0;
 }
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}

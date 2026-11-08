@@ -60,6 +60,9 @@
 </div>
 <section class="card">
     <h2><?= $v->e($v->t('founding')) ?></h2>
+    <?php if ($data['revenue']['founding'] === []): ?>
+    <p class="empty"><?= $v->e($v->t('empty_founding')) ?></p>
+    <?php endif ?>
     <?php foreach ($data['revenue']['founding'] as $discount): ?>
     <h3><?= $v->e($discount['code']) ?> · <?= $v->e($discount['paid']) ?> / <?= $v->e($discount['cap']) ?></h3>
     <progress max="<?= $v->e($discount['cap']) ?>" value="<?= $v->e(min($discount['cap'], $discount['used'])) ?>"><?= $v->e($discount['used']) ?></progress>
@@ -85,6 +88,9 @@
                     $data[$key],
                 )
                 : $data[$key],
+            [],
+            null,
+            $key === 'expiring' ? 'empty_expiring' : 'empty_sales',
         ) ?>
     </section>
     <?php endforeach ?>
@@ -92,7 +98,7 @@
         <h2><?= $v->e($v->t('webhook_errors_7d')) ?></h2>
         <strong><?= $v->e($data['webhook_errors_7d']) ?></strong>
         <h2><?= $v->e($v->t('mail')) ?></h2>
-        <?= $v->table($data['mail']['periods'][30]) ?>
+        <?= $v->table($data['mail']['periods'][30], [], null, 'empty_mail') ?>
     </section>
 </div>
 
