@@ -913,10 +913,11 @@ time {
   align-items: center;
   min-height: 44px;
 }
-@media (min-width: 640px) and (max-width: 1599px) {
-  .licence-list [data-column="jti"],
+/* Laptop widths: drop the least-used columns so the list fits without a
+   horizontal scroll, but keep jti and last seen (operators look licences up
+   by jti and check "is this install alive" at a glance). */
+@media (min-width: 640px) and (max-width: 1919px) {
   .licence-list [data-column="fingerprint"],
-  .licence-list [data-column="last_seen_at"],
   .licence-list [data-column="cycles"],
   .licence-list [data-column="is_test"],
   .licence-list [data-column="archived_at"],
@@ -925,6 +926,13 @@ time {
   }
   .licence-list td[data-column="email"] {
     overflow-wrap: anywhere;
+  }
+}
+/* Narrow laptops/tablets: jti and last seen go too; both stay on the detail page. */
+@media (min-width: 640px) and (max-width: 1279px) {
+  .licence-list [data-column="jti"],
+  .licence-list [data-column="last_seen_at"] {
+    display: none;
   }
 }
 @media (max-width: 639px) {
