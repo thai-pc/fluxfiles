@@ -10,6 +10,7 @@ use FluxFiles\LicenseServer\Client\Mask;
 
 require_once __DIR__ . '/../../client/ApiClient.php';
 require_once __DIR__ . '/Telegram.php';
+require_once __DIR__ . '/../../client/OpsText.php';
 require_once __DIR__ . '/Health.php';
 require_once __DIR__ . '/Counters.php';
 require_once __DIR__ . '/Inbox.php';
@@ -29,7 +30,7 @@ final class Worker
         $this->dir = Config::get('FLUXFILES_OPS_STATE_DIR', '/var/lib/fluxfiles-license' . (Config::sandbox()?'-sbx': '') . '-ops');
     }
 
-    public function run(): void
+    public function run(): array
     {
         $this->deadline = microtime(true) + 53;
         $old = umask(0077);
@@ -39,7 +40,8 @@ final class Worker
             }
             $lock = fopen($this->dir . '/worker.lock', 'c');
             if (!$lock || !flock($lock, LOCK_EX|LOCK_NB)) {
-                return;
+                if ($lock) { fclose($lock); }
+                return [];
             }
             try {
                 $decoded = json_decode((string) @file_get_contents($this->dir . '/state.json'), true);
@@ -51,17 +53,21 @@ final class Worker
                 }
                 $this->state['instance'] = $instance;
                 $this->state['sends'] = array_values(array_filter($this->state['sends'] ?? [], static fn($t): bool => is_int($t) && $t > time() - 3600));
-                $this->health();
-                if ($this->remaining() > 22) { $this->request('POST','/admin/ops/mail-jobs',['limit'=>10]); }
-                if ($this->remaining() > 22) { $this->inbox(); }
-                if ($this->remaining() > 22) { $this->weekly(); }
-                if ($this->telegram->enabled() && $this->remaining() > 22) {
-                    $this->outbox();
+                $this->state['stage_errors'] = [];
+                $this->stage('heartbeat', fn() => $this->heartbeat());
+                // Delivery gets the first budget after liveness, independently of probes/jobs.
+                if ($this->telegram->enabled()) { $this->stage('outbox', fn() => $this->outbox()); }
+                foreach (['health', 'mail_jobs', 'inbox', 'weekly', 'counters', 'commands'] as $stage) {
+                    if ($this->remaining() <= ($stage === 'counters' ? 27 : 22)) { break; }
+                    $this->stage($stage, function () use ($stage): void {
+                        if ($stage === 'mail_jobs') { $this->request('POST','/admin/ops/mail-jobs',['limit'=>10]); }
+                        elseif ($stage === 'commands') {
+                            if ($this->telegram->enabled() && !Config::sandbox() && Config::get('FLUXFILES_TELEGRAM_COMMANDS') === '1' && $this->budget()) { $this->commands(); }
+                        } else { $this->{$stage}(); }
+                    });
                 }
-                if ($this->remaining() > 27) { $this->counters(); }
-                if ($this->telegram->enabled() && !Config::sandbox() && Config::get('FLUXFILES_TELEGRAM_COMMANDS') === '1' && $this->remaining() > 22) {
-                    $this->commands();
-                }
+                $this->stage('heartbeat', fn() => $this->heartbeat());
+                return array_keys($this->state['stage_errors']);
             } finally {
                 $this->save();
                 flock($lock, LOCK_UN);
@@ -69,6 +75,37 @@ final class Worker
             }
         } finally {
             umask($old);
+        }
+    }
+
+    private function stage(string $name, \Closure $run): void
+    {
+        try { $run(); }
+        catch (\Throwable $e) { $this->state['stage_errors'][$name] = time(); }
+    }
+
+    private function heartbeat(array $results = []): void
+    {
+        $this->request('POST','/admin/ops/health',[
+            'results'=>$results,'telegram'=>$this->telegram->enabled(),
+            'fingerprint'=>$this->telegram->fingerprint(),
+            'stage_errors'=>array_keys($this->state['stage_errors'] ?? []),
+        ]);
+    }
+
+    private function telegramRequest(string $method, array $body): array
+    {
+        if ((int)($this->state['telegram_blocked_until'] ?? 0) > time()) { return ['ok'=>false]; }
+        $result=$this->telegram->request($method,$body,min(10,$this->remaining()));
+        $this->telegramBackoff($result);
+        return $result;
+    }
+
+    private function telegramBackoff(array $result): void
+    {
+        if (isset($result['retry_after'])) {
+            $this->state['telegram_blocked_until']=time()+(int)$result['retry_after'];
+            $this->save();
         }
     }
 
@@ -118,7 +155,7 @@ final class Worker
     }
     private function budget(): bool
     {
-        return $this->sent < 20 && count($this->state['sends'] ?? []) < 60 && $this->remaining() > 22;
+        return (int)($this->state['telegram_blocked_until'] ?? 0) <= time() && $this->sent < 20 && count($this->state['sends'] ?? []) < 60 && $this->remaining() > 22;
     }
 
     private function send(string $text): array
@@ -132,7 +169,9 @@ final class Worker
         $this->sent++;
         $this->state['sends'][] = time();
         $this->save();
-        return $this->telegram->send($text, min(10, $this->remaining()));
+        $result=$this->telegram->send($text, min(10, $this->remaining()));
+        $this->telegramBackoff($result);
+        return $result;
     }
 
     private function outbox(): void
@@ -153,7 +192,7 @@ final class Worker
                 $error = 'sandbox_filtered';
             } else {
                 try {
-                    $text = $item['text'] . ($item['suppressed'] > 0?' (+' . $item['suppressed'] . ' similar)': '');
+                    $text = $item['text'] . ($item['suppressed'] > 0?' (+' . $item['suppressed'] . \FluxFiles\LicenseServer\Client\OpsText::text(' similar)'): '');
                     Mask::safe($text, true);
                     $res = $this->send($text);
                     $ok = $res['ok'];
@@ -172,16 +211,17 @@ final class Worker
 
     private function commands(): void
     {
+        if (!$this->budget()) { return; }
         $name = $this->state['bot_name'] ?? '';
         if ($name === '') {
-            $me = $this->telegram->request('getMe', [], min(10, $this->remaining()));
+            $me = $this->telegramRequest('getMe', []);
             if (!$me['ok']) {
                 return;
             }
             $name = (string) ($me['result']['username'] ?? '');
             $this->state['bot_name'] = $name;
         }
-        $updates = $this->telegram->request('getUpdates', ['offset' => (int) ($this->state['offset'] ?? 0) + 1, 'timeout' => 0, 'allowed_updates' => ['message']], min(10, $this->remaining()));
+        $updates = $this->telegramRequest('getUpdates', ['offset' => (int) ($this->state['offset'] ?? 0) + 1, 'timeout' => 0, 'allowed_updates' => ['message']]);
         if (!$updates['ok'] || !is_array($updates['result'])) {
             return;
         }
@@ -217,14 +257,17 @@ final class Worker
         $results = [];
         if ((int) ($this->state['health_at'] ?? 0) <= time() - 300) {
             $targets = json_decode(Config::get('FLUXFILES_OPS_HEALTH_TARGETS', '[]'), true);
-            if (!is_array($targets) || count($targets) > 20) {
+            if (!is_array($targets) || !array_is_list($targets) || count($targets) > 20) {
                 throw new \RuntimeException('invalid health config');
             }
-            foreach ($targets as $target) {
-                if ($this->remaining() < 32) {
-                    break;
-                }
-                $r = (new Health())->probe($target, min(5, $this->remaining() - 22));
+            $done=true;$offset=(int)($this->state['health_offset'] ?? 0);$count=count($targets);
+            for ($i=0;$i<$count;$i++) {
+                $index=($offset+$i)%$count;$target=$targets[$index];
+                if ($this->remaining() < 32) { $done=false;$this->state['health_offset']=$index;break; }
+                try {
+                    if (!is_array($target)) { throw new \InvalidArgumentException(); }
+                    $r = (new Health())->probe($target, min(5, $this->remaining() - 22));
+                } catch (\InvalidArgumentException $e) { $this->state['stage_errors']['health']=time();continue; }
                 $results[] = $r;
                 $name = $r['target'];
                 $previous = $this->state['health'][$name] ?? ['failures' => 0, 'down' => false];
@@ -254,7 +297,7 @@ final class Worker
                 $free = @disk_free_space($path);
                 if ($total && $free !== false && $free / $total < .1) {
                     $level = $free / $total < .05?'crit': 'warn';
-                    $this->alert('disk.low', $level, 'disk:' . hash('sha256', $path) . ':' . $level, 'Disk space low · ' . (int) round($free / $total * 100) . '%', 21600);
+                    $this->alert('disk.low', $level, 'disk:' . hash('sha256', $path) . ':' . $level, 'Disk space low · ' . mb_substr(Mask::clean($path),0,160) . ' · ' . (int) round($free / $total * 100) . '%', 21600);
                 }
             }
             if ($this->remaining() > 22) {
@@ -263,10 +306,10 @@ final class Worker
                     $this->alert('backup.stale', 'crit', 'backup', 'Backup missing or older than 26 hours', 86400);
                 }
             }
-            $this->state['health_at'] = time();
+            if ($done) { $this->state['health_at']=time();$this->state['health_offset']=0; }
         }
         if ($this->remaining() > 21) {
-            $this->request('POST', '/admin/ops/health', ['results' => $results, 'telegram' => $this->telegram->enabled(), 'fingerprint' => $this->telegram->fingerprint()]);
+            $this->heartbeat($results);
         }
         $this->save();
     }

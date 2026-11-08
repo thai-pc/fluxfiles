@@ -7,8 +7,10 @@ namespace FluxFiles\LicenseServer;
 use FluxFiles\LicenseServer\Client\Ingest;
 use FluxFiles\LicenseServer\Client\Mask;
 
+require_once __DIR__ . '/PolarWebhook.php';
 require_once __DIR__ . '/client/Ingest.php';
 require_once __DIR__ . '/VersionRange.php';
+require_once __DIR__ . '/InstallGroups.php';
 
 trait OperationsStore
 {
@@ -33,11 +35,12 @@ trait OperationsStore
         if ($at > time()+300) { $at=time(); }
         return $this->transaction(function () use ($type, $data, $sid, $at, $webhookId): bool {
             $q = $this->db->prepare('SELECT * FROM subscriptions WHERE subscription_id=?'); $q->execute([$sid]); $old = $q->fetch() ?: [];
-            if ((int) ($old['updated_at'] ?? 0) > $at || (($old['last_webhook_id'] ?? '') === $webhookId && $webhookId !== '')) { return true; }
+            if (((int) ($old['updated_at'] ?? 0) > $at && $type!=='subscription.revoked') || (($old['last_webhook_id'] ?? '') === $webhookId && $webhookId !== '')) { return true; }
+            $at=max($at,(int)($old['updated_at']??0));
             $status = match ($type) { 'subscription.revoked' => 'revoked', 'subscription.past_due' => 'past_due', 'subscription.uncanceled' => 'active', 'subscription.canceled' => 'canceled', default => (string) ($data['status'] ?? $old['status'] ?? 'active') };
             if (!in_array($status, ['active','canceled','revoked','past_due','trialing','unpaid','incomplete','incomplete_expired'], true)) { $status = 'active'; }
             // A same-timestamp canceled/updated delivery cannot undo an immediate revoke.
-            if (($old['status'] ?? '') === 'revoked' && (int) $old['updated_at'] === $at && $status !== 'revoked') { return true; }
+            if (($old['status'] ?? '') === 'revoked' && $status !== 'revoked') { return true; }
             $flag = is_bool($data['cancel_at_period_end'] ?? null) ? $data['cancel_at_period_end'] : (bool) ($old['cancel_at_period_end'] ?? false);
             $cancel = $type === 'subscription.uncanceled' ? false : ($type === 'subscription.canceled' || $flag);
             $end = self::eventTime($data['current_period_end'] ?? null) ?? ($old['current_period_end'] ?? null);
@@ -47,7 +50,8 @@ trait OperationsStore
             if ($cancel || $status === 'revoked') { $this->resolveRefundSubscription($sid); }
             if ($status === 'revoked') {
                 $pick = $this->db->prepare("SELECT expires FROM licenses WHERE subscription_id=? AND status='active' ORDER BY issued DESC,id DESC LIMIT 1"); $pick->execute([$sid]); $expires = $pick->fetchColumn();
-                if ($expires !== false && (int) $expires - time() > 48 * 3600) { $this->setStatusForSubscription($sid, 'revoked'); $this->audit('subscription.revoke', $sid, 'ok', 'polar: more than 48h remain'); }
+                $periodEnd=$end ?? self::eventTime($data['ended_at']??null) ?? ($expires===false?null:(int)$expires);
+                if ($expires !== false && $periodEnd!==null && (int)$periodEnd-time() > 48*3600) { $this->setStatusForSubscription($sid, 'revoked'); $this->audit('subscription.revoke', $sid, 'ok', 'polar: more than 48h remain'); }
             }
             return true;
         });
@@ -63,7 +67,7 @@ trait OperationsStore
 
     public function opsItem(string $kind, string $summary, ?string $jti = null, ?string $order = null, ?int $event = null): void
     {
-        $summary = mb_substr(Mask::clean($summary), 0, 500);
+        $summary = mb_substr(Mask::clean(\FluxFiles\LicenseServer\Client\OpsText::text($summary)), 0, 500);
         $q = $this->db->prepare('INSERT OR IGNORE INTO ops_items(at,kind,ref_jti,ref_order,ref_event,summary) VALUES(?,?,?,?,?,?)');
         $q->execute([time(), $kind, $jti, $order, $event, $summary]);
         if ($q->rowCount() > 0) {
@@ -100,9 +104,14 @@ trait OperationsStore
     {
         foreach ($this->undelivered(1000) as $row) { if (!$row['is_test'] && !$row['archived_at']) { $this->opsItem('mail_failed', 'Undelivered licence · '.Mask::email($row['email']), $row['jti']); } }
         foreach ($this->db->query("SELECT id,jti,order_id,outcome FROM webhook_events WHERE verify='ok' AND resolved_at IS NULL AND outcome IN ('unmapped_product','renewal_unmatched','mail_failed','error')")->fetchAll() as $event) { $this->opsItem($event['outcome'],'Webhook: '.$event['outcome'],$event['jti'],$event['order_id'],(int)$event['id']); }
-        $q = $this->db->prepare("SELECT jti,email FROM licenses WHERE status='active' AND is_test=0 AND archived_at IS NULL AND modules!='' AND first_seen_at IS NULL AND created_at<?"); $q->execute([time()-7*86400]);
-        foreach ($q->fetchAll() as $r) { $this->opsItem('never_installed', 'Never installed · ' . Mask::email($r['email']), $r['jti']); }
-        $this->db->prepare("UPDATE ops_items SET resolved_at=?,resolved_by='system' WHERE kind='never_installed' AND resolved_at IS NULL AND ref_jti IN (SELECT jti FROM licenses WHERE first_seen_at IS NOT NULL OR status!='active' OR is_test=1 OR archived_at IS NOT NULL)")->execute([time()]);
+        $installs=new InstallGroups($this->db);
+        $never=[];
+        foreach ($installs->groups as $group) {
+            if ($installs->never($group)) { $r=$group['head'];$never[$r['jti']]=true;$this->opsItem('never_installed','Never installed · '.Mask::email($r['email']),$r['jti']); }
+        }
+        foreach ($this->db->query("SELECT id,ref_jti FROM ops_items WHERE kind='never_installed' AND resolved_at IS NULL")->fetchAll() as $item) {
+            if (!isset($never[$item['ref_jti']])) { $this->db->prepare("UPDATE ops_items SET resolved_at=?,resolved_by='system' WHERE id=?")->execute([time(),$item['id']]); }
+        }
     }
 
     public function recordActivity(string $kind, string $result, string $jti = ''): void

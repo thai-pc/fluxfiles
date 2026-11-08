@@ -9,6 +9,7 @@ use FluxFiles\LicenseServer\Client\Config;
 use FluxFiles\LicenseServer\Client\Mask;
 
 require_once __DIR__ . '/Plans.php';
+require_once __DIR__ . '/InstallGroups.php';
 require_once __DIR__ . '/client/Config.php';
 require_once __DIR__ . '/client/Mask.php';
 
@@ -48,10 +49,21 @@ final class Stats
         return "o.gateway!='manual' AND NOT EXISTS(SELECT 1 FROM licenses l WHERE l.jti=o.jti AND (l.is_test=1 OR l.archived_at IS NOT NULL))";
     }
 
+    private function accountingEvents(): array
+    {
+        $events=$this->rows('SELECT o.* FROM orders o WHERE '.$this->orderFilter());
+        foreach ($events as &$row) { $row['refunded_at']=null;$row['refunded_amount']=0;$row['refunded_tax_amount']=0; }unset($row);
+        $refunds=$this->rows('SELECT o.*,r.at event_at,r.amount event_amount,r.tax_amount event_tax FROM order_refunds r JOIN orders o USING(order_id) WHERE '.$this->orderFilter());
+        foreach ($refunds as $row) {
+            $row['paid_at']=null;$row['refunded_at']=$row['event_at'];$row['refunded_amount']=$row['event_amount'];$row['refunded_tax_amount']=$row['event_tax'];$events[]=$row;
+        }
+        return $events;
+    }
+
     public function revenue(array $q = []): array
     {
         [$a, $b] = $this->range($q);
-        $orders = $this->rows('SELECT o.* FROM orders o WHERE ' . $this->orderFilter());
+        $orders = $this->accountingEvents();
         $now = new \DateTimeImmutable('now', $this->tz());
         $start = $now->modify('first day of this month')->setTime(0, 0);
         $previous = $start->modify('-1 month');
@@ -214,19 +226,24 @@ final class Stats
             }
             $code = $m[1];
             $cap = (int) $m[2];
-            $rows = $this->rows('SELECT o.* FROM orders o WHERE ' . $this->orderFilter() . ' AND (lower(o.discount_code)=lower(?) OR o.discount_id IN (SELECT discount_id FROM orders WHERE lower(discount_code)=lower(?) AND discount_id IS NOT NULL))', [$code, $code]);
+            $rows = $this->rows('SELECT o.* FROM orders o WHERE ' . $this->orderFilter() . ' AND (lower(o.discount_code)=lower(?) OR o.discount_id IN (SELECT discount_id FROM orders WHERE lower(discount_code)=lower(?) AND discount_id IS NOT NULL)) ORDER BY o.paid_at,o.order_id', [$code, $code]);
             $paid = 0;
             $refunded = 0;
             $net = [];
             $last = null;
+            $redemptions=[];
             foreach ($rows as $o) {
+                $net[$o['currency']] = ($net[$o['currency']] ?? 0) + (int) $o['net_amount'] - (int) $o['refunded_amount'] + (int) $o['refunded_tax_amount'];
+                $last=max((int)$last,(int)$o['paid_at']);
+                if (!in_array($o['billing_reason'],['purchase','subscription_create',null,''],true)) { continue; }
+                $identity=$o['subscription_id'] ?: 'order:'.$o['order_id'];
+                if (isset($redemptions[$identity])) { continue; }$redemptions[$identity]=true;
                 if ($o['status'] === 'refunded') {
                     $refunded++;
                 } else {
                     $paid++;
                 }
-                $net[$o['currency']] = ($net[$o['currency']] ?? 0) + (int) $o['net_amount'] - (int) $o['refunded_amount'] + (int) $o['refunded_tax_amount'];
-                $last = max((int) $last, (int) $o['paid_at']);
+
             }
             $out[] = ['code' => $code, 'cap' => $cap, 'paid' => $paid, 'refunded' => $refunded, 'used' => $paid + $refunded, 'net' => $net, 'last_at' => $last];
         }
@@ -236,14 +253,21 @@ final class Stats
     public function installs(array $q = []): array
     {
         [$a, $b] = $this->range($q);
-        $now = time();
-        $filter = "status='active' AND is_test=0 AND archived_at IS NULL AND modules!=''";
-        $active = $this->rows("SELECT COUNT(*) n FROM licenses WHERE $filter AND last_seen_at>=?", [$now - 30 * 86400])[0]['n'];
-        $never = $this->rows("SELECT * FROM licenses WHERE $filter AND first_seen_at IS NULL AND created_at<? ORDER BY id DESC LIMIT 100", [$now - 7 * 86400]);
-        $quiet = $this->rows("SELECT * FROM licenses WHERE $filter AND first_seen_at IS NOT NULL AND last_seen_at<? ORDER BY id DESC LIMIT 100", [$now - 30 * 86400]);
-        $counts = $this->rows("SELECT SUM(first_seen_at IS NULL AND created_at<?) never_n,SUM(first_seen_at IS NOT NULL AND last_seen_at<?) quiet_n FROM licenses WHERE $filter", [$now - 7 * 86400, $now - 30 * 86400])[0];
-        $daily = $this->rows("SELECT p.day,COUNT(DISTINCT p.jti) active FROM install_pings p JOIN licenses l USING(jti) WHERE p.active=1 AND l.is_test=0 AND l.archived_at IS NULL AND l.modules!='' AND p.day>=? AND p.day<? GROUP BY p.day ORDER BY p.day", [$a->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d'), $b->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d')]);
-        return ['active_30d' => (int) $active, 'never_installed' => (int) $counts['never_n'], 'gone_quiet' => (int) $counts['quiet_n'], 'series' => $daily, 'never' => array_map([Mask::class, 'row'], $never), 'quiet' => array_map([Mask::class, 'row'], $quiet)];
+        $now=time();$installs=new InstallGroups($this->db);$active=0;$never=[];$quiet=[];$daily=[];
+        foreach ($installs->groups as $key=>$group) {
+            $row=$group['head'];$row['first_seen_at']=$group['first_seen_at'];$row['last_seen_at']=$group['last_seen_at'];
+            if ($group['last_seen_at']!==null && $group['last_seen_at']>=$now-30*86400) { $active++; }
+            if ($installs->never($group,$now)) { $never[]=$row; }
+            elseif ($group['first_seen_at']!==null && (int)$group['last_seen_at']<$now-30*86400) { $quiet[]=$row; }
+        }
+        // Group timestamps in the accounting timezone; UTC dates can straddle local midnight.
+        foreach ($installs->pings($a->getTimestamp()) as $ping) {
+            $at=(int)$ping['last_at'];if (!$ping['active'] || $at>=$b->getTimestamp()) { continue; }
+            $day=(new \DateTimeImmutable('@'.$at))->setTimezone($this->tz())->format('Y-m-d');$daily[$day][$ping['group']]=true;
+        }
+        ksort($daily);$series=[];foreach ($daily as $day=>$groups) { $series[]=['day'=>$day,'active'=>count($groups)]; }
+        return ['active_30d'=>$active,'never_installed'=>count($never),'gone_quiet'=>count($quiet),'series'=>$series,
+            'never'=>array_map([Mask::class,'row'],array_slice($never,0,100)),'quiet'=>array_map([Mask::class,'row'],array_slice($quiet,0,100))];
     }
 
     public function mail(array $q = []): array

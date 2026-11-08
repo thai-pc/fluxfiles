@@ -12,9 +12,11 @@ try {
     if (($argv[1] ?? 'run') !== 'run') {
         throw new RuntimeException('Usage: ops-worker.php run');
     }
-    (new \FluxFiles\LicenseServer\Ops\Worker())->run();
+    $failed=(new \FluxFiles\LicenseServer\Ops\Worker())->run();
+    foreach ($failed as $stage) { fwrite(STDERR, 'ops stage failed: '.$stage."\n"); }
+    exit($failed===[]?0:1);
 } catch (Throwable $e) {
     // Provider bodies, URLs, configuration and secrets never reach journald.
-    fwrite(STDERR, "ops worker failed; check the API and worker configuration\n");
+    fwrite(STDERR, "ops stage failed: startup\n");
     exit(1);
 }

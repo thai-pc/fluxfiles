@@ -20,7 +20,7 @@ final class ApiClient
         if ($path !== '/admin/export/orders.csv') { throw new \InvalidArgumentException('invalid_input'); }
         $ch = curl_init($this->base.$path.'?'.http_build_query($query));
         curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>2,CURLOPT_TIMEOUT=>$this->timeout,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_PROXY=>'',CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$this->token,'X-FluxFiles-Actor: '.$this->actor,'X-FluxFiles-Role: '.$this->accessRole]]);
-        $raw = curl_exec($ch); $status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
+        $raw = curl_exec($ch); $status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);unset($ch);
         if ($raw===false || $status===0) { throw new \RuntimeException('api_unreachable'); }
         if ($status!==200 || !str_starts_with($raw,"\xEF\xBB\xBF")) { throw new \RuntimeException('invalid_input'); }
         return $raw;
@@ -35,7 +35,7 @@ final class ApiClient
         curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => $method, CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 2, CURLOPT_TIMEOUT => $this->timeout, CURLOPT_FOLLOWLOCATION => false, CURLOPT_PROXY => '', CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $this->token, 'Content-Type: application/json', 'X-FluxFiles-Actor: ' . $this->actor, 'X-FluxFiles-Role: ' . $this->accessRole], CURLOPT_POSTFIELDS => $method === 'GET' ? null: json_encode($data)]);
         $raw = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        unset($ch);
         if ($raw === false || $status === 0) {
             throw new \RuntimeException('api_unreachable');
         }

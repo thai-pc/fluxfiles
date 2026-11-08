@@ -25,6 +25,8 @@ final class Harness
             'FLUXFILES_POLAR_WEBHOOK_SECRET'=>'hook-secret','FLUXFILES_RESEND_WEBHOOK_SECRET'=>'resend-secret','FLUXFILES_MAIL_TRANSPORT'=>'log',
             'FLUXFILES_POLAR_PLAN_MAP'=>'{"pm":"pro-monthly","pro":"pro","studio":"studio","support":"support-monthly"}',
             'FLUXFILES_ADMIN_TRACKED_DISCOUNTS'=>'FOUNDING40:5','FLUXFILES_LICENSE_BACKUP_STATUS'=>$this->dir.'/backup.json'];
+        putenv('RANDFILE='.$this->dir.'/openssl-rand');
+        $this->env['RANDFILE']=$this->dir.'/openssl-rand';
         file_put_contents($this->dir.'/backup.json',json_encode(['ok'=>true,'at'=>time()]));
         register_shutdown_function(function():void { foreach (array_reverse($this->processes) as $p) { proc_terminate($p);proc_close($p); }if (getenv('FF_KEEP_ADMIN_TESTS')!=='1') { $this->remove($this->dir); }else { echo $this->dir."\n"; } });
     }
@@ -56,7 +58,7 @@ final class Harness
         $ch=curl_init('http://127.0.0.1:'.$port.$path);
         curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_HEADER=>true,CURLOPT_CUSTOMREQUEST=>$method,CURLOPT_TIMEOUT=>35,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_HTTPHEADER=>$headers+[]]);
         if($body!==null) { curl_setopt($ch,CURLOPT_POSTFIELDS,$form?http_build_query($body):json_encode($body)); }
-        $raw=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);$n=(int)curl_getinfo($ch,CURLINFO_HEADER_SIZE);curl_close($ch);
+        $raw=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);$n=(int)curl_getinfo($ch,CURLINFO_HEADER_SIZE);unset($ch);
         $text=substr((string)$raw,$n);return ['code'=>$status,'headers'=>substr((string)$raw,0,$n),'raw'=>$text,'body'=>json_decode($text,true)];
     }
     public function call(int $port,string $method,string $path,array $b=[],string $role='ui'): array

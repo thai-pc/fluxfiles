@@ -46,6 +46,19 @@ final class Access
         return is_array($keys) && self::verify((string)($server['HTTP_CF_ACCESS_JWT_ASSERTION']??''),Config::get('FLUXFILES_ADMIN_ACCESS_ISSUER'),Config::get('FLUXFILES_ADMIN_ACCESS_AUD'),$keys);
     }
 
+    public static function downloadKeys(string $issuer): ?array
+    {
+        if (!self::issuer($issuer)) { Config::loopback($issuer); }
+        $raw='';$ch=curl_init($issuer.'/cdn-cgi/access/certs');
+        curl_setopt_array($ch,[CURLOPT_PROXY=>'',CURLOPT_FOLLOWLOCATION=>false,CURLOPT_CONNECTTIMEOUT=>2,CURLOPT_TIMEOUT=>5,
+            CURLOPT_WRITEFUNCTION=>static function($ch,string $chunk) use (&$raw):int {
+                if (strlen($raw)+strlen($chunk)>65536) { return 0; }$raw.=$chunk;return strlen($chunk);
+            }]);
+        $ok=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);unset($ch);
+        $data=$ok!==false && $status===200?json_decode($raw,true):null;
+        return is_array($data) && is_array($data['keys']??null) && $data['keys']!==[]?$data:null;
+    }
+
     private static function decode(string $value): ?string
     {
         if ($value==='' || preg_match('/[^A-Za-z0-9_-]/',$value)) { return null; }$decoded=base64_decode(strtr($value,'-_','+/').str_repeat('=',(4-strlen($value)%4)%4),true);return $decoded===false?null:$decoded;

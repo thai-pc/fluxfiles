@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../client/Mask.php';
 
 final class View
 {
+    private string $context='records';
     public function __construct(public I18n $i18n, public ?array $session)
     {
     }
@@ -20,7 +21,7 @@ final class View
     {
         return htmlspecialchars((string) $s, ENT_QUOTES|ENT_SUBSTITUTE, 'UTF-8');
     }
-    public function canWrite(): bool { return ($this->session['role'] ?? 'admin') === 'admin'; }
+    public function canWrite(): bool { return ($this->session['role'] ?? null) === 'admin'; }
     public function t(string $key): string
     {
         return $this->i18n->t($key);
@@ -52,6 +53,8 @@ final class View
     }
     public function render(string $template, array $vars = [], int $status = 200): void
     {
+        $this->context=(string)($vars['title']??'records');
+        Svg::labels($this->i18n);
         http_response_code($status);
         $v = $this;
         extract($vars, EXTR_SKIP);
@@ -65,10 +68,10 @@ final class View
         }
         require __DIR__ . '/../templates/layout.php';
     }
-    public function table(array $rows, array $cols = [], ?string $link = null): string
+    public function table(array $rows, array $cols = [], ?string $link = null, ?string $empty=null): string
     {
         if ($rows === []) {
-            return '<p class="empty">' . $this->e($this->t('empty')) . '</p>';
+            return '<p class="empty">' . $this->e($this->t($empty??('empty_'.$this->context))) . '</p>';
         }
         if ($cols === []) {
             $cols = array_keys($rows[0]);
@@ -96,6 +99,12 @@ final class View
                     $cell = '<span class="pill ' . $this->e($val) . '" title="' . $this->e($val) . '">' . $this->e($this->t($val)) . '</span>';
                 } elseif (in_array($col,['jti','order_id','subscription_id','checkout_id','customer_id','product_id','ref_jti','ref_order','webhook_id'],true) && is_string($val) && $val !== '') {
                     $cell = '<code title="'.$this->e($val).'">'.$this->e(Mask::id($val)).'</code> <button type="button" class="copy-id" data-copy="'.$this->e($val).'" aria-label="'.$this->e($this->t('copy')).'">⧉</button>';
+                } elseif (is_numeric($val) && isset($r['currency']) && in_array($col,self::moneyFields(),true)) {
+                    $cell=$this->e(self::money((int)$val,(string)$r['currency']));
+                } elseif (is_array($val)) {
+                    $cell=$col==='net'?$this->currencyTotals($val):$this->facts($val);
+                } elseif (is_bool($val)) {
+                    $cell=$this->e($this->t($val?'yes':'no'));
                 } else {
                     $cell = $this->e($text);
                 }
@@ -108,6 +117,36 @@ final class View
         }
         return $html . '</tbody></table></div>';
     }
+    public static function moneyFields(): array
+    {
+        return ['net','net_amount','net_month','net_previous','refund_net','refunded_amount','refunded_tax_amount','amount','gross_month','tax_month','total_amount','subtotal_amount','discount_amount','mrr','arr','refunds_30d','one_time_month'];
+    }
+
+    private function currencyTotals(array $totals): string
+    {
+        $out=[];foreach ($totals as $currency=>$amount) { $out[]=$this->e(self::money((int)$amount,(string)$currency)); }
+        return implode('<br>',$out);
+    }
+
+    public function facts(array $facts): string
+    {
+        if ($facts===[]) { return '<p class="empty">'.$this->e($this->t('empty_system')).'</p>'; }
+        if (array_is_list($facts)) {
+            if (is_array($facts[0])) { return $this->table($facts); }
+            return $this->e(implode(', ',array_map(fn($v):string=>$this->t((string)$v),$facts)));
+        }
+        $out='<dl>';
+        foreach ($facts as $key=>$value) {
+            $out.='<dt>'.$this->e($this->t((string)$key)).'</dt><dd>';
+            if (is_array($value)) { $out.=$this->facts($value); }
+            elseif (is_bool($value)) { $out.=$this->e($this->t($value?'yes':'no')); }
+            elseif (in_array($key,['at','last_ok_at','oldest_at','last_sent','last_at'],true)) { $out.=$this->time($value); }
+            else { $out.=$this->e($value??$this->t('none')); }
+            $out.='</dd>';
+        }
+        return $out.'</dl>';
+    }
+
     public function polar(string $kind, string $id): ?string
     {
         if ($id === '') {

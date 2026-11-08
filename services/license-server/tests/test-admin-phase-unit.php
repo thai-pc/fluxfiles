@@ -51,7 +51,7 @@ $h->test('Root collector exports only counts, strips queries, filters dates/stat
 });
 $h->test('CSV has BOM and formula guards without mangling ordinary text, refuses signed keys',function() use($reject):void {
     $csv=Csv::encode([['name','amount'],['=HYPERLINK("evil")','-3.25'],["\tcmd",'normal']]);Harness::ok(str_starts_with($csv,"\xEF\xBB\xBF"));Harness::ok(str_contains($csv,"'=HYPERLINK"));Harness::ok(str_contains($csv,"'-3.25"));
-    $reject(fn()=>Csv::encode([[str_repeat('a',20).'.'.str_repeat('b',20).'.'.str_repeat('c',20)]]));
+    $out=Csv::encode([[str_repeat('a',20).'.'.str_repeat('b',20).'.'.str_repeat('c',20)]],$redactions);Harness::eq(1,$redactions);Harness::ok(str_contains($out,'[redacted]'));
 });
 $h->test('Access verifies RSA signature and exact issuer/audience/time/kid; malformed JWKS fail closed',function():void {
     $rsa=openssl_pkey_new(['private_key_bits'=>2048,'private_key_type'=>OPENSSL_KEYTYPE_RSA]);$detail=openssl_pkey_get_details($rsa);$b64=static fn(string $x):string=>rtrim(strtr(base64_encode($x),'+/','-_'),'=');
@@ -65,7 +65,7 @@ $h->test('Access verifies RSA signature and exact issuer/audience/time/kid; malf
 $h->test('Additive v2 migration on a copied database preserves keys/history and repeated starts are idempotent',function() use($h):void {
     $old=new LicenseStore($h->env['FLUXFILES_LICENSE_DB']);$issuer=new \FluxFiles\LicenseServer\LicenseIssuer(new \FluxFiles\LicenseServer\LicenseSigner($h->secret),$old);$issued=$issuer->issue(['email'=>'migration@example.test','plan'=>'pro','gateway'=>'manual','order_id'=>'migration-order']);
     foreach(['subscriptions','ops_items','activity_daily','downloads_daily','public_counters','demo_daily','customer_notes','advisories','notices'] as $table){$old->pdo()->exec('DROP TABLE '.$table);}$old->pdo()->exec('PRAGMA user_version=2');$copy=$h->dir.'/migration-copy.sqlite';$old->pdo()->prepare('VACUUM INTO ?')->execute([$copy]);
-    $s=new LicenseStore($copy);Harness::eq(3,(int)$s->pdo()->query('PRAGMA user_version')->fetchColumn());Harness::eq($issued['key'],$s->findByJti($issued['record']['jti'])['license_key']);Harness::eq(1,(int)$s->pdo()->query('SELECT COUNT(*) FROM license_history')->fetchColumn());
+    $s=new LicenseStore($copy);Harness::eq(4,(int)$s->pdo()->query('PRAGMA user_version')->fetchColumn());Harness::eq($issued['key'],$s->findByJti($issued['record']['jti'])['license_key']);Harness::eq(1,(int)$s->pdo()->query('SELECT COUNT(*) FROM license_history')->fetchColumn());
     $s=new LicenseStore($copy);Harness::eq(1,(int)$s->pdo()->query('SELECT COUNT(*) FROM licenses')->fetchColumn());Harness::eq(2,(int)$old->pdo()->query('PRAGMA user_version')->fetchColumn());
 });
 $h->finish();

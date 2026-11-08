@@ -201,7 +201,7 @@ if (!in_array($module, $FREE_MODULES, true)) {
         // Send only a network prefix over loopback. Never log this payload or the raw IP.
         CURLOPT_POSTFIELDS => json_encode([
             'jti' => $lm->id(), 'module' => $module,
-            'current' => is_string($_GET['current'] ?? null) ? $_GET['current'] : null,
+            'current' => is_string($_GET['current'] ?? null) && preg_match('/^v?[0-9]{1,4}(?:\.[0-9]{1,4}){1,3}(?:[-+][0-9A-Za-z.-]{1,40})?$/D',$_GET['current']) ? $_GET['current'] : null,
             'core_version' => is_string($_GET['core_version'] ?? null) ? CoreVersion::normalize($_GET['core_version']) : null,
             'install' => ($_GET['install'] ?? '') === '1',
             'net' => (static function (string $ip): string {
@@ -218,7 +218,7 @@ if (!in_array($module, $FREE_MODULES, true)) {
     ]);
     $statusBody = curl_exec($statusRequest);
     $statusCode = (int) curl_getinfo($statusRequest, CURLINFO_HTTP_CODE);
-    curl_close($statusRequest);
+    unset($statusRequest);
     $status = is_string($statusBody) ? json_decode($statusBody, true) : null;
     if ($statusCode !== 200 || !is_array($status) || ($status['active'] ?? false) !== true) {
         http_response_code($statusCode === 200 ? 402 : 503);

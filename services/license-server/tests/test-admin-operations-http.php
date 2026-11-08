@@ -8,7 +8,7 @@ use FluxFiles\LicenseServer\{LicenseStore};
 use FluxFiles\LicenseServer\Client\Mask;
 use FluxFiles\LicenseServer\Ops\Counters;
 
-$h=new Harness();$api=$h->api();$s=new LicenseStore($h->env['FLUXFILES_LICENSE_DB']);$db=$s->pdo();
+$h=new Harness();$h->env['FLUXFILES_ADMIN_LANG']='en';$api=$h->api();$s=new LicenseStore($h->env['FLUXFILES_LICENSE_DB']);$db=$s->pdo();
 $providerFile=$h->dir.'/provider.php';file_put_contents($providerFile, <<<'FAKE'
 <?php
 $path=parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH);$raw=file_get_contents('php://input');

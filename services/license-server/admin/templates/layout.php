@@ -5,13 +5,13 @@
 <title><?= \FluxFiles\LicenseServer\Client\Config::sandbox() ? '[SANDBOX] ' : '' ?><?= $v->e($v->t($title ?? 'app')) ?> · FluxFiles</title>
 <link rel="stylesheet" href="/assets/admin.css"><script src="/assets/admin.js" defer></script>
 </head>
-<body<?php foreach (['invalid_input','login_error','csrf','stepup_required','api_unreachable','internal','unauthorized','not_found','archive_not_allowed','invalid_status','forbidden_scope','preview_changed','replay_unavailable','feature_disabled','export_too_large','provider_unavailable'] as $code): ?> data-error-<?= str_replace('_','-',$code) ?>="<?= $v->e($v->t($code)) ?>"<?php endforeach ?>>
+<body<?php foreach (['rate_limited','invalid_input','login_error','csrf','stepup_required','api_unreachable','internal','unauthorized','not_found','archive_not_allowed','invalid_status','forbidden_scope','preview_changed','replay_unavailable','feature_disabled','export_too_large','provider_unavailable'] as $code): ?> data-error-<?= str_replace('_','-',$code) ?>="<?= $v->e($v->t($code)) ?>"<?php endforeach ?>>
 <?php if (\FluxFiles\LicenseServer\Client\Config::sandbox()): ?><div class="sandbox-banner" role="status"><?= $v->e($v->t('sandbox')) ?></div><?php endif ?>
 <header class="topbar"><a class="brand" href="/">FluxFiles <span><?= $v->e($v->t('app')) ?></span></a>
 <div class="preferences">
 <?php if ($v->session): ?>
 <form method="post" action="/pref/lang"><?= $v->csrf() ?><button name="value" value="<?= $v->i18n->lang === 'vi' ? 'en' : 'vi' ?>" aria-label="<?= $v->e($v->t('language')) ?>"><?= $v->i18n->lang === 'vi' ? 'EN' : 'VI' ?></button></form>
-<form method="post" action="/pref/theme"><?= $v->csrf() ?><label class="sr-only" for="theme"><?= $v->e($v->t('theme')) ?></label><select id="theme" name="value"><?php foreach (['auto','light','dark'] as $theme): ?><option value="<?= $theme ?>" <?= ($v->session['theme'] ?? 'auto') === $theme ? 'selected' : '' ?>><?= $v->e($v->t($theme)) ?></option><?php endforeach ?></select><button><?= $v->e($v->t('save')) ?></button></form>
+<form method="post" action="/pref/theme"><?= $v->csrf() ?><label class="sr-only" for="theme"><?= $v->e($v->t('theme')) ?></label><select id="theme" name="value"><?php foreach (['auto','light','dark'] as $theme): ?><option value="<?= $theme ?>" <?= ($v->session['theme'] ?? 'auto') === $theme ? 'selected' : '' ?>><?= $v->e($v->t($theme)) ?></option><?php endforeach ?></select><button><?= $v->e($v->t('save_theme')) ?></button></form>
 <?php if ($v->session['user_id']): ?><span><?= $v->e($v->session['name']) ?><?php if (!$v->canWrite()): ?> · <?= $v->e($v->t('viewer')) ?><?php endif ?></span><form method="post" action="/logout"><?= $v->csrf() ?><button><?= $v->e($v->t('logout')) ?></button></form><?php endif ?>
 <?php endif ?>
 </div></header>

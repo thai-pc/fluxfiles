@@ -46,6 +46,7 @@ if ($lockFp === false || !flock($lockFp, LOCK_EX | LOCK_NB)) {
 }
 
 $store = new LicenseStore();
+$store->expireWebhookBodies();
 $store->setActor('cron:reminder');
 $mailJti = null;
 $mailer = new LicenseMailer('', '', '', static function (string $kind, string $to, bool $ok, ?string $error, ?string $id) use ($store, &$mailJti): void {

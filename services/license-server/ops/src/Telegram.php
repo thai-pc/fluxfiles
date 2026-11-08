@@ -46,10 +46,10 @@ final class Telegram
     {
         // This class lives only in the CLI worker; neither server nor UI imports it.
         $ch = curl_init($this->base . '/bot' . $this->token . '/' . $method);
-        curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($payload), CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT => 2, CURLOPT_TIMEOUT => max(1, min(25, $timeout))]);
+        curl_setopt_array($ch, [CURLOPT_PROXY => '', CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($payload), CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT => 2, CURLOPT_TIMEOUT => max(1, min(25, $timeout))]);
         $raw = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        unset($ch);
         $body = is_string($raw)?json_decode($raw, true): null;
         if ($code === 200 && is_array($body) && ($body['ok'] ?? false) === true) {
             return ['ok' => true, 'result' => $body['result'] ?? []];
@@ -81,7 +81,7 @@ final class Telegram
         if (!preg_match('~^/(stats|today|help)(?:@([A-Za-z0-9_]+))?$~D', $text, $m)) {
             return null;
         }
-        if (!$private && (!isset($m[2]) || !hash_equals(strtolower($username), strtolower($m[2])))) {
+        if (!$private && !isset($m[2])) {
             return null;
         }
         if (isset($m[2]) && !hash_equals(strtolower($username), strtolower($m[2]))) {

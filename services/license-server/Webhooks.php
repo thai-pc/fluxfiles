@@ -7,6 +7,7 @@ namespace FluxFiles\LicenseServer;
 use FluxFiles\LicenseServer\Client\Config;
 use FluxFiles\LicenseServer\Client\Mask;
 
+require_once __DIR__ . '/PolarWebhook.php';
 require_once __DIR__ . '/AdminApi.php';
 
 final class Webhooks

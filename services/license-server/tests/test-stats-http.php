@@ -33,6 +33,8 @@ $h->test('Install and mail fixture definitions, send and delivery rates',functio
     $b=$h->call($port,'POST','/issue',['email'=>'never@example.test','plan'=>'pro'])['body']['record']['jti'];
     $c=$h->call($port,'POST','/issue',['email'=>'quiet@example.test','plan'=>'pro'])['body']['record']['jti'];
     $h->call($port,'POST','/update-status',['jti'=>$a,'module'=>'share'],'status');
+    $db->prepare("UPDATE ops_state SET value=? WHERE key='telemetry_migration'")->execute([json_encode(['at'=>time()-9*86400])]);
+    $db->prepare("UPDATE licenses SET gateway='polar' WHERE jti=?")->execute([$b]);
     $db->prepare('UPDATE licenses SET created_at=? WHERE jti=?')->execute([time()-8*86400,$b]);$db->prepare('UPDATE licenses SET first_seen_at=?,last_seen_at=? WHERE jti=?')->execute([time()-60*86400,time()-31*86400,$c]);
     $r=$h->call($port,'GET','/admin/stats/installs')['body'];Harness::eq(1,$r['active_30d']);Harness::eq(1,$r['never_installed']);Harness::eq(1,$r['gone_quiet']);
     foreach ([['delivered',1],['bounced',1],['failed',0]] as [$status,$ok]) { $db->prepare("INSERT INTO mail_log(at,kind,recipient,transport,ok,status,actor) VALUES(?,'licence','a***@example.test','resend',?,?,'system')")->execute([time(),$ok,$status]); }
@@ -41,7 +43,7 @@ $h->test('Install and mail fixture definitions, send and delivery rates',functio
 $h->test('Guarded migration on an old DB copy preserves key, repeat migrations are safe',function() use($h):void {
     $old=$h->dir.'/old.sqlite';$db=new PDO('sqlite:'.$old);$db->exec("CREATE TABLE licenses(id INTEGER PRIMARY KEY AUTOINCREMENT,jti TEXT UNIQUE NOT NULL,email TEXT NOT NULL,customer TEXT,plan TEXT,edition TEXT,modules TEXT,enforcement TEXT,issued INTEGER,expires INTEGER,license_key TEXT NOT NULL,gateway TEXT,order_id TEXT,status TEXT DEFAULT 'active',created_at INTEGER)");
     $db->exec("INSERT INTO licenses(jti,email,license_key) VALUES('legacy','legacy@example.test','unchanged')");$db=null;copy($old,$h->dir.'/copy.sqlite');
-    for($i=0;$i<2;$i++) { $s=new LicenseStore($h->dir.'/copy.sqlite');Harness::eq('unchanged',$s->findByJti('legacy')['license_key']);Harness::eq(3,(int)$s->pdo()->query('PRAGMA user_version')->fetchColumn()); }
+    for($i=0;$i<2;$i++) { $s=new LicenseStore($h->dir.'/copy.sqlite');Harness::eq('unchanged',$s->findByJti('legacy')['license_key']);Harness::eq(4,(int)$s->pdo()->query('PRAGMA user_version')->fetchColumn()); }
     $db=new PDO('sqlite:'.$old);Harness::eq(0,(int)$db->query('PRAGMA user_version')->fetchColumn());
 });
 $h->test('Order backfill dry-run writes nothing, apply uses fake Polar and is idempotent',function() use($h,$port,$db):void {

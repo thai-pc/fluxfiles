@@ -130,7 +130,7 @@ try {
 
     // ── Polar webhook (Standard Webhooks) ────────────────────────────────────
     if ($method === 'POST' && $uri === '/webhook/polar') {
-        if (strlen($raw) > 65536) { respond(400, ['error' => 'invalid_input']); }
+        if (strlen($raw) > 1048576) { respond(400, ['error' => 'invalid_input']); }
         [$code, $out] = (new Webhooks($store, $issuer))->polar($raw, $_SERVER);
         respond($code, $out);
     }
@@ -443,6 +443,6 @@ try {
 } catch (\Throwable $e) {
     // Log the detail for the operator; the caller (possibly unauthenticated) gets
     // nothing about the signer, the database or the input that broke.
-    error_log('license server: internal failure (' . get_class($e) . ')');
+    error_log('license server: '.get_class($e).' · '.mb_substr(Mask::clean(str_replace(["\r","\n"], ' ', $e->getMessage())),0,400));
     respond(500, ['error' => 'internal error']);
 }

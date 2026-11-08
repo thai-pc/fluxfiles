@@ -4,7 +4,7 @@ Scope: all phases in `docs/design/LICENSE-ADMIN-UI-DESIGN.md`, per the owner's
 expanded request. Same branch and PR #245; no merge, tag, deployment, provider
 configuration or real mail/Telegram send is authorized by this implementation.
 
-- [x] v3 migrations: subscriptions, ops items, activity/download/public/demo counters,
+- [x] v4 migrations: subscriptions, ops items, activity/download/public/demo counters,
       customer notes, advisories and notices; preserve existing licence rows.
 - [x] Subscription webhooks, out-of-order handling, 48-hour revoke rule and reminder suppression.
 - [x] Customers and per-customer notes; mail log/backlog; webhook replay; activity.
@@ -33,6 +33,10 @@ Deployment-only items stay with the operator: users/ACLs/pools/nginx/timers,
 provider secrets, Access/Tunnel policy and JWKS refresh, private log-format wiring,
 root backup sweep, initial user/TOTP enrolment, real-instance smoke and Terms text.
 
-Validation: 15 PHP scripts / 249 checks, 88 service PHP lints, JavaScript syntax,
+Baseline validation before review: 15 PHP scripts / 249 checks, 88 service PHP lints, JavaScript syntax,
 Chromium desktop/mobile + viewer/notices/CSV/two instances and collector CLI smoke.
 Executed on PHP 8.2.35; other supported PHP versions still need CI/operator checks.
+
+Review follow-up: all A/B/C items map to `REVIEW-FIXES.md`. The v4 migration adds
+refund increments and observation grace without rewriting signed keys. Formatting
+is committed separately; final matrix/browser results are recorded in the PR reply.

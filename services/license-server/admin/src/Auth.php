@@ -14,7 +14,8 @@ final class Auth
 {
     public PDO $db;
     public ?array $session = null;
-    private const DUMMY = '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi';
+    private const DUMMY_ARGON = '$argon2id$v=19$m=65536,t=4,p=1$eVJ4c0U2UUk2bTlQcTlHQw$JSJ2S1shSCyrC04MWrfhSAk5EDhbcSNVWn8fp7hGOPc';
+    private const DUMMY_BCRYPT = '$2y$12$61kJbLZkZy.K/43ULf2c9.5KZN5TQeYNQ3C1B5MEYn9iAudsxN2nO';
 
     public function __construct(?string $path = null)
     {
@@ -34,6 +35,11 @@ final class Auth
         } finally {
             umask($mask);
         }
+    }
+
+    public static function hashPassword(string $password): string
+    {
+        return defined('PASSWORD_ARGON2ID')?password_hash($password,PASSWORD_ARGON2ID):password_hash($password,PASSWORD_BCRYPT,['cost'=>12]);
     }
 
     public static function now(): int
@@ -80,7 +86,7 @@ final class Auth
         setcookie(Config::sandbox()?'fxadm_sbx': 'fxadm', $id, ['path' => '/', 'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', 'httponly' => true, 'samesite' => 'Strict']);
         $_COOKIE[Config::sandbox()?'fxadm_sbx': 'fxadm'] = $id;
         $this->load();
-        $this->db->prepare('DELETE FROM sessions WHERE last_seen<? OR created_at<?')->execute([$now - 1800, $now - 43200]);
+        $this->db->prepare('DELETE FROM sessions WHERE last_seen<? OR created_at<?')->execute([$now-max(1,(int)Config::get('FLUXFILES_ADMIN_SESSION_IDLE','1800')),$now-max(1,(int)Config::get('FLUXFILES_ADMIN_SESSION_ABSOLUTE','43200'))]);
     }
 
     public function login(string $name, string $password, string $code): bool
@@ -92,7 +98,7 @@ final class Auth
             $q = $this->db->prepare('SELECT * FROM users WHERE name=?');
             $q->execute([$name]);
             $u = $q->fetch();
-            $valid = password_verify($password, $u['pass_hash'] ?? self::DUMMY);
+            $valid = password_verify($password, $u['pass_hash'] ?? (defined('PASSWORD_ARGON2ID')?self::DUMMY_ARGON:self::DUMMY_BCRYPT));
             $hit = $this->db->prepare('SELECT MAX(locked_until) FROM login_hits WHERE bucket IN (?,?)');
             $hit->execute([$bucket, 'global']);
             $locked = (int) $hit->fetchColumn() > $now;
@@ -101,7 +107,7 @@ final class Auth
                 $this->db->prepare('UPDATE users SET totp_last_step=? WHERE id=?')->execute([$step, $u['id']]);
                 $this->db->prepare('DELETE FROM login_hits WHERE bucket=?')->execute([$bucket]);
                 $this->db->exec('COMMIT');
-                $this->create((int) $u['id'], $now);
+                $this->create((int) $u['id']);
                 return true;
             }
             foreach ([[$bucket, 900, 5], ['global', 3600, 20]] as [$key, $period, $max]) {
@@ -166,7 +172,7 @@ final class Auth
         if ($this->session) {
             $this->db->prepare('DELETE FROM sessions WHERE id_hash=?')->execute([$this->session['id_hash']]);
         }
-        setcookie(Config::sandbox()?'fxadm_sbx': 'fxadm', '', ['expires' => 1, 'path' => '/', 'httponly' => true, 'samesite' => 'Strict']);
+        setcookie(Config::sandbox()?'fxadm_sbx': 'fxadm', '', ['expires' => 1, 'path' => '/', 'secure'=>isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']!=='off', 'httponly' => true, 'samesite' => 'Strict']);
         $this->session = null;
     }
 

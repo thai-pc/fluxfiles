@@ -21,7 +21,7 @@ final class SystemChecks
                     if (($p['scheme']??'')!=='https') { try { Config::loopback($url); }catch (\InvalidArgumentException $e) { $row['ok']=false; } }
                     if ($row['ok']!==false) {
                         $ch=curl_init($url.'/');curl_setopt_array($ch,[CURLOPT_NOBODY=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_CONNECTTIMEOUT=>1,CURLOPT_TIMEOUT=>2]);
-                        $out=curl_exec($ch);$code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);$row['http_status']=$code;$row['ok']=$out!==false && $code>=200 && $code<400;
+                        $out=curl_exec($ch);$code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);unset($ch);$row['http_status']=$code;$row['ok']=$out!==false && $code>=200 && $code<400;
                     }
                 }
             }

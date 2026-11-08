@@ -9,6 +9,7 @@ use PDO;
 require_once __DIR__ . '/AdminSchema.php';
 require_once __DIR__ . '/AdminStore.php';
 require_once __DIR__ . '/PhaseSchema.php';
+require_once __DIR__ . '/ReviewSchema.php';
 require_once __DIR__ . '/OperationsStore.php';
 
 /**
@@ -38,7 +39,8 @@ final class LicenseStore
         // -wal/-shm files) owner-only, whatever the process umask is.
         $prevUmask = umask(0077);
         try {
-            $this->db = new PDO('sqlite:' . $path, null, null, [
+            $class=class_exists('Pdo\Sqlite') ? 'Pdo\Sqlite' : PDO::class;
+            $this->db = new $class('sqlite:' . $path, null, null, [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]);
@@ -141,6 +143,7 @@ final class LicenseStore
         }
         AdminSchema::migrate($this->db);
         PhaseSchema::migrate($this->db);
+        ReviewSchema::migrate($this->db);
     }
 
     /** ADD COLUMN that survives a concurrent first request adding it at the same moment. */

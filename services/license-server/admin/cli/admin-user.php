@@ -61,9 +61,9 @@ try {
     }
     $db->beginTransaction();
     if ($action === 'add') {
-        $db->prepare('INSERT INTO users(name,pass_hash,totp_secret,created_at,role) VALUES(?,?,?,?,?)')->execute([$name, password_hash($password, defined('PASSWORD_ARGON2ID')?PASSWORD_ARGON2ID: PASSWORD_BCRYPT), $secret, time(), $role]);
+        $db->prepare('INSERT INTO users(name,pass_hash,totp_secret,created_at,role) VALUES(?,?,?,?,?)')->execute([$name, Auth::hashPassword($password), $secret, time(), $role]);
     } elseif ($action === 'passwd') {
-        $db->prepare('UPDATE users SET pass_hash=? WHERE id=?')->execute([password_hash($password, defined('PASSWORD_ARGON2ID')?PASSWORD_ARGON2ID: PASSWORD_BCRYPT), $id]);
+        $db->prepare('UPDATE users SET pass_hash=? WHERE id=?')->execute([Auth::hashPassword($password), $id]);
     } elseif ($action === 'totp-reset') {
         $db->prepare('UPDATE users SET totp_secret=?,totp_last_step=-1 WHERE id=?')->execute([$secret, $id]);
     } elseif ($action === 'role') {

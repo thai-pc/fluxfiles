@@ -155,7 +155,11 @@ final class Analytics
 
     public function versions(): array
     {
-        $latest=$this->rows("SELECT p.jti,p.module,p.version,p.core_version,p.last_at,l.email FROM install_pings p JOIN licenses l USING(jti) WHERE p.last_at>=? AND l.is_test=0 AND l.archived_at IS NULL AND l.status IN ('active','superseded') AND NOT EXISTS(SELECT 1 FROM install_pings n WHERE n.jti=p.jti AND n.module=p.module AND (n.last_at>p.last_at OR (n.last_at=p.last_at AND (n.day>p.day OR (n.day=p.day AND n.net>p.net)))))",[time()-30*86400]);
+        $groups=new InstallGroups($this->store->pdo());$latest=[];
+        foreach ($groups->pings(time()-30*86400) as $ping) {
+            $head=$groups->groups[$ping['group']]['head'];
+            $latest[$ping['group'].':'.$ping['module']]=array_merge($ping,['jti'=>$head['jti'],'email'=>$head['email']]);
+        }
         $core=[];$installs=[];
         foreach ($latest as $row) {
             $version=is_string($row['version']) && VersionRange::validVersion($row['version'])?$row['version']:null;

@@ -27,7 +27,7 @@ final class Health
         curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_errno($ch);
-        curl_close($ch);
+        unset($ch);
         $out = ['target' => $name, 'ok' => $error === 0 && $code === (int) ($target['expect_status'] ?? 200), 'ms' => (int) round((microtime(true) - $start) * 1000), 'detail' => 'HTTP ' . $code];
         if (($p['scheme'] ?? '') === 'https') {
             $ctx = stream_context_create(['ssl' => ['capture_peer_cert' => true, 'peer_name' => $p['host'], 'verify_peer' => true, 'verify_peer_name' => true]]);

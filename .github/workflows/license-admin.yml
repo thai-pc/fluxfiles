@@ -1,0 +1,70 @@
+name: Licence admin
+on:
+  push:
+    paths:
+      - 'services/license-server/**'
+      - 'docs/update-server.example.php'
+      - '.github/workflows/license-admin.yml'
+  pull_request:
+    paths:
+      - 'services/license-server/**'
+      - 'docs/update-server.example.php'
+      - '.github/workflows/license-admin.yml'
+permissions:
+  contents: read
+jobs:
+  php:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.2', '8.3', '8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite, sodium, curl, mbstring, openssl, zlib, posix
+          coverage: none
+      - name: Lint service and update example
+        run: |
+          find services/license-server -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l docs/update-server.example.php
+      - name: Unit and local HTTP contracts
+        run: |
+          for test in services/license-server/tests/*.php; do
+            php -d error_reporting=-1 -d display_errors=1 "$test" || exit 1
+          done
+      - name: Root collector privilege boundary (disposable runner)
+        run: sudo -n "$(command -v php)" services/license-server/tests/support/collector-root-smoke.php "$(id -u)" "$(id -g)"
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pdo_sqlite, sodium, curl, mbstring, openssl, zlib
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated test-only browser dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/admin-browser" --no-audit --no-fund playwright@1.60.0
+          "$RUNNER_TEMP/admin-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Admin desktop/mobile smoke
+        env:
+          FLUXFILES_TEST_PLAYWRIGHT_MODULE: ${{ runner.temp }}/admin-browser/node_modules/playwright
+          FLUXFILES_TEST_PHP_BINARY: php
+          FLUXFILES_TEST_OUTPUT_DIR: ${{ runner.temp }}/admin-shots
+        run: node services/license-server/tests/browser-admin.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: admin-screenshots
+          path: ${{ runner.temp }}/admin-shots

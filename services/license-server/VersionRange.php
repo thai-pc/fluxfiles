@@ -25,6 +25,13 @@ final class VersionRange
         return true;
     }
 
+    private static function normalize(string $version): string
+    {
+        $version=explode('+',ltrim($version,'v'),2)[0];$parts=explode('-',$version,2);
+        $numbers=array_map('intval',explode('.',$parts[0]));
+        return implode('.',array_pad($numbers,4,0)).(isset($parts[1])?'-'.$parts[1]:'');
+    }
+
     public static function matches(string $version, string $constraint): bool
     {
         if (!self::validVersion($version) || !self::valid($constraint)) { return false; }
@@ -32,7 +39,7 @@ final class VersionRange
             $all = true;
             foreach (preg_split('/\s+/', trim($group)) ?: [] as $token) {
                 preg_match('/^(<=|>=|!=|=|<|>)?(.+)$/D', $token, $m);
-                if (!version_compare(ltrim($version, 'v'), ltrim($m[2], 'v'), ($m[1] ?? '') ?: '=')) { $all = false; break; }
+                if (!version_compare(self::normalize($version), self::normalize($m[2]), ($m[1] ?? '') ?: '=')) { $all = false; break; }
             }
             if ($all) { return true; }
         }

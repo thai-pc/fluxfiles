@@ -58,9 +58,9 @@ $h->test('All admin pages render without key or inline code, hostile strings esc
     $detail=$get('/licences/'.$jti)['raw'];Harness::ok(str_contains($detail,'&lt;img'));Harness::ok(str_contains($detail,'&lt;script&gt;'));
 });
 $h->test('Issue needs a delivery choice; action GET is 405; fresh step-up required after ten minutes',function() use($h,$ui,$get,$post,$secret,$now,&$cookie,&$csrf,&$jti):void {
-    Harness::eq(400,$post('/issue',['email'=>'x@example.test','plan'=>'pro'])['code']);
+    Harness::eq(403,$post('/issue',['email'=>'x@example.test','plan'=>'pro'])['code']);
     Harness::eq(405,$get('/licences/'.$jti.'/reveal')['code']);Harness::eq(405,$get('/logout')['code']);
-    $future=$now+650;$headers=['X-FluxFiles-Test-Time: '.$future,'Accept: application/json'];
+    $future=$now+650;$headers=['X-FluxFiles-Test-Time: '.$future,'Accept: application/json','Sec-Fetch-Site: same-origin'];
     Harness::eq(403,$post('/licences/'.$jti.'/reveal',[],$headers)['code']);
     Harness::eq(403,$get('/export/orders.csv',$headers)['code']);
     foreach(['/system/backup','/advisories','/notices/send','/events/1/replay'] as $route){Harness::eq(403,$post($route,[],$headers)['code'],$route);}

@@ -42,13 +42,13 @@ try {
         }
         $source = new PDO('sqlite:file:' . $path . '?mode=ro', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
         $file = sys_get_temp_dir() . '/ff-orders-' . bin2hex(random_bytes(8)) . '.sqlite';
-        $source->prepare('VACUUM INTO ?')->execute([$file]);
-        $source = null;
         register_shutdown_function(static function() use($file): void {
             foreach ([$file, $file . '-wal', $file . '-shm'] as $p) {
                 @unlink($p);
             }
         });
+        $source->prepare('VACUUM INTO ?')->execute([$file]);
+        $source = null;
         $store = new LicenseStore($file);
         $db = $store->pdo();
     }
@@ -61,7 +61,7 @@ try {
             curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT => 2, CURLOPT_TIMEOUT => 20, CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token, 'Accept: application/json']]);
             $raw = curl_exec($ch);
             $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
+            unset($ch);
             if ($status === 429 && $attempt < 4) {
                 usleep(min(30000, (int) ($options['backoff-ms'] ?? 1000) * (2 ** $attempt)) * 1000);
                 continue;

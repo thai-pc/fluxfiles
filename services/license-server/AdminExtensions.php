@@ -102,7 +102,7 @@ final class AdminExtensions
             $money=static fn($n):string=>$n===null?'':number_format((int)$n/(in_array($r['currency'],['vnd','jpy','krw'],true)?1:100),in_array($r['currency'],['vnd','jpy','krw'],true)?0:2,'.','');
             $output[] = [$local($r['paid_at']),$r['paid_at']?gmdate('c',(int)$r['paid_at']):'',$r['order_id'],$r['status'],$r['plan'],$r['product_id'],$r['billing_reason'],$r['subscription_id'],$r['email_lower'],$r['customer_name'],$r['currency'],$money($r['subtotal_amount']),$money($r['discount_amount']),$r['discount_code'],$money($r['net_amount']),$money($r['tax_amount']),$money($r['total_amount']),$money($r['refunded_amount']),$money($r['refunded_tax_amount']),$local($r['refunded_at']),$r['jti']];
         }
-        $csv=Csv::encode($output);$this->store->audit('export.orders',null,'ok',null,['rows'=>count($rows),'from'=>$from->format('Y-m-d'),'to'=>$to->modify('-1 day')->format('Y-m-d')]);return $csv;
+        $csv=Csv::encode($output,$redactions);$this->store->audit('export.orders',null,'ok',null,['rows'=>count($rows),'redactions'=>$redactions,'from'=>$from->format('Y-m-d'),'to'=>$to->modify('-1 day')->format('Y-m-d')]);return $csv;
     }
 
     private function advisory(array $body): void
@@ -140,7 +140,7 @@ final class AdminExtensions
         $base=Config::get('FLUXFILES_POLAR_API_BASE',Config::sandbox()?'https://sandbox-api.polar.sh/v1':'https://api.polar.sh/v1');
         if ($base!==(Config::sandbox()?'https://sandbox-api.polar.sh/v1':'https://api.polar.sh/v1')) { $base=Config::loopback($base); }
         $ch=curl_init($base.'/subscriptions/'.rawurlencode($sid));curl_setopt_array($ch,[CURLOPT_CUSTOMREQUEST=>'PATCH',CURLOPT_POSTFIELDS=>'{"cancel_at_period_end":true}',CURLOPT_HTTPHEADER=>['Content-Type: application/json','Authorization: Bearer '.$token],CURLOPT_RETURNTRANSFER=>true,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_CONNECTTIMEOUT=>2,CURLOPT_TIMEOUT=>10]);
-        $raw=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);unset($token,$body['polar_token']);
+        $raw=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);unset($ch);unset($token,$body['polar_token']);
         $ok=$raw!==false && $status>=200 && $status<300;$this->store->audit('subscription.cancel',$sid,$ok?'ok':'failed',null,['http_status'=>$status]);
         return ['requested'=>$ok,'http_status'=>$status];
     }

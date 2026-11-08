@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/support/Harness.php';
 use FluxFiles\LicenseServer\LicenseStore;
 
-$h=new Harness();$api=$h->api();$h->call($api,'GET','/admin/meta');$store=new LicenseStore($h->env['FLUXFILES_LICENSE_DB']);$db=$h->db();
+$h=new Harness();$h->env['FLUXFILES_ADMIN_LANG']='en';$api=$h->api();$h->call($api,'GET','/admin/meta');$store=new LicenseStore($h->env['FLUXFILES_LICENSE_DB']);$db=$h->db();
 $token='123456:fake_bot_token_for_tests';file_put_contents($h->dir.'/telegram.token',$token);
 $fake=$h->dir.'/telegram.php';
 file_put_contents($fake, <<<'FAKE'
@@ -18,7 +18,7 @@ $result=match(basename($path)) { 'getMe'=>['username'=>'fluxfiles_ops_bot'],'get
 echo json_encode(['ok'=>true,'result'=>$result]);
 FAKE);
 $telegram=$h->start($fake,['PATH'=>(string)getenv('PATH')]);
-$env=['PATH'=>(string)getenv('PATH'),'FLUXFILES_ADMIN_API'=>'http://127.0.0.1:'.$api,'FLUXFILES_LICENSE_OPS_TOKEN'=>'ops-secret','FLUXFILES_TELEGRAM_BOT_TOKEN_FILE'=>$h->dir.'/telegram.token','FLUXFILES_TELEGRAM_CHAT_ID'=>'42','FLUXFILES_TELEGRAM_API_BASE'=>'http://127.0.0.1:'.$telegram,'FLUXFILES_OPS_STATE_DIR'=>$h->dir.'/ops'];
+$env=['FLUXFILES_ADMIN_LANG'=>'en','PATH'=>(string)getenv('PATH'),'FLUXFILES_ADMIN_API'=>'http://127.0.0.1:'.$api,'FLUXFILES_LICENSE_OPS_TOKEN'=>'ops-secret','FLUXFILES_TELEGRAM_BOT_TOKEN_FILE'=>$h->dir.'/telegram.token','FLUXFILES_TELEGRAM_CHAT_ID'=>'42','FLUXFILES_TELEGRAM_API_BASE'=>'http://127.0.0.1:'.$telegram,'FLUXFILES_OPS_STATE_DIR'=>$h->dir.'/ops'];
 $run=function(array $extra=[]) use($h,$env):array {
     $p=proc_open([PHP_BINARY,dirname(__DIR__).'/ops/ops-worker.php','run'],[1=>['pipe','w'],2=>['pipe','w']],$pipes,null,$extra+$env);$out=stream_get_contents($pipes[1]).stream_get_contents($pipes[2]);foreach($pipes as $fp) { fclose($fp); }return [proc_close($p),$out];
 };
@@ -43,6 +43,7 @@ $h->test('429 Retry-After persists and provider token/URL errors never enter log
     $clear();file_put_contents($h->dir.'/429','1');$store->enqueueAlert('test','warn','retry','Retry alert');$r=$run();unlink($h->dir.'/429');Harness::eq(0,$r[0]);Harness::ok(!str_contains($r[1],$token));$row=$db->query('SELECT * FROM ops_outbox')->fetch();Harness::ok((int)$row['next_at']>=time()+15);Harness::eq('telegram_http_429',$row['last_error']);Harness::ok(!str_contains($row['last_error'],$token));
 });
 $h->test('Optional read-only commands authorize chat, group author and topic; cursor persists',function() use($h,$clear,$run,$calls):void {
+    $state=json_decode(file_get_contents($h->dir.'/ops/state.json'),true);$state['telegram_blocked_until']=0;file_put_contents($h->dir.'/ops/state.json',json_encode($state));
     $clear();file_put_contents($h->dir.'/updates.json',json_encode([
         ['update_id'=>1,'message'=>['chat'=>['id'=>666,'type'=>'private'],'text'=>'/stats']],
         ['update_id'=>2,'message'=>['chat'=>['id'=>42,'type'=>'private'],'text'=>'/stats']],

@@ -7,9 +7,11 @@ namespace FluxFiles\LicenseServer;
 use PDO;
 use FluxFiles\LicenseServer\Client\Config;
 use FluxFiles\LicenseServer\Client\Mask;
+use FluxFiles\LicenseServer\Client\OpsText;
 
 require_once __DIR__ . '/client/Config.php';
 require_once __DIR__ . '/client/Mask.php';
+require_once __DIR__ . '/client/OpsText.php';
 
 /** Administrative persistence shares the issuing connection and its transaction. */
 trait AdminStore {
@@ -31,10 +33,11 @@ trait AdminStore {
 
     private function installHistoryTriggers(): void
     {
-        $this->db->sqliteCreateFunction('ff_sha256', static fn(string $v): string => hash('sha256', $v), 1);
-        $this->db->sqliteCreateFunction('ff_kind', fn (): string => $this->historyKind, 0);
-        $this->db->sqliteCreateFunction('ff_ref', fn (): ?string => $this->historyRef, 0);
-        $this->db->sqliteCreateFunction('ff_actor', fn (): string => $this->actor, 0);
+        $function=method_exists($this->db,'createFunction')?'createFunction':'sqliteCreateFunction';
+        $this->db->{$function}('ff_sha256', static fn(string $v): string => hash('sha256', $v), 1);
+        $this->db->{$function}('ff_kind', fn (): string => $this->historyKind, 0);
+        $this->db->{$function}('ff_ref', fn (): ?string => $this->historyRef, 0);
+        $this->db->{$function}('ff_actor', fn (): string => $this->actor, 0);
         // Connection-local triggers capture bulk supersedes and cascades as well as single
         // changes, atomically. They do not impose a PHP UDF on offline SQLite tooling.
         $this->db->exec(<<<'SQL'
@@ -256,32 +259,56 @@ SQL);
         if (empty($facts['order_id'])) {
             return;
         }
-        $facts['updated_at'] = time();
-        $cols = array_keys($facts);
-        $updates = [];
-        foreach ($cols as $c) {
-            if (!preg_match('/^[a-z_]+$/D', $c)) {
-                throw new \InvalidArgumentException('invalid_input');
+        $this->transaction(function () use ($facts): void {
+            $q=$this->db->prepare('SELECT * FROM orders WHERE order_id=?');$q->execute([$facts['order_id']]);$old=$q->fetch() ?: [];
+            $facts['currency']??=$old['currency']??'unknown';
+            $oldAmount=(int)($old['refunded_amount']??0);$oldTax=(int)($old['refunded_tax_amount']??0);
+            $amount=max($oldAmount,(int)($facts['refunded_amount']??0));$tax=max($oldTax,(int)($facts['refunded_tax_amount']??0));
+            $refundAt=$facts['refunded_at']??null;
+            if ($refundAt!==null && (int)($facts['refunded_amount']??0)>0) {
+                $this->db->prepare('INSERT OR IGNORE INTO order_refunds(order_id,total_amount,total_tax,amount,tax_amount,at) VALUES(?,?,?,?,?,?)')
+                    ->execute([$facts['order_id'],(int)$facts['refunded_amount'],(int)($facts['refunded_tax_amount']??0),0,0,$refundAt]);
+                // Cumulative snapshots may arrive out of order; each increment belongs
+                // to the timestamp of the snapshot that first proves it occurred.
+                $q=$this->db->prepare('SELECT * FROM order_refunds WHERE order_id=? ORDER BY total_amount,total_tax');$q->execute([$facts['order_id']]);
+                $snapshots=$q->fetchAll();$beforeAmount=0;$beforeTax=0;
+                foreach ($snapshots as $snapshot) {
+                    $this->db->prepare('UPDATE order_refunds SET amount=?,tax_amount=? WHERE order_id=? AND total_amount=? AND total_tax=?')
+                        ->execute([max(0,(int)$snapshot['total_amount']-$beforeAmount),max(0,(int)$snapshot['total_tax']-$beforeTax),$facts['order_id'],$snapshot['total_amount'],$snapshot['total_tax']]);
+                    $beforeAmount=max($beforeAmount,(int)$snapshot['total_amount']);$beforeTax=max($beforeTax,(int)$snapshot['total_tax']);
+                }
             }
-            if ($c === 'order_id') {
-                continue;
+            $facts['updated_at']=time();$cols=array_keys($facts);$updates=[];
+            foreach ($cols as $c) {
+                if (!preg_match('/^[a-z_]+$/D',$c)) { throw new \InvalidArgumentException('invalid_input'); }
+                if ($c==='order_id') { continue; }
+                $updates[]=match ($c) {
+                    'refunded_at'=>"refunded_at=COALESCE(orders.refunded_at,excluded.refunded_at)",
+                    'refunded_amount','refunded_tax_amount'=>"$c=MAX(COALESCE(orders.$c,0),COALESCE(excluded.$c,0))",
+                    'status'=>"status=CASE WHEN orders.status='refunded' OR (orders.status='partially_refunded' AND excluded.status='paid') THEN orders.status ELSE excluded.status END",
+                    default=>"$c=COALESCE(excluded.$c,orders.$c)",
+                };
             }
-            // Refunds can precede a delayed paid webhook; a paid retry must not erase them.
-            $updates[] = in_array($c, ['refunded_at', 'refunded_amount', 'refunded_tax_amount'], true) ? "$c=MAX(COALESCE(orders.$c,0),COALESCE(excluded.$c,0))": ($c === 'status' ? "status=CASE WHEN orders.status IN ('refunded','partially_refunded') AND excluded.status='paid' THEN orders.status ELSE excluded.status END": "$c=COALESCE(excluded.$c,orders.$c)");
-        }
-        $sql = 'INSERT INTO orders(' . implode(',', $cols) . ') VALUES(' . implode(',', array_fill(0, count($cols), '?')) . ') ON CONFLICT(order_id) DO UPDATE SET ' . implode(',', $updates);
-        $this->db->prepare($sql)->execute(array_values($facts));
+            $sql='INSERT INTO orders('.implode(',',$cols).') VALUES('.implode(',',array_fill(0,count($cols),'?')).') ON CONFLICT(order_id) DO UPDATE SET '.implode(',',$updates);
+            $this->db->prepare($sql)->execute(array_values($facts));
+        });
+    }
+
+    public function expireWebhookBodies(?int $now=null): void
+    {
+        $this->db->prepare('UPDATE webhook_events SET body=NULL,body_expires_at=NULL WHERE body IS NOT NULL AND (body_expires_at<CAST(? AS INTEGER) OR resolved_at IS NOT NULL)')->execute([$now??time()]);
     }
 
     public function recordEvent(string $source, string $webhookId, string $verify, array $body, string $raw, string $outcome, int $http, ?string $jti = null): void
     {
         $now = time();
+        $this->expireWebhookBodies($now);
         $trusted = $verify === 'ok';
         $d = $trusted && is_array($body['data'] ?? null) ? $body['data']: [];
         $facts = PolarWebhook::orderFacts($body) ?? [];
-        $stored = $trusted && in_array($outcome, ['unmapped_product', 'renewal_unmatched', 'error'], true) ? gzcompress($raw): null;
+        $stored = strlen($raw)<=65536 && $trusted && in_array($outcome, ['unmapped_product', 'renewal_unmatched', 'error'], true) ? gzcompress($raw): null;
         $id = $trusted ? mb_substr(Mask::clean($webhookId), 0, 200): 'invalid:' . intdiv($now, 3600) . ':' . $verify;
-        $values = [$source, $id, $now, $now, $trusted ? mb_substr(Mask::clean((string) ($body['type'] ?? '')), 0, 100): null, $verify, $outcome, $http, $facts['order_id'] ?? null, $trusted ? PolarWebhook::cleanId((string) ($d['checkout_id'] ?? '')): null, $facts['subscription_id'] ?? null, $facts['customer_id'] ?? null, $facts['product_id'] ?? null, $jti, in_array($outcome, ['error', 'unmapped_product', 'renewal_unmatched'], true) ? $outcome: null, $stored, $stored === null ? null: $now + self::BODY_DAYS * 86400];
+        $values = [$source, $id, $now, $now, $trusted ? mb_substr(Mask::clean((string) ($body['type'] ?? '')), 0, 100): null, $verify, $outcome, $http, $facts['order_id'] ?? null, $trusted ? PolarWebhook::cleanId((string) ($d['checkout_id'] ?? '')): null, (str_starts_with((string)($body['type']??''),'subscription.') ? (PolarWebhook::cleanId((string)($d['id']??'')) ?: null) : ($facts['subscription_id']??null)), $facts['customer_id'] ?? null, $facts['product_id'] ?? null, $jti, in_array($outcome, ['error', 'unmapped_product', 'renewal_unmatched'], true) ? $outcome: null, $stored, $stored === null ? null: $now + self::BODY_DAYS * 86400];
         $this->db->prepare('INSERT INTO webhook_events(id,source,webhook_id,received_at,last_at,type,verify,outcome,http_status,order_id,checkout_id,subscription_id,customer_id,product_id,jti,error,body,body_expires_at)
             VALUES((SELECT id FROM webhook_events WHERE source=? AND webhook_id=? AND verify=? LIMIT 1),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(id) DO UPDATE SET attempts=attempts+1,last_at=excluded.last_at,outcome=excluded.outcome,http_status=excluded.http_status,
@@ -311,6 +338,7 @@ SQL);
 
     public function enqueueAlert(string $kind, string $severity, string $dedupKey, string $text, int $windowSec = PHP_INT_MAX): void
     {
+        $text=OpsText::text($text);
         Mask::safe($text, true);
         Mask::safe($dedupKey, true);
         $now = time();
@@ -350,7 +378,7 @@ SQL);
                     $pick->execute([$tailId, $now, $now]);
                     $digest = $pick->fetch();
                     $this->db->prepare("UPDATE ops_outbox SET dropped_at=?,last_error='budget_digest' WHERE id>=? AND channel='telegram' AND sent_at IS NULL AND dropped_at IS NULL AND next_at<=? AND COALESCE(lease_until,0)<=CAST(? AS INTEGER)")->execute([$now, $tailId, $now, $now]);
-                    $text = 'Alert digest: ' . $digest['n'] . ' alerts; open the admin UI';
+                    $text = OpsText::text('Alert digest: ' . $digest['n'] . ' alerts; open the admin UI');
                     $this->db->prepare("INSERT INTO ops_outbox(created_at,channel,kind,severity,dedup_key,text,next_at) VALUES(?,'telegram','budget.digest',?,?,?,?)")->execute([$now, $digest['critical']?'crit': 'info', 'digest:' . bin2hex(random_bytes(8)), $text, $now]);
                     $rows[] = ['id' => (int) $this->db->lastInsertId(), 'kind' => 'budget.digest', 'severity' => $digest['critical']?'crit': 'info', 'text' => $text, 'suppressed' => 0, 'attempts' => 0];
                 }
@@ -406,11 +434,24 @@ SQL);
     public function prune(): void
     {
         $now = time();
-        $this->db->prepare('UPDATE webhook_events SET body=NULL,body_expires_at=NULL WHERE body_expires_at<? OR resolved_at IS NOT NULL')->execute([$now]);
+        $this->expireWebhookBodies($now);
         foreach (['webhook_events' => ['received_at', self::EVENT_DAYS], 'mail_log' => ['at', self::MAIL_DAYS], 'admin_audit' => ['at', self::AUDIT_DAYS], 'install_pings' => ['last_at', self::PING_DAYS], 'health_checks' => ['at', self::OPS_DAYS]] as $table => [$col, $days]) {
             $this->db->prepare("DELETE FROM $table WHERE $col<?")->execute([$now - $days * 86400]);
         }
+        $this->transaction(function () use ($now): void {
+            $q=$this->db->prepare("SELECT id,payload FROM ops_outbox WHERE channel='email' AND sent_at IS NULL AND dropped_at IS NULL AND created_at<CAST(? AS INTEGER) AND COALESCE(lease_until,0)<=CAST(? AS INTEGER)");$q->execute([$now-self::OPS_DAYS*86400,$now]);
+            foreach ($q->fetchAll() as $job) {
+                $u=$this->db->prepare("UPDATE ops_outbox SET dropped_at=?,lease_until=NULL,last_error='expired' WHERE id=? AND sent_at IS NULL AND dropped_at IS NULL");$u->execute([$now,$job['id']]);
+                if ($u->rowCount()) {
+                    $id=(int)(json_decode((string)$job['payload'],true)['notice_id']??0);
+                    $this->db->prepare('UPDATE notices SET failed=failed+1 WHERE id=?')->execute([$id]);
+                    $this->db->prepare("UPDATE notices SET status='done' WHERE id=? AND sent+failed>=recipients")->execute([$id]);
+                }
+            }
+        });
+        $this->db->prepare("UPDATE ops_outbox SET dropped_at=?,lease_until=NULL,last_error='expired' WHERE channel='telegram' AND sent_at IS NULL AND dropped_at IS NULL AND created_at<CAST(? AS INTEGER) AND COALESCE(lease_until,0)<=CAST(? AS INTEGER)")->execute([$now,$now-self::OPS_DAYS*86400,$now]);
         $this->db->prepare("INSERT OR IGNORE INTO ops_state(key,value,updated_at) SELECT 'alert-dedup:' || ff_sha256(dedup_key),NULL,? FROM ops_outbox WHERE COALESCE(sent_at,dropped_at)>0 AND COALESCE(sent_at,dropped_at)<CAST(? AS INTEGER)")->execute([$now, $now - self::OPS_DAYS * 86400]);
+        $this->db->prepare("DELETE FROM ops_state WHERE (key LIKE 'alert-dedup:%' OR key LIKE 'notice:%' OR key LIKE 'weekly:%') AND updated_at<CAST(? AS INTEGER)")->execute([$now-self::AUDIT_DAYS*86400]);
         foreach (['activity_daily'=>90,'downloads_daily'=>730,'public_counters'=>730,'demo_daily'=>730] as $table=>$days) { $this->db->prepare("DELETE FROM $table WHERE day<?")->execute([gmdate('Y-m-d',$now-$days*86400)]); }
         $this->db->prepare('DELETE FROM ops_items WHERE resolved_at<?')->execute([$now-180*86400]);
         $this->db->prepare('DELETE FROM ops_outbox WHERE COALESCE(sent_at,dropped_at)>0 AND COALESCE(sent_at,dropped_at)<CAST(? AS INTEGER)')->execute([$now - self::OPS_DAYS * 86400]);

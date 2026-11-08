@@ -39,7 +39,7 @@ final class Counters
         $override=Config::get('FLUXFILES_OPS_COUNTER_API_BASE');if ($override!=='') { $url=Config::loopback($override).'/'.$source.'/'.rawurlencode($subject); }
         $buffer='';$start=microtime(true);$ch=curl_init($url);
         curl_setopt_array($ch,[CURLOPT_FOLLOWLOCATION=>false,CURLOPT_CONNECTTIMEOUT=>2,CURLOPT_TIMEOUT=>max(1,min(5,$timeout)),CURLOPT_USERAGENT=>'FluxFiles-Ops/1.0',CURLOPT_HTTPHEADER=>['Accept: application/json'],CURLOPT_WRITEFUNCTION=>static function($ch,string $chunk) use(&$buffer):int { if (strlen($buffer)+strlen($chunk)>1048576) { return 0; }$buffer.=$chunk;return strlen($chunk); }]);
-        $result=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
+        $result=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);unset($ch);
         $data=$result!==false && $status===200?json_decode($buffer,true):null;$rows=[];
         if (is_array($data)) {
             $values=match($source){'wporg'=>['active_installs'=>$data['active_installs']??null,'downloaded'=>$data['downloaded']??null],'github'=>['stargazers_count'=>$data['stargazers_count']??null,'forks_count'=>$data['forks_count']??null],'packagist'=>['downloads.total'=>$data['downloads']['total']??null,'downloads.monthly'=>$data['downloads']['monthly']??null],default=>['downloads'=>$data['downloads']??null]};

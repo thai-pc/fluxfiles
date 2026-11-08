@@ -97,6 +97,11 @@ final class AdminApi
                 return [200, $s->cascadePreview($jti, $status)];
             }
             if ($method === 'POST' && $action === 'reveal') {
+                if (!$s->rateHit('key-reveal:'.hash('sha256',MachineAuth::actor($this->role,$_SERVER)),600,10)) {
+                    $s->audit('key.reveal',$jti,'rate_limited');
+                    $s->enqueueAlert('key.reveal_burst','warn','key-reveal-burst','Key reveal burst; inspect the audit log',600);
+                    return [429,['error'=>'rate_limited']];
+                }
                 $s->audit('key.reveal', $jti, 'ok', is_string($b['reason'] ?? null)?$b['reason']: null);
                 return [200, ['license_key' => $r['license_key']]];
             }
@@ -321,7 +326,7 @@ final class AdminApi
                 Mask::safe((string) ($r['detail'] ?? ''), true);
                 $db->prepare('INSERT OR REPLACE INTO health_checks(target,at,ok,ms,tls_days,detail) VALUES(?,?,?,?,?,?)')->execute([$r['target'], time(), (int) $r['ok'], max(0, min(60000, (int) ($r['ms'] ?? 0))), isset($r['tls_days'])?(int) $r['tls_days']: null, mb_substr(Mask::clean((string) ($r['detail'] ?? '')), 0, 300)]);
             }
-            $s->state('heartbeat', ['at' => time(), 'telegram' => ($b['telegram'] ?? false) === true, 'fingerprint' => preg_match('/^[a-f0-9]{10}$/D', (string) ($b['fingerprint'] ?? ''))?$b['fingerprint']: null]);
+            $s->state('heartbeat', ['at' => time(), 'telegram' => ($b['telegram'] ?? false) === true, 'fingerprint' => preg_match('/^[a-f0-9]{10}$/D', (string) ($b['fingerprint'] ?? ''))?$b['fingerprint']: null, 'stage_errors'=>array_values(array_filter(is_array($b['stage_errors']??null)?$b['stage_errors']:[],static fn($v):bool=>is_string($v) && in_array($v,['heartbeat','outbox','health','mail_jobs','inbox','weekly','counters','commands'],true)))]);
             if (($s->state('pruned')['day'] ?? '') !== gmdate('Y-m-d')) {
                 $s->prune();
                 $s->sweepOpsItems();
@@ -348,7 +353,7 @@ final class AdminApi
                 }
                 $text[] = 'Active installs: ' . $d['installs']['active_30d'];
             }
-            return [200, ['text' => Mask::safe(implode("\n", $text), true)]];
+            return [200, ['text' => Mask::safe(\FluxFiles\LicenseServer\Client\OpsText::text(implode("\n", $text)), true)]];
         }
         return [404, ['error' => 'not_found']];
     }

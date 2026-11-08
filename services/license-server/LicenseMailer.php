@@ -196,7 +196,7 @@ final class LicenseMailer
                 default => $this->sendLog($to, $subject, $body),
             };
         } catch (\Throwable $e) {
-            $error = 'mail transport failed';
+            $error = self::diagnostic($e->getMessage());
             error_log($failPrefix . self::maskEmail($to) . ': ' . $error);
             return false;
         } finally {
@@ -205,6 +205,20 @@ final class LicenseMailer
                 catch (\Throwable $e) { error_log('mail result recording failed'); }
             }
         }
+    }
+
+    private static function diagnostic(string $message): string
+    {
+        foreach (['FLUXFILES_RESEND_API_KEY','FLUXFILES_SMTP_PASS','FLUXFILES_SMTP_USER'] as $name) {
+            $secret=(string)getenv($name);if ($secret!=='') { $message=str_replace([$secret,base64_encode($secret)],'[redacted]',$message); }
+        }
+        $message=preg_replace('/Bearer\s+\S+/i','Bearer [redacted]',$message);
+        if (class_exists(\FluxFiles\LicenseServer\Client\Mask::class,false)) { $message=\FluxFiles\LicenseServer\Client\Mask::clean($message); }
+        else {
+            $message=preg_replace('/[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/','[redacted]',$message);
+            $message=preg_replace_callback('/[A-Z0-9.!#$%&\x27+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i',static fn(array $m):string=>self::maskEmail($m[0]),$message);
+        }
+        return mb_substr(str_replace(["\r","\n"],' ',(string)$message),0,400);
     }
 
     public function sendTest(): bool

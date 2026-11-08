@@ -370,10 +370,17 @@ Reach the UI through an SSH tunnel, for example:
 ssh -N -L 127.0.0.1:8471:127.0.0.1:9472 <licence-host>
 ```
 
-Open `http://localhost:8471`. Forward sandbox to a different laptop port, e.g.
-`8473:127.0.0.1:9474`. Do not expose either UI through a public vhost. Both the
-application and nginx must check Host; SSH mode permits only localhost/127.0.0.1.
-A `FLUXFILES_ADMIN_HOSTS` value narrows that list and cannot enable a public host.
+Set the production UI's `FLUXFILES_ADMIN_HOSTS=prod.localhost` and the sandbox
+UI's `FLUXFILES_ADMIN_HOSTS=sbx.localhost`. Mirror these exact Hosts in nginx.
+Open `http://prod.localhost:8471`; forward sandbox to laptop port 8473 and open
+`http://sbx.localhost:8473`. Modern browsers resolve `.localhost` to loopback.
+Cookies are host-only: **ports do not isolate cookies**, so distinct ports on the
+same `localhost` cannot protect production sessions from sandbox/local dev apps.
+Legacy localhost/127.0.0.1 defaults remain available for single-instance testing.
+Configured SSH Hosts may be exact one-label `.localhost` names; arbitrary public
+hosts remain forbidden. Neither API port **9471/9473** nor UI port 9472/9474 may
+listen on a public interface. Check with `ss -ltnp` in the deploy smoke.
+
 
 Enroll an account as the appropriate **UI Unix user**, with its UI config loaded:
 
@@ -395,7 +402,9 @@ Login uses password plus six-digit RFC 6238 TOTP, with replay prevention, rollin
 username/global failure limits and 15-minute lockouts. Session tokens are random
 32-byte values, stored only as SHA-256 hashes. They rotate at login and expire after
 30 minutes idle or 12 hours absolute. Reveal, manual issue, restore, archive, replay, CSV, backup, advisory/notice changes
-and optional Polar actions require a TOTP accepted within the last 10 minutes. Revoke requires the typed final
+and optional Polar actions require a **separate fresh TOTP**. Login does not
+count as step-up, and its code cannot be reused; use the next authenticator code.
+A successful step-up lasts ten minutes. Revoke requires the typed final
 six jti characters and a server-rendered cascade preview. Read-only pages retain native links and forms;
 reveal is an explicit POST and clears after 60 seconds when JS is available. Close
 or navigate away after a reveal when scripting is disabled. Never share a screenshot
@@ -411,7 +420,7 @@ Asia/Ho_Chi_Minh with UTC on hover. Charts are server-generated SVG with table
 fallbacks; each currency has its own chart. `j/k`, Enter, `/`, `x`, `g d/l/s/w/a`,
 `?` and Escape provide keyboard navigation.
 
-`licenses.sqlite` migrations are guarded by `PRAGMA user_version=3` and preserve
+`licenses.sqlite` migrations are guarded by `PRAGMA user_version=4` and preserve
 existing rows. Back up before migrating. History is written by connection-local
 SQLite triggers, in the same transaction as the mutation, including bulk supersedes
 and cascades. Offline SQLite tools do not depend on a PHP UDF; edits made outside
@@ -449,7 +458,7 @@ in depth, not a replacement for that split. No HTTP route downloads a DB or back
 | `FLUXFILES_ADMIN_API` | `http://127.0.0.1:9471`, sandbox `:9473`; literal http loopback only, no redirects |
 | `FLUXFILES_ADMIN_UI_TOKEN` / `_FILE` | Own 0400 copy of the instance's UI token |
 | `FLUXFILES_ADMIN_DB` | `/var/lib/fluxfiles-license-admin/admin.sqlite`, sandbox `/var/lib/fluxfiles-license-sbx-admin/admin.sqlite` |
-| `FLUXFILES_ADMIN_HOSTS` | `localhost,127.0.0.1`, incoming port ignored |
+| `FLUXFILES_ADMIN_HOSTS` | `localhost,127.0.0.1` for local tests; deploy `prod.localhost` / `sbx.localhost`, exact per-instance allowlist |
 | `FLUXFILES_ADMIN_LANG` | `vi`, or `en` |
 | `FLUXFILES_ADMIN_SESSION_IDLE` / `FLUXFILES_ADMIN_SESSION_ABSOLUTE` | `1800` / `43200` seconds |
 | `FLUXFILES_ADMIN_POLAR_ORG` | Unset; links are hidden until configured |
@@ -601,12 +610,16 @@ call only `/admin/ops/*`; it cannot read customers, keys or accounting exports.
 Subscription canceled/uncanceled events toggle reminder suppression without
 revoking a paid period. Past-due subscriptions appear separately and are excluded
 from current MRR. A revoked event revokes all subscription rows only when the
-newest active licence has **more than 48 hours** remaining. Unknown subscriptions
+paid period has **more than 48 hours** remaining (current_period_end, then ended_at,
+with licence expiry only for legacy missing period fields). Unknown subscriptions
 ACK 200; older events cannot undo newer state. Refunds leave an operator item until
 cancellation is observed. Enable these four subscription events at Polar after
 migration. `subscription.created/updated` are also accepted for known subscriptions.
 
-Reported versions use the latest ping per jti/component over 30 days. Downloads
+Install/field-version identity follows a subscription or lifetime-renewal root,
+so rotating a key does not lose an installation. Versions use its latest component
+ping over 30 days. Never-installed rows exclude manual licences and wait seven
+days after max(original purchase time, telemetry migration time). Downloads
 keep `zip_log`, `pro_link_claim` and `pro_link_download` separate from update checks.
 Retention uses recorded licence history at month end; pre-migration history and
 historical MRR are estimates. A refund rate with nonpositive net is undefined.
@@ -665,7 +678,9 @@ Root's backup tool writes status atomically, readable only by the licence API:
 integer Unix seconds; preserve `last_ok_at` across failures and set `last_error`.
 The operator retains/sweeps staged snapshots and backups; HTTP never serves them.
 Retention adds 730 days of daily counters, 90 days activity and 180 days resolved
-ops items; notices/advisories/notes and request receipts persist.
+ops items. Pending outbox rows expire after 30 days even with Telegram off;
+notice failure counters are updated consistently. Dedup/notice/report receipts
+expire after 730 days; notices/advisories/notes and accounting history persist.
 
 ### Optional Cloudflare Access and viewer accounts
 
@@ -695,6 +710,60 @@ Use `admin-user.php add <name> [admin|viewer]` or
 migrate to admin; changing role invalidates their sessions. Viewers retain language,
 theme and logout controls but cannot reveal, export or mutate business data.
 
-Browser smoke (uses an already installed Playwright, no package installation):
-`node services/license-server/tests/browser-admin.cjs`. Override the module path
-with `FLUXFILES_TEST_PLAYWRIGHT_MODULE` if necessary. It starts only local fixtures.
+Browser smoke starts only local fixtures. It uses `php` from PATH and either a
+locally resolvable Playwright or the monorepo browser installation. Install an
+isolated test dependency when neither exists:
+
+```sh
+npm install --prefix /tmp/fluxfiles-admin-browser --no-audit --no-fund playwright@1.60.0
+/tmp/fluxfiles-admin-browser/node_modules/.bin/playwright install chromium
+FLUXFILES_TEST_PLAYWRIGHT_MODULE=/tmp/fluxfiles-admin-browser/node_modules/playwright \
+  node services/license-server/tests/browser-admin.cjs
+```
+
+Optional `FLUXFILES_TEST_PHP_BINARY` selects a PHP binary;
+`FLUXFILES_TEST_OUTPUT_DIR` selects screenshot output (default:
+`os.tmpdir()/fluxfiles-admin-screenshots`). No machine-specific binary or temp path
+is required. `.github/workflows/license-admin.yml` runs every PHP suite on
+8.1–8.5, installs isolated browser dependencies, runs Chromium and uploads captures.
+It also verifies the root collector's actual privilege drop on the disposable
+runner; normal local runs never invoke sudo.
+
+
+### Review hardening and accounting migration
+
+**All four machine tokens must be nonempty and pairwise unique per instance**;
+all eight across production/sandbox must also differ. `MachineAuth::tokens()`
+throws on equal configured credentials. Validate this before restarting pools.
+
+The v4 migration creates `order_refunds` and the observation timestamp without
+rewriting licence keys. Polar's Order schema supplies `modified_at`, not a refund
+timestamp: refund facts use that value, then the webhook envelope's `timestamp`,
+then receipt time only if neither exists. Duplicate snapshots preserve the first
+recorded date. Each cumulative snapshot allocates its incremental amount/tax to
+its own month, including out-of-order delivery. An order-only backfill cannot
+reconstruct missing earlier partial-refund history; replay retained original
+snapshots to refine it. See the official [Polar refund event schema](https://polar.sh/docs/api-reference/webhooks/order.refunded).
+
+CSV exports redact key-shaped hostile cells instead of failing, record the
+redaction count in the audit, and keep the BOM/formula guard. The UI download GET
+requires same-origin Fetch Metadata or an exact Origin fallback; initiate it via
+the export form. Key reveals are additionally limited by API actor to ten per
+ten minutes, with an audited refusal and a burst alert.
+
+Worker heartbeat reports stage names only. Delivery runs immediately after the
+initial heartbeat; failures in probes, jobs, ingest, reports or commands do not
+abort unrelated stages. Health resumes skipped targets without resetting its
+schedule. Telegram 429 stores a global blocked-until for every send and poll.
+Weekly report preparation failures clear the lease into failed; failed sends
+retry with 1/2/4…60-minute backoff. Vietnamese is the default operational language;
+set `FLUXFILES_ADMIN_LANG=en` consistently in API and worker for English.
+
+The optional Polar cancel token grants **organisation-wide**
+`subscriptions:write`, not just the selected customer's subscription. Use a
+short-expiry token, paste it only for the confirmed action and revoke it after
+use. Never keep it in an env file or browser storage.
+
+The PHP 8.5 path uses the native SQLite `createFunction` method and avoids
+no-op/deprecated cURL/reflection calls. The legacy method remains only as the
+PHP 8.1–8.3 compatibility fallback. See [PHP's SQLite deprecation note](https://www.php.net/manual/en/pdo.sqlitecreatefunction.php).

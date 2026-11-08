@@ -37,7 +37,7 @@ final class App
         self::headers();
         $this->view = new View(new I18n(Config::get('FLUXFILES_ADMIN_LANG', 'vi')), null);
         $host = (string)($_SERVER['HTTP_HOST']??'');
-        $allowed = implode(',',array_intersect(array_map('trim',explode(',',Config::get('FLUXFILES_ADMIN_HOSTS','localhost,127.0.0.1'))),['localhost','127.0.0.1']));
+        $allowed = implode(',',array_filter(array_map('trim',explode(',',Config::get('FLUXFILES_ADMIN_HOSTS','localhost,127.0.0.1'))),static fn(string $host):bool=>Csrf::localHost($host)));
         if (Access::enabled()) { $allowed=Config::get('FLUXFILES_ADMIN_ACCESS_HOST'); }
         if (!Csrf::host($host,$allowed) || !in_array($_SERVER['REMOTE_ADDR']??'',['127.0.0.1','::1'],true)) { $this->error('bad_host',400);return; }
         if (!Access::allows($_SERVER)) { $this->error('access_denied',403);return; }
@@ -119,7 +119,7 @@ final class App
             if (!array_key_exists($code, require __DIR__ . '/../lang/en.php')) {
                 $code = 'internal';
             }
-            $this->error($code, ['api_unreachable' => 503, 'not_found' => 404, 'internal' => 500, 'stepup_required' => 403, 'forbidden_scope' => 403, 'unauthorized' => 401][$code] ?? 400);
+            $this->error($code, ['api_unreachable' => 503, 'not_found' => 404, 'internal' => 500, 'stepup_required' => 403, 'csrf'=>403, 'rate_limited'=>429, 'forbidden_scope' => 403, 'unauthorized' => 401][$code] ?? 400);
         }
     }
 
@@ -197,6 +197,7 @@ final class App
         if (preg_match('~^/stats/(customers|versions|downloads|growth|demo|anomalies)$~D',$path,$m)) { $this->view->render('statistics-extra',['title'=>$m[1]==='customers'?'customer_stats':$m[1],'kind'=>$m[1],'data'=>$this->api->request('GET','/admin/stats/'.$m[1],$_GET)]);return true; }
         if ($path==='/export') { $this->view->render('export',['title'=>'export']);return true; }
         if ($path==='/export/orders.csv') {
+            if (!Csrf::download($_SERVER)) { throw new \RuntimeException('csrf'); }
             $this->requireStepup();$csv=$this->api->csv('/admin/export/orders.csv',array_intersect_key($_GET,array_flip(['from','to'])));
             header('Content-Type: text/csv; charset=utf-8');header('Content-Disposition: attachment; filename=fluxfiles-orders.csv');echo \FluxFiles\LicenseServer\Client\Mask::safe($csv);return true;
         }

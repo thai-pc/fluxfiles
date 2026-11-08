@@ -7,6 +7,7 @@ namespace FluxFiles\LicenseServer;
 use PDO;
 use FluxFiles\LicenseServer\Client\Config;
 use FluxFiles\LicenseServer\Client\Mask;
+use FluxFiles\LicenseServer\Client\OpsText;
 
 /** Mail credentials stay in the API process. The worker only requests bounded jobs. */
 final class Communications
@@ -139,31 +140,47 @@ final class Communications
         $tz=new \DateTimeZone(Config::get('FLUXFILES_ADMIN_TZ','Asia/Ho_Chi_Minh'));$start=(new \DateTimeImmutable('now',$tz))->setISODate((int)$m[1],(int)$m[2],1)->setTime(0,0);$end=$start->modify('+1 week');
         if ($start->format('o-\WW')!==$week || $end->setTime(8,0)->getTimestamp()>time()) { throw new \InvalidArgumentException(); }
         $email=Config::get('FLUXFILES_OPS_EMAIL');if (!filter_var($email,FILTER_VALIDATE_EMAIL)) { return ['ok'=>false,'configured'=>false]; }
-        $claimed=$this->store->transaction(function() use($week):bool {
-            $old=$this->store->state('weekly:'.$week);if ($old && in_array($old['status']??'', ['sending','done'],true)) { return false; }$this->store->state('weekly:'.$week,['status'=>'sending','at'=>time()]);return true;
+        $receipt=$this->store->transaction(function() use($week):array {
+            $old=$this->store->state('weekly:'.$week)??[];
+            if (in_array($old['status']??'',['sending','done'],true)) { return ['ok'=>true,'reused'=>true]; }
+            if ((int)($old['next_at']??0)>time()) { return ['ok'=>false,'retry_at'=>$old['next_at']]; }
+            $state=['status'=>'preparing','at'=>time(),'attempts'=>(int)($old['attempts']??0)+1,'next_at'=>time()+60];
+            $this->store->state('weekly:'.$week,$state);return $state;
         });
-        if (!$claimed) { return ['ok'=>true,'reused'=>true]; }
-        $stats=new Stats($this->store->pdo());$data=$stats->dashboard();$weekRows=$this->rows("SELECT currency,SUM(CASE WHEN paid_at>=? AND paid_at<? THEN COALESCE(net_amount,0) ELSE 0 END)-SUM(CASE WHEN refunded_at>=? AND refunded_at<? THEN refunded_amount-refunded_tax_amount ELSE 0 END) net FROM orders o WHERE gateway!='manual' AND NOT EXISTS(SELECT 1 FROM licenses l WHERE l.jti=o.jti AND (l.is_test=1 OR l.archived_at IS NOT NULL)) GROUP BY currency",[$start->getTimestamp(),$end->getTimestamp(),$start->getTimestamp(),$end->getTimestamp()]);
+        if (array_key_exists('ok',$receipt)) { return $receipt; }
+        try {
+        $stats=new Stats($this->store->pdo());$data=$stats->dashboard();$weekRows=$this->rows("SELECT currency,SUM(net) net FROM (
+            SELECT o.currency,COALESCE(o.net_amount,0) net FROM orders o WHERE o.paid_at>=? AND o.paid_at<? AND o.gateway!='manual' AND NOT EXISTS(SELECT 1 FROM licenses l WHERE l.jti=o.jti AND (l.is_test=1 OR l.archived_at IS NOT NULL))
+            UNION ALL SELECT o.currency,-(r.amount-r.tax_amount) net FROM order_refunds r JOIN orders o USING(order_id) WHERE r.at>=? AND r.at<? AND o.gateway!='manual' AND NOT EXISTS(SELECT 1 FROM licenses l WHERE l.jti=o.jti AND (l.is_test=1 OR l.archived_at IS NOT NULL))
+        ) GROUP BY currency",[$start->getTimestamp(),$end->getTimestamp(),$start->getTimestamp(),$end->getTimestamp()]);
         $previous=$this->store->state('weekly_report')??[];$mrr=[];$lines=['FluxFiles weekly report '.$week];
         foreach ($weekRows as $row) { $lines[]='Week net: '.$row['net'].' '.$row['currency'].' minor units'; }
         foreach ($data['revenue']['currencies'] as $row) { $mrr[$row['currency']]=$row['mrr'];$lines[]='Month-to-date net: '.$row['net_month'].' '.$row['currency'].' minor units; MRR '.$row['mrr'].'; change '.($row['mrr']-($previous['mrr'][$row['currency']]??0)).' since previous report'; }
         $counts=(new Analytics($this->store))->stats('customers',['from'=>$start->format('Y-m-d'),'to'=>$end->modify('-1 day')->format('Y-m-d')]);$new=array_sum(array_column($counts['series'],'new'));
-        $refunds=$this->rows('SELECT COUNT(*) n FROM orders WHERE refunded_at>=? AND refunded_at<?',[$start->getTimestamp(),$end->getTimestamp()])[0]['n'];
+        $refunds=$this->rows('SELECT COUNT(*) n FROM order_refunds WHERE at>=? AND at<?',[$start->getTimestamp(),$end->getTimestamp()])[0]['n'];
         $open=$this->rows('SELECT kind,summary FROM ops_items WHERE resolved_at IS NULL ORDER BY id DESC LIMIT 20');
         $lines[]='New customers: '.$new.'; refunds: '.$refunds;$lines[]='Active installs: '.$data['installs']['active_30d'].'; never installed: '.$data['installs']['never_installed'];
         foreach ($data['revenue']['founding'] as $discount) { $lines[]=$discount['code'].': '.$discount['paid'].' / '.$discount['cap'].'; refunded '.$discount['refunded']; }
         foreach ($open as $item) { $lines[]='Needs attention: '.Mask::clean($item['summary']); }
-        $lines[]='Webhook failures (7d): '.$data['webhook_errors_7d'];$lines[]='Mail (30d): '.json_encode($data['mail']['periods'][30]);
+        $lines[]='Webhook failures (7d): '.$data['webhook_errors_7d'];foreach ($data['mail']['periods'][30] as $mail) { $lines[]='Mail (30d): '.$mail['kind'].'; sent: '.$mail['sent'].'; accepted: '.$mail['accepted'].'; delivered: '.$mail['delivered'].'; bounced: '.$mail['bounced'].'; failed: '.$mail['failed']; }
         $backup=$this->store->backupStatus();$lines[]='Backup last OK: '.($backup['at']?gmdate('c',(int)$backup['at']):'missing');
         foreach ((new Analytics($this->store))->health()['latest'] as $health) { $lines[]='Health '.$health['target'].': '.($health['ok']?'OK':'DOWN').'; TLS days '.($health['tls_days']??'unknown'); }
-        $body=Mask::clean(implode("\n",$lines));$mailer=(new AdminApi($this->store,'ops'))->mailer();$mailer->setTimeout(12);$mailer->setIdempotencyKey('weekly-'.$week);
-        $ok=$mailer->sendStructured('report',$email,'FluxFiles weekly report '.$week,$body);
-        $this->store->state('weekly:'.$week,['status'=>$ok?'done':'failed','at'=>time()]);
+        $body=Mask::clean(OpsText::text(implode("\n",$lines)));$mailer=(new AdminApi($this->store,'ops'))->mailer();$mailer->setTimeout(12);$mailer->setIdempotencyKey('weekly-'.$week);
+        $this->store->state('weekly:'.$week,array_replace($receipt,['status'=>'sending']));
+        $ok=$mailer->sendStructured('report',$email,OpsText::text('FluxFiles weekly report '.$week),$body);
+        $delay=min(3600,60*(2**min(6,$receipt['attempts']-1)));
+        $this->store->state('weekly:'.$week,['status'=>$ok?'done':'failed','at'=>time(),'attempts'=>$receipt['attempts'],'next_at'=>$ok?0:time()+$delay]);
         if ($ok) {
             $this->store->state('weekly_report',['week'=>$week,'at'=>time(),'mrr'=>$mrr]);
             $digest='Weekly '.$week."\n".implode('; ',array_map(static fn(array $r):string=>$r['currency'].' net '.$r['net'],$weekRows))."\nNew customers: ".$new.'; refunds: '.$refunds."\nActive installs: ".$data['installs']['active_30d']."\nNeeds attention: ".count($open);
             $this->store->enqueueAlert('report.weekly','info','report:'.$week,Mask::safe($digest,true));
         }
         return ['ok'=>$ok,'reused'=>false];
+        } catch (\Throwable $e) {
+            $delay=min(3600,60*(2**min(6,$receipt['attempts']-1)));
+            $this->store->state('weekly:'.$week,['status'=>'failed','at'=>time(),'attempts'=>$receipt['attempts'],'next_at'=>time()+$delay]);
+            error_log('weekly report preparation failed');
+            return ['ok'=>false,'retry_at'=>time()+$delay];
+        }
     }
 }

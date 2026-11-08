@@ -5,7 +5,7 @@ scope expansion. One branch and PR, independent production/sandbox deployments.
 No merge, tag, deployment, real mail/Telegram or private configuration changes.
 
 - §2–6/9: public/status/admin-api split, four machine scopes and trusted UI actors,
-  guarded additive migrations through v3, licence history, strict password/TOTP,
+  guarded additive migrations through v4, licence history, strict password/TOTP,
   hashed sessions, throttling, step-up, CSRF/exact Origin/Host and CSP. All admin
   screens, customer notes, mail/backlog, event replay, activity and audit.
 - §7: per-currency accounting/refunds and rate, current MRR respecting subscription
@@ -34,41 +34,22 @@ for f in services/license-server/tests/*.php; do php "$f" || exit; done
 node services/license-server/tests/browser-admin.cjs
 ```
 
-All **15 PHP test scripts pass: 249 named checks, zero failures**, on PHP **8.2.35**.
+The review baseline passed 249 checks on PHP 8.2. The review fixes add dedicated
+data, HTTP, UI and worker regressions; the final supported-PHP and browser results
+are recorded in the PR reply and [REVIEW-FIXES.md](REVIEW-FIXES.md).
 
-| Suite | Passed |
-|---|---:|
-| Licence server / mail sandbox / fallback | 119 / 8 / 5 |
-| Pro download / refresh / renewal / concurrent renewal | 8 / 22 / 9 / 6 |
-| Admin API / UI HTTP / UI-security unit | 12 / 12 / 8 |
-| Statistics-backfill / ops-Telegram-health | 5 / 7 |
-| Phase API contracts / phase unit / operations HTTP | 15 / 7 / 6 |
-
-All **88 service PHP files** plus the update-server example pass lint; JavaScript
-syntax and `git diff --check` pass. Chromium smoke passes all new screens at
-1440/375px, light/dark, login/TOTP, keyboard navigation, key reveal/clear,
-notice live preview and queue, CSV download/BOM, viewer restrictions and isolated
-sandbox banner/title/amber styling, without page errors or viewport overflow.
-The collector CLI also passes a counts-only atomic 0640 output smoke.
-
-Coverage includes copied-v2 migration preserving signed keys/history, subscription
-48-hour boundaries/stale events/refund follow-up, failure-safe webhook ACK and
-replay, public-key-only refresh, customer/cohort identities, exact ingest fields,
-four counter fixtures and daily polling, inbox retry/quarantine, CSV formula guard,
-notice changed-preview/idempotency/snapshot/retry/exhaustion/ineligible recipients,
-weekly report idempotency, scoped Polar fakes and Access signature/claims/staleness.
-
-HTTP tests use generated keys, temporary DBs and local fake
-Polar/Resend/Telegram/counter/health endpoints. No real account or deployment is
-contacted. Browser smoke uses the existing local Playwright module;
-`FLUXFILES_TEST_PLAYWRIGHT_MODULE` can override its path. PHP 8.1 and 8.3–8.5
-were not run locally.
+New coverage includes historical/cumulative refunds, key-rotation install identity,
+stage isolation, global Telegram backoff, host-only cookies, fresh step-up,
+poisoned CSV, same-origin downloads, bounded JWKS, failure/backoff receipts,
+collector hostile lines/permissions, portable browser execution and PHP 8.5
+with deprecations visible. A dedicated workflow covers PHP 8.1–8.5 and Chromium,
+including a privileged collector smoke only on the disposable CI runner.
 
 ## Ordered server changes (operator applies; repeat per instance)
 
 1. **Back up and select the instance.** Stop its reminder/ops writers briefly and
    take a consistent SQLite backup with the existing backup CLI before any new
-   request runs the v3 migration. Preserve the original code for rollback. Do not
+   request runs the v4 migration. Preserve the original code for rollback. Do not
    restore old code over the migrated schema without the reviewed rollback plan.
    Set `LIC_INSTANCE=production` or `sandbox` in the private deploy tooling; set
    `FLUXFILES_LICENSE_INSTANCE=sandbox` in every sandbox process.
@@ -136,8 +117,8 @@ were not run locally.
 6. **Wire loopback nginx, never a public admin vhost.** On API :9471/:9473 route
    exact `/update-status` to the status socket, and `/issue`, `/licenses`, `/revoke`,
    `/redeliver`, `/admin/*` to the admin-api socket. On UI :9472/:9474 bind
-   **127.0.0.1 only**, provide a default server returning 444, allow only localhost
-   and 127.0.0.1 Hosts, serve only `admin/public`, and route pages to its UI pool.
+   **127.0.0.1 only**, provide a default server returning 444, allow only the instance-specific prod.localhost
+   or sbx.localhost Host, serve only `admin/public`, and route pages to its UI pool.
    Add a per-instance login limit_req zone and 16 KiB UI request cap. `/assets/`
    may serve static files, but must attach **all** App::headers() security headers
    with `always`, including CSP/no-store on errors. Other paths must never expose
@@ -147,8 +128,8 @@ were not run locally.
    public `/refresh`, `/claim`, `/pro-download` and `/webhook/polar` routing.
 
 7. **Migrate and verify isolation.** With new code installed, run a controlled
-   admin API read to migrate. Confirm `user_version=3`, existing licence counts
-   and keys unchanged, and all four tokens distinct. Run access checks under
+   admin API read to migrate. Confirm `user_version=4`, existing licence counts
+   and keys unchanged, and all four nonempty machine tokens pairwise distinct (all eight across instances). Run access checks under
    UI/ops Unix users: opening the signing file, licence DB and licence-secret
    directory must fail EACCES. Check status works without signing-key env.
    Check UI/ops tokens from the other instance get 401. Confirm neither UI port
@@ -266,9 +247,24 @@ were not run locally.
   reconstruction. Nonpositive-net refund rates are undefined. Anomalies never
   revoke automatically. Optional Polar token is runtime-only, not persisted.
 - Existing mail tests now assert mandatory masking rather than the retired
-  `FLUXFILES_MAIL_LOG_FULL` bypass. Existing stats tests expect migration v3;
+  `FLUXFILES_MAIL_LOG_FULL` bypass. Existing stats tests expect migration v4;
   other buyer contracts remain covered. Local validation uses PHP 8.2.35;
   PHP 8.1 and 8.3–8.5 have not been executed locally.
 - All Unix users, ACLs/nginx/FPM/systemd, bootstrap allow-lists, root timers,
   provider setup, initial user/TOTP enrolment, real-instance smokes and landing
   Terms remain operator deployment work listed above. No automated deploy.
+
+
+## Review follow-up
+
+All A/B/C review items are mapped to code and regressions in
+[REVIEW-FIXES.md](REVIEW-FIXES.md). Formatting is a separate commit. Deploy with
+`prod.localhost` and `sbx.localhost`, because ports do not isolate cookies. Login
+TOTP never grants step-up. Use a separate fresh authenticator code for sensitive
+actions. API and UI ports must remain loopback-only.
+
+The optional Polar token is organisation-wide. Use short expiry and revoke it
+after the confirmed action. The v4 refund ledger records per-increment dates;
+backfilling a cumulative order cannot reconstruct missing earlier partial events.
+Worker stage failures appear by name, without exception text, in heartbeat/System.
+No merge, tag, provider configuration or deployment was performed.

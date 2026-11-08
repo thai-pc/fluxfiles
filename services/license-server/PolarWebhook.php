@@ -163,7 +163,7 @@ final class PolarWebhook
         }
         $out['created_at']=$stamp($d['created_at'] ?? null);
         if ($type === 'order.paid') { $out['paid_at']=$stamp($d['paid_at'] ?? null) ?? $out['created_at'] ?? time(); }
-        else { $out['refunded_at']=$stamp($d['refunded_at'] ?? null) ?? time(); }
+        else { $out['refunded_at']=$stamp($d['modified_at'] ?? null) ?? $stamp($body['timestamp'] ?? null) ?? time(); }
         return $out;
     }
 
