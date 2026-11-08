@@ -26,6 +26,7 @@ declare(strict_types=1);
  *   FLUXFILES_POLAR_PLAN_MAP            JSON {"<product_id>":"pro", ...}
  *   FLUXFILES_REFRESH_MAX_STALE_DAYS    days past expiry+grace after which a key no longer refreshes (default 90)
  *   FLUXFILES_OPS_EMAIL                 optional: also notified when a renewal cannot be matched
+ *   FLUXFILES_LICENSE_INSTANCE          optional: instance name echoed by /health (sandbox); see README "Sandbox instance"
  *   FLUXFILES_PRO_UPDATE_URL            optional: update-server base URL (https). Enables the FluxFiles Pro
  *                                       download link in /claim, POST /pro-download, and the licence mail's
  *                                       pointer to the landing /download page (all need it AND
@@ -105,7 +106,10 @@ function updateStatusOk(): bool
 
 try {
     if ($uri === '/health') {
-        respond(200, ['ok' => true]);
+        // FLUXFILES_LICENSE_INSTANCE (e.g. "sandbox") tells instances apart; unset keeps
+        // the exact {"ok":true} body that deploy self-checks compare against.
+        $instance = trim((string) getenv('FLUXFILES_LICENSE_INSTANCE'));
+        respond(200, $instance === '' ? ['ok' => true] : ['ok' => true, 'instance' => $instance]);
     }
 
     $signer = new LicenseSigner();

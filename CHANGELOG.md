@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Licence server: **sandbox instance support** for running Polar sandbox on its own deployment. `FLUXFILES_MAIL_SUBJECT_PREFIX` (prepended to every subject, control characters stripped, max 32), `FLUXFILES_MAIL_ALLOW_TO` (exact addresses / `@domain` suffixes; other recipients are not sent, logged masked, and reported as handled so `mailed_at` is stamped and Polar never retries), and `FLUXFILES_LICENSE_INSTANCE` (adds `"instance"` to `/health`; the body is unchanged when unset). All default off. README "Sandbox instance" covers the separate test signing key, Polar sandbox org and webhook secret.
+
 ## [1.0.24] — 2026-11-08
 
 > Released: `core-v1.2.0` (licence key refresh: `fluxfiles license refresh`, automatic before `fluxfiles update`; dev router path normalisation). Needs a licence server with `POST /refresh` (the hosted one has it). Licence-server changes in this entry (HTML mail, `/refresh`, Pro download, plugin bundles) are deployed separately.
