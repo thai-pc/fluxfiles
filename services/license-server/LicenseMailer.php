@@ -155,7 +155,8 @@ final class LicenseMailer
         // the key and hands out a fresh short-lived link (nothing to expire in the inbox).
         $wpBlock = '';
         $origin = rtrim((string) getenv('FLUXFILES_LANDING_ORIGIN'), '/');
-        if ($origin !== '' && str_starts_with($origin, 'https://') && ProDownload::eligible($record)) {
+        // Only when the page can actually work: it needs the update-server URL on this server too.
+        if ($origin !== '' && str_starts_with($origin, 'https://') && ProDownload::configured() && ProDownload::eligible($record)) {
             $wpBlock = "WordPress: get the FluxFiles Pro plugin here (paste the key above):\n\n"
                 . "    {$origin}/download\n\n"
                 . "Upload it in Plugins > Add New > Upload Plugin (the free FluxFiles plugin must be\nactive), then paste the key in Settings > FluxFiles. Later updates arrive in wp-admin.\n\n";

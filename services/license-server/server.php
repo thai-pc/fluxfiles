@@ -24,8 +24,10 @@ declare(strict_types=1);
  *   FLUXFILES_POLAR_WEBHOOK_SECRET      Polar webhook signing secret (whsec_…)
  *   FLUXFILES_POLAR_PLAN_MAP            JSON {"<product_id>":"pro", ...}
  *   FLUXFILES_OPS_EMAIL                 optional: also notified when a renewal cannot be matched
- *   FLUXFILES_PRO_UPDATE_URL            optional: update-server base URL; enables the FluxFiles Pro
- *                                       download link in /claim and the licence mail (ProDownload.php)
+ *   FLUXFILES_PRO_UPDATE_URL            optional: update-server base URL (https). Enables the FluxFiles Pro
+ *                                       download link in /claim, POST /pro-download, and the licence mail's
+ *                                       pointer to the landing /download page (all need it AND
+ *                                       FLUXFILES_LANDING_ORIGIN; ProDownload.php)
  *
  * Run behind any web server, or for dev:  php -S 127.0.0.1:9000 server.php
  */
@@ -299,8 +301,7 @@ try {
             respond(204, []);
         }
         $store = new LicenseStore();
-        $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
-        if (!$store->rateHit('dl-ip:' . $ip, 600, 10)) {
+        if (!$store->rateHit('dl-ip:' . ProDownload::ipBucket((string) ($_SERVER['REMOTE_ADDR'] ?? '')), 600, 10)) {
             header('Retry-After: 600');
             respond(429, ['error' => 'too many attempts']);
         }
@@ -308,14 +309,21 @@ try {
         $key = is_array($b) ? preg_replace('/\s+/', '', (string) ($b['license_key'] ?? '')) : '';
         $rec = is_string($key) && $key !== '' ? $store->findByKey($key) : null;
         $fail = static fn () => respond(404, ['error' => 'not available', 'hint' => 'check the key, or reply to your licence e-mail']);
-        if ($rec === null || ($rec['status'] ?? '') !== 'active' || !ProDownload::eligible($rec)) {
+        if ($rec === null) {
             $fail();
         }
+        // Count the licence bucket for EVERY known key before judging it, so a revoked, a
+        // superseded and a live key behave the same from outside.
         if (!$store->rateHit('dl-jti:' . $rec['jti'], 600, 5)) {
             header('Retry-After: 600');
             respond(429, ['error' => 'too many attempts']);
         }
-        $dl = ProDownload::linkFor($rec, $store, ProDownload::TIMEOUT_DOWNLOAD);
+        // Same test the update server applies (active OR superseded: an early renewal
+        // supersedes the base key, which must keep working), and a plan with Pro modules.
+        if (!$store->isUpdateEligible((string) $rec['jti']) || !ProDownload::eligible($rec)) {
+            $fail();
+        }
+        $dl = ProDownload::linkFor($rec, $store, ProDownload::TIMEOUT_CLAIM);   // a public worker never waits long on the update server
         if ($dl === null) {
             $fail();
         }

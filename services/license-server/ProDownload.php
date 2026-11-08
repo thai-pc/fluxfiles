@@ -8,7 +8,8 @@ namespace FluxFiles\LicenseServer;
  * First-install delivery of the FluxFiles Pro WordPress zip.
  *
  * The buyer needs the zip BEFORE they have a plugin that can update itself, so the
- * checkout success page and the licence e-mail carry a download link. The link is NOT
+ * checkout success page (/claim) shows a download link, and the licence e-mail points at the
+ * landing /download page, which calls POST /pro-download for a fresh one. The link is NOT
  * minted here: the licence server has no download secret. It asks the update server for
  * the signed manifest of `fluxfiles-pro` exactly as the plugin's updater would (the
  * licence travels in the Authorization header over https, never in a URL) and hands on
@@ -16,7 +17,8 @@ namespace FluxFiles\LicenseServer;
  * update window and the revocation check stay in ONE place, the update server.
  *
  *   FLUXFILES_PRO_UPDATE_URL   base URL of the update server, e.g. https://fluxfiles-updates.thai-pc.com
- *                              (unset = feature off, /claim and the mail simply omit the link)
+ *                              (unset = feature off: /claim omits the link, /pro-download answers 404 and
+ *                              the mail does not mention the download page)
  *
  * Every failure returns null: a missing download link must never fail a purchase, a
  * /claim or a mail.
@@ -119,6 +121,23 @@ final class ProDownload
             $store->cacheLink($jti, $d['url'], $d['version'], time() + $d['expires_in']);
         }
         return $d;
+    }
+
+    /** Is the feature configured at all (the update server base URL is a safe URL)? */
+    public static function configured(): bool
+    {
+        $b = rtrim((string) getenv('FLUXFILES_PRO_UPDATE_URL'), '/');
+        return $b !== '' && self::safeUrl($b);
+    }
+
+    /** Throttle key for a client address: IPv4 as is, IPv6 collapsed to its /64 (a user owns a whole /64). */
+    public static function ipBucket(string $ip): string
+    {
+        $bin = @inet_pton($ip);
+        if ($bin !== false && strlen($bin) === 16) {
+            return bin2hex(substr($bin, 0, 8)) . '/64';
+        }
+        return $ip;
     }
 
     /** https, or plain http to the local machine only (tests). */

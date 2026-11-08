@@ -127,11 +127,22 @@ test('/pro-download: valid key in the body -> fresh link; unknown, revoked and s
     $s = $issue('support'); [$c3, , $r3] = req($pPub, 'POST', '/pro-download', json_encode(['license_key' => $s['key']]), $cors);
     eq([404, 404, 404], [$c1, $c2, $c3]); eq($r1, $r2, 'revoked == unknown'); eq($r1, $r3, 'support == unknown');
 });
-test('/pro-download rate limits: 5 per licence, then 10 per IP, both per 10 minutes', function () use ($pPub, $issue, $cors) {
+test('/pro-download: a SUPERSEDED key (early renewal) still works; revoked does not; both count against the licence throttle', function () use ($pPub, $issue, $cors, $db) {
+    $a = $issue('pro');
+    $db->prepare("UPDATE licenses SET status='superseded' WHERE jti=?")->execute([$a['jti']]);
+    eq(200, req($pPub, 'POST', '/pro-download', json_encode(['license_key' => $a['key']]), $cors)[0], 'superseded is update-eligible');
+    $db->prepare("UPDATE licenses SET status='revoked' WHERE jti=?")->execute([$a['jti']]);
+    eq(404, req($pPub, 'POST', '/pro-download', json_encode(['license_key' => $a['key']]), $cors)[0], 'revoked: generic 404');
+    $n = (int) $db->query("SELECT n FROM rate_hits WHERE bucket='dl-jti:{$a['jti']}'")->fetchColumn();
+    eq(2, $n, 'the revoked attempt was counted too');
+});
+test('/pro-download rate limits: 5 per licence, then 10 per IP, both per 10 minutes', function () use ($pPub, $issue, $cors, $db) {
+    $db->exec('DELETE FROM rate_hits');   // fresh window: the earlier tests spent part of the IP budget
     $a = $issue('pro'); $codes = [];
     for ($i = 0; $i < 6; $i++) { $codes[] = req($pPub, 'POST', '/pro-download', json_encode(['license_key' => $a['key']]), $cors)[0]; }
     eq([200, 200, 200, 200, 200, 429], $codes, 'the 6th call for one licence is throttled');
-    eq(429, req($pPub, 'POST', '/pro-download', json_encode(['license_key' => 'x']), $cors)[0], 'the IP is over its 10 as well');
+    for ($i = 0; $i < 4; $i++) { eq(404, req($pPub, 'POST', '/pro-download', json_encode(['license_key' => 'x']), $cors)[0], 'unknown key, IP budget left'); }
+    eq(429, req($pPub, 'POST', '/pro-download', json_encode(['license_key' => 'x']), $cors)[0], 'the 11th call from this IP in the window');
 });
 
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";

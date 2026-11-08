@@ -61,12 +61,23 @@ because implementations disagree and guessing wrong silently drops every purchas
 Delivery is at-least-once; issuing is idempotent on `(gateway, order_id)`, so a retry
 returns the same key rather than minting a second one.
 
+## FluxFiles Pro download (WordPress add-on)
+
+Set `FLUXFILES_PRO_UPDATE_URL` (the update server's https base URL) and `FLUXFILES_LANDING_ORIGIN`.
+`/claim` and `POST /pro-download` then ask the update server for the signed `fluxfiles-pro` manifest
+(the licence goes in the Authorization header only) and hand on the expiring download URL. The Polar
+webhook and `/redeliver` never call the update server; the licence e-mail only points at the landing
+`/download` page, and only when both variables are set. Production needs the loopback vhost
+(`/update-status`) on its own php-fpm pool, because `/claim` and `/pro-download` wait on an update server
+that calls `/update-status` back.
+
 ## Endpoints
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | POST | `/webhook/polar` | Standard Webhooks sig | Issue on `order.paid`, then email the key; a full `order.refunded` marks it `refunded` |
-| GET | `/claim?checkout_id=` | none (see below) | Hand the key to the checkout success page |
+| GET | `/claim?checkout_id=` | none (see below) | Hand the key to the checkout success page; for share/intake plans also `pro_download` (cached per licence, 3 s timeout, omitted on any failure) |
+| POST | `/pro-download` | none, landing-origin CORS only | `{license_key}` in the body → `{pro_download:{url,version,expires_in}}`, a fresh signed FluxFiles Pro (WordPress) zip link. Generic 404 for any key that is unknown, revoked or without share/intake; throttled per IP (/64 for IPv6) and per licence. Needs `FLUXFILES_PRO_UPDATE_URL` and `FLUXFILES_LANDING_ORIGIN` |
 | POST | `/issue` | Bearer admin | Manual issue `{email, plan, customer?, order_id?}` |
 | GET | `/licenses[?email=]` | Bearer admin | List / lookup |
 | POST | `/revoke` | Bearer admin | `{jti, status}` with status `revoked`, `refunded` or `active` |
@@ -231,6 +242,8 @@ immediately instead of waiting for the next billing cycle. Safe to re-run
 
 ```bash
 php services/license-server/tests/test-license-server.php   # from the repo root
+php services/license-server/tests/test-renewal-http.php
+php services/license-server/tests/test-pro-download-http.php   # /claim cache, no-deadlock, /pro-download
 ```
 
 ## Getting the key to the buyer

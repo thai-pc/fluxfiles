@@ -958,12 +958,24 @@ test('mail: points at the landing /download page (never a bearer URL), only for 
     assertTrue(!str_contains($render->invoke(new LicenseMailer('log'), $rec), 'WordPress:'), 'no origin configured: no block');
     putenv('FLUXFILES_LANDING_ORIGIN=https://fluxfiles.example');
     try {
+        putenv('FLUXFILES_PRO_UPDATE_URL');
+        assertTrue(!str_contains($render->invoke(new LicenseMailer('log'), $rec), '/download'), 'B4: origin set but NO update-server URL: the page could only 404, so the mail must not send buyers there');
+        putenv('FLUXFILES_PRO_UPDATE_URL=http://updates.example');
+        assertTrue(!str_contains($render->invoke(new LicenseMailer('log'), $rec), '/download'), 'an unsafe (plain http, remote) update URL counts as not configured');
+        putenv('FLUXFILES_PRO_UPDATE_URL=https://updates.example');
         $with = $render->invoke(new LicenseMailer('log'), $rec);
         assertTrue(str_contains($with, 'https://fluxfiles.example/download') && str_contains($with, 'Keep this email'), 'page link, rest intact');
         assertTrue(!str_contains($with, 'md5=') && !str_contains($with, 'expires='), 'no signed URL in the mail');
         $sup = $iss->issue(['email'=>'a@b.co','plan'=>'support','order_id'=>'pd-ms'])['record'];
         assertTrue(!str_contains($render->invoke(new LicenseMailer('log'), $sup), '/download'), 'support: none');
-    } finally { putenv('FLUXFILES_LANDING_ORIGIN'); }
+    } finally { putenv('FLUXFILES_LANDING_ORIGIN'); putenv('FLUXFILES_PRO_UPDATE_URL'); }
+});
+
+test('pro download: ipBucket keeps IPv4 and collapses IPv6 to its /64', function () {
+    assertEqual('203.0.113.9', ProDownload::ipBucket('203.0.113.9'));
+    assertEqual(ProDownload::ipBucket('2001:db8:1:2::1'), ProDownload::ipBucket('2001:db8:1:2:ffff:ffff:ffff:ffff'), 'same /64');
+    assertTrue(ProDownload::ipBucket('2001:db8:1:2::1') !== ProDownload::ipBucket('2001:db8:1:3::1'), 'different /64');
+    assertEqual('garbage', ProDownload::ipBucket('garbage'));
 });
 
 test('store: findByKey, rateHit windows, link cache honours the minimum remaining life', function () use ($secretB64) {
