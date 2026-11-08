@@ -61,15 +61,27 @@ because implementations disagree and guessing wrong silently drops every purchas
 Delivery is at-least-once; issuing is idempotent on `(gateway, order_id)`, so a retry
 returns the same key rather than minting a second one.
 
+## FluxFiles Pro download (WordPress add-on)
+
+Set `FLUXFILES_PRO_UPDATE_URL` (the update server's https base URL) and `FLUXFILES_LANDING_ORIGIN`.
+`/claim` and `POST /pro-download` then ask the update server for the signed `fluxfiles-pro` manifest
+(the licence goes in the Authorization header only) and hand on the expiring download URL. The Polar
+webhook and `/redeliver` never call the update server; the licence e-mail only points at the landing
+`/download` page, and only when both variables are set. Production needs the loopback vhost
+(`/update-status`) on its own php-fpm pool, because `/claim` and `/pro-download` wait on an update server
+that calls `/update-status` back.
+
 ## Endpoints
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | POST | `/webhook/polar` | Standard Webhooks sig | Issue on `order.paid`, then email the key; a full `order.refunded` marks it `refunded` |
-| GET | `/claim?checkout_id=` | none (see below) | Hand the key to the checkout success page |
+| GET | `/claim?checkout_id=` | none (see below) | Hand the key to the checkout success page; for share/intake plans also `pro_download` (cached per licence, 3 s timeout, omitted on any failure) |
+| POST | `/pro-download` | none, landing-origin CORS only | `{license_key}` in the body → `{pro_download:{url,version,expires_in}}`, a fresh signed FluxFiles Pro (WordPress) zip link. Generic 404 for any key that is unknown, revoked or without share/intake; throttled per IP (/64 for IPv6) and per licence. Needs `FLUXFILES_PRO_UPDATE_URL` and `FLUXFILES_LANDING_ORIGIN` |
+| POST | `/refresh` | the current licence key as `Authorization: Bearer` (never in a URL or body) | Returns the newest key of the same subscription / renewal chain: `{status:"refreshed",license_key,jti,issued,expires}` or `{status:"current"}`. 401 `{error:"invalid key"}` for a bad signature; **one identical** 404 `{error:"not available",hint}` for everything else (unknown, revoked/refunded chain, support-only, no-expiry, stale, ambiguous); 429 + `Retry-After` (10/hour per licence, 120/hour per IP, IPv6 as /64). Never mints, no outbound calls, no CORS. See below |
 | POST | `/issue` | Bearer admin | Manual issue `{email, plan, customer?, order_id?}` |
 | GET | `/licenses[?email=]` | Bearer admin | List / lookup |
-| POST | `/revoke` | Bearer admin | `{jti, status}` with status `revoked`, `refunded` or `active` |
+| POST | `/revoke` | Bearer admin | `{jti, status}` or `{subscription_id, status}` with status `revoked`, `refunded` or `active`. The `subscription_id` form applies it to every key of that subscription (so none can refresh) |
 | POST | `/redeliver` | Bearer admin | Re-send every licence whose mail failed |
 | POST | `/update-status` | Bearer update-status token | `{jti}` → `{active: bool}` for the update server |
 | GET | `/health` | — | Liveness |
@@ -141,6 +153,57 @@ emails the buyer ("we couldn't match your licence, reply and we'll fix or refund
 `POST /issue {"plan":"pro-renewal","email":"<the email of the LIFETIME purchase>"}`
 (`studio-renewal` for Studio), or refund in Polar. Optional `FLUXFILES_RENEWAL_URL` is
 quoted in the reminder mails of one-time plans.
+
+## Key refresh (`POST /refresh`)
+
+A monthly subscription mints a new key on every `order.paid`. Instead of pasting it, the
+customer's install (`fluxfiles license refresh`, FluxFiles Pro's updater) presents its
+current key and receives the newest one. Design: `docs/design/LICENSE-KEY-REFRESH-DESIGN.md`.
+
+- **Linkage.** The webhook stores Polar's `subscription_id` and `billing_reason`; a new
+  key supersedes the earlier ones **of its subscription** (two subscriptions of one buyer
+  no longer retire each other). Rows without a subscription id keep the email+plan
+  behaviour, and refresh falls back to it only when unambiguous. One-time lifetime
+  renewals link through `renews_jti`. Manual rows have no chain and are always `current`.
+- **Never a downgrade.** Only a strictly newer `issued` with an `expires` no earlier than
+  the presented key's is returned; `issued` is monotonic per subscription even if this
+  host's clock steps back. An edition change inside a subscription is followed.
+- **Bounds.** A key stops refreshing `FLUXFILES_REFRESH_MAX_STALE_DAYS` (default 90) after
+  `expires` + its grace, and `POST /revoke {"subscription_id":"...","status":"revoked"}` is
+  the kill switch. It records the subscription, so a later paid order of it is still
+  recorded but stays revoked (not mailed, ops notified): **also cancel the subscription
+  in Polar**, revoking here does not stop billing. Keys are never logged; log lines carry the jti and an outcome.
+- **Exposure.** Public pool, public vhost, `location = /refresh` with its own
+  `limit_req` zone and `client_max_body_size 1k`. Do not route it to the loopback/internal
+  pool (sized for the update server), and never add `$http_authorization` to a log format.
+
+### Deploying
+
+Copy the **whole `services/license-server` directory** (minus `tests/`), including
+`templates/` and `LicenseMailer.php`. A missing `templates/email.php` no longer breaks
+mail (the text part is sent and a loud `LICENSE MAIL: HTML template failed` is logged),
+but customers then get plain-text mail only.
+
+**Rollback caveat:** rolling back to pre-refresh code ignores `revoked_subscriptions`; revoked subscriptions' new orders would issue active keys again.
+
+### Migration and backfill (existing server)
+
+The two new columns (`subscription_id`, `billing_reason`) and `idx_subscription` are
+added automatically, additively and idempotently, the first time any request opens the
+DB. Then fill in the subscription ids of rows issued before the webhook captured them:
+
+```bash
+export FLUXFILES_LICENSE_DB=/var/lib/fluxfiles/licenses.sqlite
+export POLAR_TOKEN=polar_oat_...        # or --token-file=/secure/path (never an argument)
+php backfill-subscription-ids.php            # dry run: asks Polar GET /v1/orders/{id}, writes nothing
+php backfill-subscription-ids.php --apply
+```
+
+Idempotent; a one-time order is marked via `billing_reason` so it is not asked twice;
+exit 2 means some orders could not be read (re-run). Run it before the next billing cycle
+and before enabling `/refresh`.
+**Refresh is not fully available to legacy customers until the backfill has run** (ambiguous legacy chains are refused): run the backfill before enabling the nginx `/refresh` location. A legacy row whose email+plan spans two subscriptions
+stays refused (ambiguous) until you resolve it by hand.
 
 ## Notes
 
@@ -231,6 +294,8 @@ immediately instead of waiting for the next billing cycle. Safe to re-run
 
 ```bash
 php services/license-server/tests/test-license-server.php   # from the repo root
+php services/license-server/tests/test-renewal-http.php
+php services/license-server/tests/test-pro-download-http.php   # /claim cache, no-deadlock, /pro-download
 ```
 
 ## Getting the key to the buyer

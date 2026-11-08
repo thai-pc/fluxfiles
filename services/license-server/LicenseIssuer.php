@@ -33,11 +33,12 @@ final class LicenseIssuer
      */
     public function issue(array $order): array
     {
-        $plan = Plans::get((string) ($order['plan'] ?? ''));
-        if ($plan !== null && isset($plan['renews'])) {
-            return $this->store->transaction(fn () => $this->issueNow($order));
-        }
-        return $this->issueNow($order);
+        // One write transaction (BEGIN IMMEDIATE) for every issue: renewals need lookup -> mint ->
+        // record -> supersede to be atomic, and a subscription order must read the
+        // revoked-subscription marker and record in the same transaction, or a revoke landing
+        // between the two would leave the paid order's key active. It also serialises
+        // issuance, which keeps `issued` monotonic per subscription under concurrent webhooks.
+        return $this->store->transaction(fn () => $this->issueNow($order));
     }
 
     /** @return array{key:string, record:array<string,mixed>, reused:bool} */
@@ -81,6 +82,19 @@ final class LicenseIssuer
             $plan['modules'] = array_values(array_filter(explode(',', (string) $base['modules'])));
         }
 
+        // Keep `issued` strictly above everything this subscription/chain has produced, so a
+        // clock that stepped backwards cannot mint a key a refreshing client would reject.
+        $subId = trim((string) ($order['subscription_id'] ?? ''));
+        $floor = 0;
+        if ($base !== null) {
+            $floor = (int) $base['issued'];
+        } elseif ($subId !== '') {
+            // also above the buyer's legacy (id-less) cycles, which this subscription continues
+            $floor = max($this->store->maxIssuedForSubscription($subId), $this->store->maxIssuedForBuyerPlan($email, $planId));
+        } elseif (($order['gateway'] ?? 'manual') !== 'manual') {
+            $floor = $this->store->maxIssuedForBuyerPlan($email, $planId);
+        }
+
         $minted = $this->signer->mint([
             'customer'    => (string) ($order['customer'] ?? $email),
             'edition'     => (string) $plan['edition'],
@@ -89,12 +103,17 @@ final class LicenseIssuer
             'ttlDays'     => $plan['ttlDays'],
             'graceDays'   => (int) ($plan['graceDays'] ?? 14),
             'extendFrom'  => $extendFrom,
+            'issuedAtLeast' => $floor > 0 ? $floor + 1 : 0,
         ]);
         $p = $minted['payload'];
 
         // Read the signed grace window back from the payload so the reminder store
         // records the actual per-plan policy rather than duplicating it.
         $graceDays = isset($p['grace']) ? (int) round($p['grace'] / 86400) : 14;
+
+        // An admin revoked this whole subscription: the buyer still paid, so the order is
+        // recorded, but its key stays revoked (the caller logs and ops-notices it).
+        $initial = ($subId !== '' && $base === null) ? ($this->store->revokedSubscriptionStatus($subId) ?? 'active') : 'active';
 
         $record = $this->store->record([
             'jti'         => $p['jti'],
@@ -110,10 +129,12 @@ final class LicenseIssuer
             'gateway'     => (string) ($order['gateway'] ?? 'manual'),
             'order_id'    => (string) ($order['order_id'] ?? ''),
             'checkout_id' => (string) ($order['checkout_id'] ?? ''),
-            'status'      => 'active',
+            'status'      => $initial,
             'grace_days'  => $graceDays,
             'customer_id' => $customerId,
             'renews_jti'  => $base !== null ? (string) $base['jti'] : '',
+            'subscription_id' => $subId,
+            'billing_reason'  => (string) ($order['billing_reason'] ?? ''),
         ]);
 
         if ((string) $record['jti'] !== (string) $p['jti']) {
@@ -127,8 +148,17 @@ final class LicenseIssuer
             // so that row stops reminding and a second lifetime under the same email
             // stays independently renewable.
             $this->store->supersedeJti((string) $base['jti']);
+        } elseif ($initial !== 'active') {
+            error_log("license issuer: order {$record['order_id']} belongs to revoked subscription {$subId} — recorded as {$initial}");
+        } elseif ((string) $record['gateway'] !== 'manual' && $subId !== '') {
+            // The subscription is known: retire ITS earlier keys, so a buyer's second
+            // subscription on the same plan keeps running, plus the buyer's still-active
+            // legacy rows (no subscription id yet) for this plan, which are the same
+            // subscription's earlier cycles until the backfill proves otherwise.
+            $this->store->supersedeActiveForSubscription($subId, (string) $record['jti']);
+            $this->store->supersedeLegacyForBuyerPlan((string) $record['email'], (string) $record['plan'], $customerId, (string) $record['jti']);
         } elseif ((string) $record['gateway'] !== 'manual') {
-            // A recurring subscription renewal is a NEW order (fresh order_id) but the
+            // No subscription id (legacy / one-time): A recurring subscription renewal is a NEW order (fresh order_id) but the
             // SAME buyer+plan — retire any other still-`active` gateway row for that pair
             // so only this newest one stays eligible for reminders (see the store
             // method's docblock for why the duplicate-row is otherwise unavoidable here).

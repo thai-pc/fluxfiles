@@ -9,9 +9,11 @@ declare(strict_types=1);
  *   POST /webhook/polar         — Polar order webhook (the store)
  *   POST /issue                 — admin-authed manual issue {email, plan}
  *   GET  /licenses[?email=]     — admin: list / lookup
- *   POST /revoke                — admin: {jti, status} mark revoked/refunded/active
+ *   POST /revoke                — admin: {jti|subscription_id, status} mark revoked/refunded/active
  *   POST /redeliver             — admin: re-send licences whose mail failed
  *   GET  /claim?checkout_id=    — public: the buyer's key, for an hour after purchase
+ *   POST /pro-download          — public (landing origin only): {license_key} -> fresh Pro zip link
+ *   POST /refresh               — public: Bearer <current key> -> the newest key of the same subscription/chain
  *   POST /update-status          — update-server auth: {jti} → active/revoked
  *   GET  /health                — liveness
  *
@@ -22,7 +24,12 @@ declare(strict_types=1);
  *   FLUXFILES_UPDATE_STATUS_TOKEN        bearer token for /update-status (separate from admin)
  *   FLUXFILES_POLAR_WEBHOOK_SECRET      Polar webhook signing secret (whsec_…)
  *   FLUXFILES_POLAR_PLAN_MAP            JSON {"<product_id>":"pro", ...}
+ *   FLUXFILES_REFRESH_MAX_STALE_DAYS    days past expiry+grace after which a key no longer refreshes (default 90)
  *   FLUXFILES_OPS_EMAIL                 optional: also notified when a renewal cannot be matched
+ *   FLUXFILES_PRO_UPDATE_URL            optional: update-server base URL (https). Enables the FluxFiles Pro
+ *                                       download link in /claim, POST /pro-download, and the licence mail's
+ *                                       pointer to the landing /download page (all need it AND
+ *                                       FLUXFILES_LANDING_ORIGIN; ProDownload.php)
  *
  * Run behind any web server, or for dev:  php -S 127.0.0.1:9000 server.php
  */
@@ -33,12 +40,14 @@ require_once __DIR__ . '/Plans.php';
 require_once __DIR__ . '/LicenseIssuer.php';
 require_once __DIR__ . '/PolarWebhook.php';
 require_once __DIR__ . '/LicenseMailer.php';
+require_once __DIR__ . '/ProDownload.php';
 
 use FluxFiles\LicenseServer\LicenseMailer;
 use FluxFiles\LicenseServer\LicenseSigner;
 use FluxFiles\LicenseServer\LicenseStore;
 use FluxFiles\LicenseServer\LicenseIssuer;
 use FluxFiles\LicenseServer\PolarWebhook;
+use FluxFiles\LicenseServer\ProDownload;
 
 header('Content-Type: application/json; charset=utf-8');
 // Responses can carry licence keys (/claim, /issue, /licenses): never cache them.
@@ -99,7 +108,8 @@ try {
         respond(200, ['ok' => true]);
     }
 
-    $issuer = new LicenseIssuer(new LicenseSigner(), new LicenseStore());
+    $signer = new LicenseSigner();
+    $issuer = new LicenseIssuer($signer, new LicenseStore());
 
     // ── Polar webhook (Standard Webhooks) ────────────────────────────────────
     if ($method === 'POST' && $uri === '/webhook/polar') {
@@ -183,8 +193,20 @@ try {
         // would skip sending, leaving a paying customer with no key and nothing in any
         // log to say so. Tracking mailed_at makes Polar's retry the recovery mechanism.
         $jti = (string) $res['record']['jti'];
+        if ((string) ($res['record']['status'] ?? 'active') !== 'active') {
+            // Never mail a key that is not active, new order or redelivery alike (a revoked or
+            // refunded subscription's order must not be sent by a Polar retry). Ops is told
+            // once, on the first delivery. Revoked subscription: also cancel it in Polar.
+            if (!$res['reused']) {
+                error_log("polar webhook: order {$order['order_id']} of revoked subscription {$order['subscription_id']} recorded as {$res['record']['status']}, not mailed (jti {$jti})");
+                (new LicenseMailer())->sendOpsNotice('FluxFiles: payment on a revoked subscription',
+                    "Order {$order['order_id']} was paid on subscription {$order['subscription_id']}, which you revoked. It is recorded as {$res['record']['status']} (licence {$jti}) and was not mailed.\n\nCancel the subscription in Polar so it stops billing, or POST /revoke {\"subscription_id\":\"{$order['subscription_id']}\",\"status\":\"active\"} to restore it.");
+            }
+            respond(200, ['issued' => !$res['reused'], 'jti' => $jti, 'status' => (string) $res['record']['status']]);
+        }
         if (empty($res['record']['mailed_at'])) {
-            if ((new LicenseMailer())->sendLicense($res['record'])) {
+            $mailRec = $res['record'];   // the mail points at the landing /download page: no update-server call here
+            if ((new LicenseMailer())->sendLicense($mailRec)) {
                 (new LicenseStore())->markMailed($jti);
             } else {
                 // Answer 200 even though delivery failed, and this is the opposite of
@@ -255,10 +277,134 @@ try {
         if ($age > CLAIM_WINDOW) {
             respond(410, ['error' => 'claim window expired', 'hint' => 'the key was emailed to you']);
         }
-        respond(200, [
+        $out = [
             'license_key' => (string) $rec['license_key'],
             'edition' => (string) $rec['edition'],
             'expires' => $rec['expires'] ?? null,
+        ];
+        // Only plans that include a bundled module (share/intake) get the WordPress Pro
+        // zip link: a signed, expiring URL on the update host, never the licence itself.
+        // Short timeout + per-licence cache, and any failure just omits the link: a licence
+        // worker must never wait long on the update server (see /pro-download for the retry path).
+        $dl = ProDownload::linkFor($rec, $store, ProDownload::TIMEOUT_CLAIM);
+        if ($dl !== null) {
+            $out['pro_download'] = $dl;
+        }
+        respond(200, $out);
+    }
+
+    // ── Public: re-download the FluxFiles Pro WordPress zip ──────────────────
+    //
+    // The landing /download page POSTs the licence key in the BODY (never a URL) and gets a
+    // fresh, short-lived secure_link. Answers are generic on purpose: unknown key, revoked,
+    // a plan without the Pro modules and an update-server hiccup all read "not available",
+    // so this cannot be used to probe which keys exist. Throttled per IP and per licence.
+    // Runs on the PUBLIC pool; the update server's callback lands on the internal pool.
+    if (($method === 'POST' || $method === 'OPTIONS') && $uri === '/pro-download') {
+        $allowed = env('FLUXFILES_LANDING_ORIGIN');
+        $origin = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
+        if ($allowed === '' || $origin === '' || !hash_equals($allowed, $origin)) {
+            respond(403, ['error' => 'forbidden']);        // browsers of the landing site only
+        }
+        header('Access-Control-Allow-Origin: ' . $allowed);
+        header('Vary: Origin');
+        if ($method === 'OPTIONS') {
+            header('Access-Control-Allow-Methods: POST');
+            header('Access-Control-Allow-Headers: Content-Type');
+            header('Access-Control-Max-Age: 600');
+            respond(204, []);
+        }
+        $store = new LicenseStore();
+        if (!$store->rateHit('dl-ip:' . ProDownload::ipBucket((string) ($_SERVER['REMOTE_ADDR'] ?? '')), 600, 10)) {
+            header('Retry-After: 600');
+            respond(429, ['error' => 'too many attempts']);
+        }
+        $b = json_decode($raw, true);
+        $key = is_array($b) ? preg_replace('/\s+/', '', (string) ($b['license_key'] ?? '')) : '';
+        $rec = is_string($key) && $key !== '' ? $store->findByKey($key) : null;
+        $fail = static fn () => respond(404, ['error' => 'not available', 'hint' => 'check the key, or reply to your licence e-mail']);
+        if ($rec === null) {
+            $fail();
+        }
+        // Count the licence bucket for EVERY known key before judging it, so a revoked, a
+        // superseded and a live key behave the same from outside.
+        if (!$store->rateHit('dl-jti:' . $rec['jti'], 600, 5)) {
+            header('Retry-After: 600');
+            respond(429, ['error' => 'too many attempts']);
+        }
+        // Same test the update server applies (active OR superseded: an early renewal
+        // supersedes the base key, which must keep working), and a plan with Pro modules.
+        if (!$store->isUpdateEligible((string) $rec['jti']) || !ProDownload::eligible($rec)) {
+            $fail();
+        }
+        $dl = ProDownload::linkFor($rec, $store, ProDownload::TIMEOUT_CLAIM);   // a public worker never waits long on the update server
+        if ($dl === null) {
+            $fail();
+        }
+        respond(200, ['pro_download' => $dl]);
+    }
+
+    // ── Public: refresh a licence key ────────────────────────────────────────
+    //
+    // The holder of a key presents it as a Bearer credential (header ONLY: never the URL
+    // or the body, which logs and proxies keep) and gets the newest key its subscription /
+    // renewal chain has produced. This never mints anything and makes NO outbound call, so
+    // it cannot starve the pool. Order matters: the signature is checked first with no DB
+    // touch (anyone with core's public key can compute that, so 401 leaks nothing), and
+    // only then does a request cost a rate_hits write. Every other refusal (unknown,
+    // mismatched, revoked, refunded, support-only, stale, ambiguous) is ONE identical 404,
+    // so the caller learns only "this key will not be refreshed". No CORS: servers, not
+    // browsers. Keys are never logged; the log lines carry the jti and an outcome.
+    if ($method === 'POST' && $uri === '/refresh') {
+        if (strlen($raw) > 1024) {
+            respond(400, ['error' => 'request too large']);
+        }
+        $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+        $key = preg_match('/^Bearer\s+(\S+)\s*$/i', $auth, $bm) === 1 ? $bm[1] : '';
+        $payload = $key !== '' ? $signer->verify($key) : null;
+        if ($payload === null) {
+            respond(401, ['error' => 'invalid key']);
+        }
+        $b = $raw !== '' ? json_decode($raw, true) : [];
+        if (!is_array($b)) {
+            respond(400, ['error' => 'invalid request']);
+        }
+        $client = preg_match('/^[a-z0-9.\/-]{1,64}$/', (string) ($b['client'] ?? '')) === 1 ? (string) $b['client'] : '-';
+
+        $store = new LicenseStore();
+        $jti = (string) $payload['jti'];
+        // Per IP (IPv6 as its /64) as well as per licence. The licence bucket is the tight one, so
+        // an agency with many sites behind one NAT is bounded by the looser IP bucket only.
+        if (!$store->rateHit('refresh-ip:' . ProDownload::ipBucket((string) ($_SERVER['REMOTE_ADDR'] ?? '')), 3600, 120)
+            || !$store->rateHit('refresh-jti:' . $jti, 3600, 10)) {
+            header('Retry-After: 3600');
+            respond(429, ['error' => 'too many attempts']);
+        }
+        $notAvailable = static fn () => respond(404, ['error' => 'not available', 'hint' => 'paste the key from your licence e-mail']);
+        $row = $store->findByJti($jti);
+        if ($row === null || !hash_equals((string) $row['license_key'], $key)) {
+            error_log("license refresh: jti={$jti} outcome=unknown client={$client}");
+            $notAvailable();
+        }
+        $staleDays = env('FLUXFILES_REFRESH_MAX_STALE_DAYS', '90');
+        $res = $store->newestRefreshable($row, null, ctype_digit($staleDays) ? (int) $staleDays : 90);
+        error_log("license refresh: jti={$jti} outcome={$res['outcome']}/{$res['reason']} client={$client}");
+        if ($res['reason'] === 'ambiguous') {
+            error_log("license refresh: AMBIGUOUS legacy linkage for jti={$jti}: backfill-subscription-ids.php should resolve it");
+        }
+        if ($res['outcome'] === 'refused') {
+            $notAvailable();
+        }
+        if ($res['outcome'] === 'current') {
+            respond(200, ['status' => 'current']);
+        }
+        $new = $res['row'];
+        respond(200, [
+            'status' => 'refreshed',
+            'license_key' => (string) $new['license_key'],
+            'jti' => (string) $new['jti'],
+            'issued' => (int) $new['issued'],
+            'expires' => $new['expires'] === null ? null : (int) $new['expires'],
         ]);
     }
 
@@ -330,6 +476,22 @@ try {
             respond(400, ['error' => 'status must be revoked, refunded or active']);
         }
         $store = new LicenseStore();
+        // {"subscription_id": ...} revokes every key of one subscription, so none of them can refresh.
+        $sid = (string) ($b['subscription_id'] ?? '');
+        if ($sid !== '') {
+            if (preg_match('/^[A-Za-z0-9_.:-]{1,100}$/', $sid) !== 1) { respond(400, ['error' => 'invalid subscription_id']); }
+            $n = $store->setStatusForSubscription($sid, $status);
+            error_log("license revoke: subscription {$sid} -> {$status} ({$n} row(s))");
+            $out = ['updated' => $n > 0, 'rows' => $n];
+            $head = $status === 'active' ? $store->newestForSubscription($sid) : null;
+            if ($head !== null && (string) $head['status'] === 'active' && empty($head['mailed_at'])) {
+                // Orders paid while it was revoked were recorded but never mailed.
+                $out['note'] = 'the newest key was never mailed: run POST /redeliver to send it';
+                (new LicenseMailer())->sendOpsNotice('FluxFiles: subscription restored, newest key not mailed',
+                    "Subscription {$sid} was restored. Its newest licence ({$head['jti']}) was recorded while revoked and never mailed: run POST /redeliver to send it.");
+            }
+            respond($n > 0 ? 200 : 404, $out);
+        }
         $ok = $store->setStatusCascade((string) ($b['jti'] ?? ''), $status);
         reportCascade($store, "{$status} licence " . (string) ($b['jti'] ?? ''));
         respond($ok ? 200 : 404, ['updated' => $ok]);

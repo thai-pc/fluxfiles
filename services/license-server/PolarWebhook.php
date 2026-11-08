@@ -73,7 +73,7 @@ final class PolarWebhook
      * it, because a non-2xx makes Polar retry an event we will never act on.
      *
      * @param array<string,mixed> $plans product-id → plan-name map
-     * @return array{email:string,plan:string,customer:string,customer_id:string,order_id:string,checkout_id:string}|null
+     * @return array{email:string,plan:string,customer:string,customer_id:string,order_id:string,checkout_id:string,subscription_id:string,billing_reason:string}|null
      */
     public static function extract(array $body, array $plans): ?array
     {
@@ -117,7 +117,21 @@ final class PolarWebhook
             // The success page is redirected with {CHECKOUT_ID}, not the order id, so
             // without this the buyer's own page could never find their licence.
             'checkout_id' => (string) ($d['checkout_id'] ?? ''),
+            // The recurring subscription this order belongs to (empty for one-time
+            // purchases). It is what links a monthly buyer's keys together for POST
+            // /refresh: the checkout email is free text and cannot tell two
+            // subscriptions of one buyer apart.
+            'subscription_id' => self::cleanId((string) ($d['subscription_id'] ?? $d['subscription']['id'] ?? '')),
+            // purchase | subscription_create | subscription_cycle | subscription_update.
+            'billing_reason' => self::cleanId((string) ($d['billing_reason'] ?? '')),
         ];
+    }
+
+    /** An opaque Polar id / enum word, kept only if it is a plain token (it is stored and used as a lookup key). */
+    private static function cleanId(string $v): string
+    {
+        $v = trim($v);
+        return preg_match('/^[A-Za-z0-9_.:-]{1,100}$/', $v) === 1 ? $v : '';
     }
 
     /**

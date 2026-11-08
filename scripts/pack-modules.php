@@ -82,7 +82,12 @@ if ($ids === []) {
 // self-contained ZIP (wrapper + bundled core + SDK + vendor/), not a `git archive` of
 // a tag. `.github/workflows/wordpress-release.yml` builds that ZIP from the
 // `wordpress-v*` tag and writes its own catalogue entry — see mergeExternal() below.
-const EXTERNALLY_BUILT = ['wordpress' => 'built by .github/workflows/wordpress-release.yml'];
+const EXTERNALLY_BUILT = [
+    'wordpress' => 'built by .github/workflows/wordpress-release.yml',
+    // The paid WordPress add-on (private repo packages/wordpress-pro): a bundle of share+intake
+    // built by scripts/pack-wordpress-pro.php in that repo, never by this script.
+    'fluxfiles-pro' => 'built by packages/wordpress-pro scripts/pack-wordpress-pro.php',
+];
 
 echo "\n{$cyan}══ Packaging module release artifacts ══{$reset}\n\n";
 

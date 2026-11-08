@@ -19,6 +19,7 @@ require_once __DIR__ . '/../Plans.php';
 require_once __DIR__ . '/../LicenseIssuer.php';
 require_once __DIR__ . '/../PolarWebhook.php';
 require_once __DIR__ . '/../LicenseMailer.php';
+require_once __DIR__ . '/../ProDownload.php';
 
 use FluxFiles\LicenseServer\PolarWebhook;
 use FluxFiles\LicenseServer\LicenseMailer;
@@ -131,6 +132,16 @@ test('bad email / unknown plan → rejected', function () use ($secretB64) {
 test('store: a new licence starts undelivered', function () use ($secretB64) {
     $rec = issuer($secretB64)->issue(['email'=>'d@x.com','plan'=>'pro','gateway'=>'polar','order_id'=>'DEL-1'])['record'];
     assertTrue(empty($rec['mailed_at']), 'mailed_at is not set at issue time');
+});
+
+test('store: undelivered() lists a failed webhook row but never a manually issued one', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $man = $iss->issue(['email'=>'m@x.com','plan'=>'pro','gateway'=>'manual','order_id'=>'manual-1'])['record'];
+    $web = $iss->issue(['email'=>'w@x.com','plan'=>'pro','gateway'=>'polar','order_id'=>'DEL-W1'])['record'];
+    $jtis = array_column($store->undelivered(), 'jti');
+    assertEqual([(string) $web['jti']], $jtis, 'only the webhook row is redelivered');
+    assertTrue(!in_array((string) $man['jti'], $jtis, true), 'manual row is not re-mailed');
 });
 
 test('store: markMailed records delivery, and only for that licence', function () use ($secretB64) {
@@ -904,6 +915,676 @@ test('mail: the renewal text does not repeat the modules-keep-running sentence',
     $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
     assertEqual(1, substr_count($render->invoke(new LicenseMailer('log'), $ren), 'running'), 'said once');
 });
+
+// ── FluxFiles Pro (WordPress) first-install download ────────────────────────
+use FluxFiles\LicenseServer\ProDownload;
+
+$fakeManifest = static function (array $over = []): string {
+    $u = static fn (string $x): string => rtrim(strtr(base64_encode($x), '+/', '-_'), '=');
+    $pl = $over + ['module' => 'fluxfiles-pro', 'version' => '1.0.0', 'url' => 'https://upd.example/dl/m/fluxfiles-pro-1.0.0.zip?md5=x&expires=' . (time() + 1800), 'sha256' => str_repeat('a', 64)];
+    return $u('{"alg":"Ed25519","kid":"r1"}') . '.' . $u((string) json_encode($pl)) . '.' . $u('sig');
+};
+
+test('pro download: only plans with share/intake are eligible', function () use ($secretB64) {
+    $iss = issuer($secretB64);
+    foreach (['pro', 'pro-monthly', 'studio', 'lifetime', 'pro-lifetime', 'enterprise'] as $i => $plan) {
+        assertTrue(ProDownload::eligible($iss->issue(['email'=>'a@b.co','plan'=>$plan,'order_id'=>"pd$i"])['record']), "$plan eligible");
+    }
+    assertEqual(false, ProDownload::eligible($iss->issue(['email'=>'a@b.co','plan'=>'support','order_id'=>'pds'])['record']), 'support has no modules');
+});
+
+test('pro download: licence goes in the Authorization header only, link comes back, TTL clamped', function () use ($secretB64, $fakeManifest) {
+    $rec = issuer($secretB64)->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-h'])['record'];
+    $seen = null;
+    $out = ProDownload::fetch($rec, 10, function (string $url, array $h) use (&$seen, $fakeManifest) { $seen = [$url, $h]; return [200, $fakeManifest()]; }, 'https://upd.example');
+    assertTrue($out !== null && str_contains($out['url'], 'fluxfiles-pro-1.0.0.zip'), 'url returned');
+    assertEqual('1.0.0', $out['version']);
+    assertTrue($out['expires_in'] > 1790 && $out['expires_in'] <= 1800, 'expires_in comes from the URL expiry, not the requested ttl: ' . $out['expires_in']);
+    assertTrue(!str_contains($seen[0], (string) $rec['license_key']), 'key not in URL');
+    assertTrue(str_contains($seen[0], '/update/fluxfiles-pro?install=1&link_ttl=300'), 'request shape, ttl clamped up to 5 min');
+    assertEqual('Authorization: Bearer ' . $rec['license_key'], $seen[1][0]);
+});
+
+test('pro download: fails soft (null) on unset base, support plan, non-200, wrong module, bad/insecure url', function () use ($secretB64, $fakeManifest) {
+    $iss = issuer($secretB64);
+    $rec = $iss->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-f'])['record'];
+    $ok = fn () => [200, $fakeManifest()];
+    assertEqual(null, ProDownload::fetch($rec, 3600, $ok, ''), 'unset base');
+    assertEqual(null, ProDownload::fetch($rec, 3600, $ok, 'http://upd.example'), 'plain http to a remote host refused');
+    $sup = $iss->issue(['email'=>'a@b.co','plan'=>'support','order_id'=>'pd-s'])['record'];
+    assertEqual(null, ProDownload::fetch($sup, 3600, $ok, 'https://upd.example'), 'support plan');
+    assertEqual(null, ProDownload::fetch($rec, 3600, fn () => [402, 'nope'], 'https://upd.example'), '402');
+    assertEqual(null, ProDownload::fetch($rec, 3600, fn () => [200, $fakeManifest(['module' => 'share'])], 'https://upd.example'), 'wrong module');
+    assertEqual(null, ProDownload::fetch($rec, 3600, fn () => [200, $fakeManifest(['url' => 'javascript:alert(1)'])], 'https://upd.example'), 'bad scheme');
+    assertEqual(null, ProDownload::fetch($rec, 3600, fn () => [200, $fakeManifest(['url' => 'http://evil.example/x.zip'])], 'https://upd.example'), 'http url');
+    assertEqual(null, ProDownload::fetch($rec, 3600, function () { throw new RuntimeException('boom'); }, 'https://upd.example'), 'throwing transport');
+});
+
+test('mail: points at the landing /download page (never a bearer URL), only for plans with Pro modules', function () use ($secretB64) {
+    $iss = issuer($secretB64);
+    $rec = $iss->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-m'])['record'];
+    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
+    putenv('FLUXFILES_LANDING_ORIGIN');
+    assertTrue(!str_contains($render->invoke(new LicenseMailer('log'), $rec), 'WordPress:'), 'no origin configured: no block');
+    putenv('FLUXFILES_LANDING_ORIGIN=https://fluxfiles.example');
+    try {
+        putenv('FLUXFILES_PRO_UPDATE_URL');
+        assertTrue(!str_contains($render->invoke(new LicenseMailer('log'), $rec), '/download'), 'B4: origin set but NO update-server URL: the page could only 404, so the mail must not send buyers there');
+        putenv('FLUXFILES_PRO_UPDATE_URL=http://updates.example');
+        assertTrue(!str_contains($render->invoke(new LicenseMailer('log'), $rec), '/download'), 'an unsafe (plain http, remote) update URL counts as not configured');
+        putenv('FLUXFILES_PRO_UPDATE_URL=https://updates.example');
+        $with = $render->invoke(new LicenseMailer('log'), $rec);
+        assertTrue(str_contains($with, 'https://fluxfiles.example/download') && str_contains($with, 'Keep this email'), 'page link, rest intact');
+        assertTrue(!str_contains($with, 'md5=') && !str_contains($with, 'expires='), 'no signed URL in the mail');
+        $sup = $iss->issue(['email'=>'a@b.co','plan'=>'support','order_id'=>'pd-ms'])['record'];
+        assertTrue(!str_contains($render->invoke(new LicenseMailer('log'), $sup), '/download'), 'support: none');
+    } finally { putenv('FLUXFILES_LANDING_ORIGIN'); putenv('FLUXFILES_PRO_UPDATE_URL'); }
+});
+
+test('pro download: ipBucket keeps IPv4 and collapses IPv6 to its /64', function () {
+    assertEqual('203.0.113.9', ProDownload::ipBucket('203.0.113.9'));
+    assertEqual(ProDownload::ipBucket('2001:db8:1:2::1'), ProDownload::ipBucket('2001:db8:1:2:ffff:ffff:ffff:ffff'), 'same /64');
+    assertTrue(ProDownload::ipBucket('2001:db8:1:2::1') !== ProDownload::ipBucket('2001:db8:1:3::1'), 'different /64');
+    assertEqual('garbage', ProDownload::ipBucket('garbage'));
+});
+
+test('store: findByKey, rateHit windows, link cache honours the minimum remaining life', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $rec = $iss->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-s1'])['record'];
+    assertEqual($rec['jti'], $store->findByKey($rec['license_key'])['jti']);
+    assertEqual(null, $store->findByKey('nope')); assertEqual(null, $store->findByKey(''));
+    for ($i = 1; $i <= 3; $i++) { assertTrue($store->rateHit('b', 600, 3, 1000), "hit $i within limit"); }
+    assertEqual(false, $store->rateHit('b', 600, 3, 1000), '4th in the window');
+    assertTrue($store->rateHit('b', 600, 3, 1000 + 600), 'next window starts fresh');
+    assertTrue($store->rateHit('other', 600, 3, 1000), 'buckets are independent');
+    $store->cacheLink('j1', 'https://x/y.zip?expires=1', '1.0.0', time() + 700);
+    assertTrue($store->cachedLink('j1', 600) !== null, 'enough life left');
+    assertEqual(null, $store->cachedLink('j1', 800), 'too little life left to hand out');
+    assertEqual(null, $store->cachedLink('missing', 0));
+});
+
+test('pro download: linkFor caches per licence (one update-server call), and a failure is not cached', function () use ($secretB64, $fakeManifest) {
+    $store = new LicenseStore(':memory:');
+    $rec = (new LicenseIssuer(new LicenseSigner($secretB64), $store))->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-c'])['record'];
+    $calls = 0;
+    $http = function () use (&$calls, $fakeManifest) { $calls++; return [200, $fakeManifest(['url' => 'https://upd.example/dl/m/x.zip?md5=a&expires=' . (time() + 3600)])]; };
+    $a = ProDownload::linkFor($rec, $store, 3, $http, 'https://upd.example');
+    $b = ProDownload::linkFor($rec, $store, 3, $http, 'https://upd.example');
+    assertEqual(1, $calls, 'second call served from the cache'); assertEqual($a['url'], $b['url']);
+    $rec2 = (new LicenseIssuer(new LicenseSigner($secretB64), $store))->issue(['email'=>'c@d.co','plan'=>'pro','order_id'=>'pd-c2'])['record'];
+    $fails = 0;
+    assertEqual(null, ProDownload::linkFor($rec2, $store, 3, function () use (&$fails) { $fails++; return [503, 'x']; }, 'https://upd.example'));
+    assertEqual(null, ProDownload::linkFor($rec2, $store, 3, function () use (&$fails) { $fails++; return [503, 'x']; }, 'https://upd.example'));
+    assertEqual(2, $fails, 'failures are retried, not cached');
+});
+
+test('pro download: secondsLeft reads the URL expiry; no expiry -> fallback', function () {
+    assertEqual(100, ProDownload::secondsLeft('https://x/y.zip?md5=a&expires=1100', 0, 1000));
+    assertEqual(0, ProDownload::secondsLeft('https://x/y.zip?md5=a&expires=900', 7, 1000), 'already expired');
+    assertEqual(7, ProDownload::secondsLeft('https://cdn.example/y.zip', 7, 1000));
+});
+
+// ── HTML + text customer mail ────────────────────────────────────────────────
+// Every customer mail is one content model rendered twice (text part + HTML template).
+
+/** Call a private LicenseMailer method. */
+function mailerCall(string $method, ...$args) {
+    $r = new ReflectionMethod(LicenseMailer::class, $method); $r->setAccessible(true);
+    return $r->invoke(new LicenseMailer('log'), ...$args);
+}
+/** @return array{text:string,html:string} for a licence record, as sendLicense would build it */
+function licenseParts(array $rec): array {
+    $content = (trim((string) ($rec['modules'] ?? '')) === '') ? mailerCall('supportContent', $rec) : mailerCall('licenseContent', $rec);
+    $content['to'] = (string) $rec['email']; $content['subject'] = 'Test subject';
+    return mailerCall('build', $content);
+}
+function withWp(callable $fn) {
+    putenv('FLUXFILES_LANDING_ORIGIN=https://fluxfiles.example'); putenv('FLUXFILES_PRO_UPDATE_URL=https://updates.example');
+    try { return $fn(); } finally { putenv('FLUXFILES_LANDING_ORIGIN'); putenv('FLUXFILES_PRO_UPDATE_URL'); }
+}
+/** Split a MIME message into [headers, [part => decoded body]]. */
+function parseMultipart(string $headers, string $body): array {
+    assertTrue((bool) preg_match('/^Content-Type: multipart\/alternative; boundary="(ff_[0-9a-f]{32})"\r?$/m', $headers, $m), 'multipart/alternative with a random boundary');
+    $b = $m[1];
+    assertTrue(str_ends_with($body, "--{$b}--\r\n"), 'closing boundary');
+    $parts = [];
+    foreach (array_slice(explode("--{$b}\r\n", $body), 1) as $chunk) {
+        $chunk = preg_replace('/--' . preg_quote($b, '/') . '--\r\n$/', '', $chunk);
+        [$ph, $pb] = explode("\r\n\r\n", $chunk, 2);
+        assertTrue(str_contains($ph, 'Content-Transfer-Encoding: quoted-printable'), 'part is QP');
+        assertTrue((bool) preg_match('/^Content-Type: (text\/(?:plain|html)); charset=UTF-8/m', $ph, $t), 'part content type');
+        foreach (explode("\r\n", $pb) as $line) { assertTrue(strlen($line) <= 76, 'QP line within 76 octets: ' . substr($line, 0, 90)); }
+        $parts[$t[1]] = quoted_printable_decode($pb);
+    }
+    return $parts;
+}
+
+test('html mail: licence mail has a text AND an html part, key exactly once in each', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'buyer@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-1'])['record'];
+    $p = licenseParts($rec); $key = (string) $rec['license_key'];
+    assertEqual(1, substr_count($p['text'], $key), 'key once in text');
+    assertEqual(1, substr_count($p['html'], $key), 'key once in html');
+    assertTrue(str_contains($p['html'], 'word-break:break-all'), 'key box wraps anywhere');
+    assertTrue(str_contains($p['html'], 'color-scheme') && str_contains($p['html'], '#8957e5'), 'dark-mode meta + accent');
+    assertTrue(str_contains($p['html'], '>Flux</span>') && str_contains($p['html'], '>Files</span>'), 'wordmark');
+    assertTrue(!preg_match('/<img|<link|url\(|src=/i', $p['html']), 'no external images/fonts/tracking');
+    assertTrue(!preg_match('/(?<![-a-z])color:\s*(#fff(?:fff)?|white)\b/i', $p['html']), 'no pure-white text');
+    assertTrue(str_contains($p['html'], 'fluxfiles@thai-pc.com') && str_contains($p['text'], 'fluxfiles@thai-pc.com'), 'support contact in both');
+    assertTrue(str_contains($p['html'], 'href="https://fluxfiles.thai-pc.com/docs"') && str_contains($p['text'], 'https://fluxfiles.thai-pc.com/docs'), 'docs button in both');
+    assertTrue(str_contains($p['text'], 'Plan: Pro') && strpos($p['text'], 'Plan: Pro') < strpos($p['text'], $key), 'plan above the key (text)');
+    assertTrue(strpos($p['html'], '>Pro</div>') < strpos($p['html'], $key), 'plan above the key (html)');
+});
+
+test('html mail: next steps are in the right order (key, update <module>, claim) in both parts', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'s@acme.com','plan'=>'studio','gateway'=>'polar','order_id'=>'H-2'])['record'];
+    $p = licenseParts($rec);
+    foreach (['text', 'html'] as $kind) {
+        $s = $p[$kind];
+        $a = strpos($s, 'FLUXFILES_LICENSE_KEY='); $b = strpos($s, 'php vendor/bin/fluxfiles update share'); $c = strpos($s, 'allow_share');
+        assertTrue($a !== false && $b !== false && $c !== false && $a < $b && $b < $c, "$kind: env key, then update, then claim");
+        foreach (['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr'] as $m) {
+            assertTrue(str_contains($s, 'php vendor/bin/fluxfiles update ' . $m), "$kind: update $m (Plans.php module)");
+        }
+        assertTrue(str_contains($s, 'allow_ai_vision') && !str_contains($s, 'allow_ai' . "\n"), "$kind: real claim names");
+    }
+    assertTrue(str_contains($p['text'], "1. ") && strpos($p['text'], '1. ') < strpos($p['text'], '2. ') && strpos($p['text'], '2. ') < strpos($p['text'], '3. '), 'numbered 1-2-3');
+});
+
+test('html mail: the WordPress block shows only when configured and eligible (both parts)', function () use ($secretB64) {
+    $iss = issuer($secretB64);
+    $rec = $iss->issue(['email'=>'w@acme.com','plan'=>'studio','gateway'=>'polar','order_id'=>'H-3'])['record'];
+    putenv('FLUXFILES_LANDING_ORIGIN'); putenv('FLUXFILES_PRO_UPDATE_URL');
+    $off = licenseParts($rec);
+    assertTrue(!str_contains($off['text'], 'WordPress:') && !str_contains($off['html'], 'WordPress:') && !str_contains($off['html'], '/download'), 'off by default');
+    $on = withWp(fn () => licenseParts($rec));
+    assertTrue(str_contains($on['text'], 'https://fluxfiles.example/download') && str_contains($on['html'], 'href="https://fluxfiles.example/download"') && str_contains($on['html'], 'WordPress:'), 'on when configured');
+    $sup = $iss->issue(['email'=>'w@acme.com','plan'=>'support','gateway'=>'polar','order_id'=>'H-3s'])['record'];
+    $s = withWp(fn () => licenseParts($sup));
+    assertTrue(!str_contains($s['html'], '/download') && !str_contains($s['text'], '/download'), 'never for support');
+    putenv('FLUXFILES_LANDING_ORIGIN=http://fluxfiles.example'); putenv('FLUXFILES_PRO_UPDATE_URL=https://updates.example');
+    try { $plain = licenseParts($rec); } finally { putenv('FLUXFILES_LANDING_ORIGIN'); putenv('FLUXFILES_PRO_UPDATE_URL'); }
+    assertTrue(!str_contains($plain['html'], 'http://') && !str_contains($plain['text'], '/download'), 'http origin is not linked');
+});
+
+test('html mail: hostile email / plan / edition / key are escaped, never raw markup or javascript: links', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'a@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-4'])['record'];
+    $evil = '<script>alert(1)</script>';
+    $rec['email'] = 'x"' . $evil . '@acme.com'; $rec['plan'] = $evil; $rec['edition'] = $evil; $rec['license_key'] = $evil . '"onmouseover="x';
+    $rec['modules'] = 'share,' . $evil;
+    $h = licenseParts($rec)['html'];
+    assertTrue(!str_contains($h, '<script') && !str_contains($h, 'onmouseover="x'), 'no raw script / attribute break-out');
+    assertTrue(str_contains($h, '&lt;script&gt;alert(1)&lt;/script&gt;'), 'shown escaped instead');
+    $r = licenseParts(['email'=>'q@acme.com','modules'=>'','plan'=>$evil,'edition'=>$evil,'expires'=>time()+86400]);
+    assertTrue(!str_contains($r['html'], '<script'), 'support mail clean');
+    // sendRenewalUnmatched: plan / order id are interpolated into prose.
+    $content = ['heading'=>'h','intro'=>["Plan {$evil}"],'to'=>$rec['email'],'subject'=>'s'];
+    $h2 = mailerCall('build', $content)['html'];
+    assertTrue(!str_contains($h2, '<script') && !str_contains($h2, 'x"<'), 'prose + footer address escaped');
+    // href: https only.
+    putenv('FLUXFILES_LANDING_ORIGIN=javascript:alert(1)');
+    try { $j = licenseParts($rec)['html']; } finally { putenv('FLUXFILES_LANDING_ORIGIN'); }
+    assertTrue(!str_contains($j, 'javascript:'), 'non-https origin never reaches an href');
+});
+
+test('html mail: every reminder + unmatched-renewal mail has both parts and the footer', function () use ($secretB64) {
+    $iss = issuer($secretB64);
+    $mod = $iss->issue(['email'=>'r@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-5'])['record'];
+    $sup = $iss->issue(['email'=>'r@acme.com','plan'=>'support','gateway'=>'polar','order_id'=>'H-5s'])['record'];
+    $contents = [
+        mailerCall('renewalContent', $mod, '7'), mailerCall('renewalSupportContent', $sup, '7'),
+        mailerCall('expiryContent', $mod, 'grace'), mailerCall('expirySupportContent', $sup, 'expired'),
+    ];
+    foreach ($contents as $c) {
+        $c['to'] = 'r@acme.com'; $c['subject'] = 's';
+        $m = mailerCall('build', $c);
+        assertTrue(str_contains($m['html'], '<html') && str_contains($m['html'], 'Replies reach a real person') && str_contains($m['text'], 'Replies reach a real person'), 'both parts + footer');
+        assertTrue(!str_contains($m['text'], '<') && trim($m['text']) !== '', 'text part has no markup');
+    }
+});
+
+test('html mail: resend payload carries both html and text; ops notices stay text-only', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'a@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-6'])['record'];
+    $p = licenseParts($rec);
+    $pl = mailerCall('resendPayload', 'a@acme.com', 'Subj', $p['text'], $p['html'], '');
+    assertEqual($p['text'], $pl['text']); assertEqual($p['html'], $pl['html']);
+    assertTrue(!isset(mailerCall('resendPayload', 'a@acme.com', 'S', 'ops text', null, '')['html']), 'no html key for plain notices');
+});
+
+test('html mail: SMTP/sendmail body is valid multipart/alternative (QP, CRLF, random boundary)', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'a@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-7'])['record'];
+    $p = licenseParts($rec);
+    $m1 = mailerCall('mime', $p['text'], $p['html']); $m2 = mailerCall('mime', $p['text'], $p['html']);
+    $hdr = implode("\r\n", $m1['headers']);
+    assertTrue(str_contains($hdr, 'MIME-Version: 1.0') && !str_contains($hdr, "\r\n\r\n"), 'headers well-formed');
+    $parts = parseMultipart($hdr, $m1['body']);
+    assertEqual($p['text'], rtrim(str_replace("\r\n", "\n", $parts['text/plain']), "\n"), 'text part round-trips');
+    assertEqual(rtrim($p['html'], "\n"), rtrim(str_replace("\r\n", "\n", $parts['text/html']), "\n"), 'html part round-trips');
+    assertTrue(array_key_first($parts) === 'text/plain' && array_key_last($parts) === 'text/html', 'html last = preferred');
+    assertTrue(!str_contains(str_replace("\r\n", '', $m1['body']), "\n"), 'CRLF only');
+    assertTrue(preg_match('/boundary="([^"]+)"/', $hdr, $b1) && preg_match('/boundary="([^"]+)"/', implode("\r\n", $m2['headers']), $b2) && $b1[1] !== $b2[1], 'boundary is random per message');
+    $plain = mailerCall('mime', 'ops text', null);
+    assertTrue(in_array('Content-Type: text/plain; charset=UTF-8', $plain['headers'], true) && $plain['body'] === 'ops text', 'no html: unchanged single-part message');
+});
+
+test('html mail: real SMTP conversation delivers the multipart message intact', function () use ($secretB64) {
+    $dir = sys_get_temp_dir() . '/ffsmtp' . bin2hex(random_bytes(4)); mkdir($dir);
+    $script = $dir . '/srv.php'; $out = $dir . '/data.txt';
+    file_put_contents($script, '<?php $s=stream_socket_server("tcp://127.0.0.1:0",$en,$es); echo substr(stream_socket_get_name($s,false),strrpos(stream_socket_get_name($s,false),":")+1),"\n"; fflush(STDOUT);
+$c=stream_socket_accept($s,15); fwrite($c,"220 hi\r\n"); $data=false; $buf="";
+while(($l=fgets($c))!==false){ if($data){ $buf.=$l; if(substr($buf,-5)==="\r\n.\r\n"){ file_put_contents($argv[1],$buf); fwrite($c,"250 ok\r\n"); $data=false; } continue; }
+ $u=strtoupper(substr($l,0,4)); if($u==="DATA"){ fwrite($c,"354 go\r\n"); $data=true; } elseif($u==="QUIT"){ fwrite($c,"221 bye\r\n"); break; } else { fwrite($c,"250 ok\r\n"); } }');
+    $proc = proc_open([PHP_BINARY, $script, $out], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    $port = (int) trim((string) fgets($pipes[1]));
+    assertTrue($port > 0, 'fake SMTP server up');
+    foreach (['HOST' => '127.0.0.1', 'PORT' => (string) $port, 'TLS' => 'none'] as $k => $v) { putenv("FLUXFILES_SMTP_{$k}={$v}"); }
+    try {
+        $rec = issuer($secretB64)->issue(['email'=>'smtp@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-8'])['record'];
+        assertTrue((new LicenseMailer('smtp', 'licenses@fluxfiles.example', 'FluxFiles'))->sendLicense($rec), 'sendLicense over SMTP');
+    } finally {
+        foreach (['HOST', 'PORT', 'TLS'] as $k) { putenv("FLUXFILES_SMTP_{$k}"); }
+        proc_close($proc);
+    }
+    $raw = (string) file_get_contents($out);
+    assertTrue($raw !== '', 'server received DATA');
+    [$h, $body] = explode("\r\n\r\n", substr($raw, 0, -5), 2);
+    assertTrue(str_contains($h, 'To: <smtp@acme.com>') && str_contains($h, 'Subject: Your FluxFiles licence key'), 'To/Subject headers');
+    assertTrue(!str_contains(str_replace("\r\n", '', $raw), "\n"), 'CRLF only on the wire');
+    $parts = parseMultipart($h, preg_replace('/^\.\./m', '.', $body));   // undo SMTP dot-stuffing
+    $key = (string) $rec['license_key'];
+    assertEqual(1, substr_count($parts['text/plain'], $key), 'key once (text, over the wire)');
+    assertEqual(1, substr_count($parts['text/html'], $key), 'key once (html, over the wire)');
+    array_map('unlink', glob($dir . '/*')); rmdir($dir);
+});
+
+test('html mail: the log transport shows the text part with the key redacted', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'log@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'H-9'])['record'];
+    $out = captureMail(fn () => (new LicenseMailer('log'))->sendLicense($rec));
+    assertTrue(!str_contains($out, (string) $rec['license_key']) && str_contains($out, '[redacted]') && !str_contains($out, '<html'), 'redacted text only');
+});
+
+
+// ── Key refresh: subscription linkage, newestRefreshable, verify, migration ─────────────
+
+/** @return array{0:LicenseStore,1:LicenseIssuer} one shared in-memory DB */
+function refreshRig(string $secretB64): array {
+    $store = new LicenseStore(':memory:');
+    return [$store, new LicenseIssuer(new LicenseSigner($secretB64), $store)];
+}
+function polarOrder(string $email, string $plan, string $order, string $sub = '', string $cid = 'cus1', string $reason = 'subscription_cycle'): array {
+    return ['email'=>$email,'plan'=>$plan,'gateway'=>'polar','order_id'=>$order,'customer_id'=>$cid,'subscription_id'=>$sub,'billing_reason'=>$reason];
+}
+
+test('refresh: extract carries subscription_id and billing_reason (flat id, nested object, or absent)', function () {
+    $d = ['id'=>'ord_1','status'=>'paid','product_id'=>'prod_pm','customer'=>['email'=>'a@x.com']];
+    $o = PolarWebhook::extract(['type'=>'order.paid','data'=>$d + ['subscription_id'=>'sub_1','billing_reason'=>'subscription_cycle']], ['prod_pm'=>'pro-monthly']);
+    assertEqual(['sub_1','subscription_cycle'], [$o['subscription_id'], $o['billing_reason']]);
+    $o = PolarWebhook::extract(['type'=>'order.paid','data'=>$d + ['subscription'=>['id'=>'sub_2']]], ['prod_pm'=>'pro-monthly']);
+    assertEqual(['sub_2',''], [$o['subscription_id'], $o['billing_reason']]);
+    $o = PolarWebhook::extract(['type'=>'order.paid','data'=>$d + ['subscription_id'=>"bad id\n"]], ['prod_pm'=>'pro-monthly']);
+    assertEqual('', $o['subscription_id'], 'a non-token value is dropped');
+});
+
+test('refresh: migration adds the columns and index to a pre-existing DB, idempotently, keeping rows', function () {
+    $f = sys_get_temp_dir() . '/fxold-' . bin2hex(random_bytes(4)) . '.sqlite';
+    $pdo = new PDO('sqlite:' . $f);
+    $pdo->exec("CREATE TABLE licenses (id INTEGER PRIMARY KEY AUTOINCREMENT, jti TEXT UNIQUE NOT NULL, email TEXT NOT NULL, customer TEXT, plan TEXT, edition TEXT, modules TEXT, enforcement TEXT, issued INTEGER, expires INTEGER, license_key TEXT NOT NULL, gateway TEXT, order_id TEXT, status TEXT DEFAULT 'active', created_at INTEGER)");
+    $pdo->exec("INSERT INTO licenses (jti,email,plan,license_key,gateway,order_id,issued) VALUES ('old1','o@x.com','pro','k','polar','ord-old',5)");
+    $pdo = null;
+    foreach ([1, 2] as $run) {
+        $st = new LicenseStore($f);
+        $chk = new PDO('sqlite:' . $f);
+        $cols = $chk->query('PRAGMA table_info(licenses)')->fetchAll(PDO::FETCH_COLUMN, 1);
+        assertTrue(in_array('subscription_id', $cols, true) && in_array('billing_reason', $cols, true), "columns (run $run)");
+        assertEqual(1, (int) $chk->query("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_subscription'")->fetchColumn(), 'index');
+        assertEqual(null, $st->findByJti('old1')['subscription_id'], 'old row has NULL');
+    }
+    foreach (glob($f . '*') as $x) { @unlink($x); }
+});
+
+test('refresh: issue stores the subscription and supersedes by subscription, not by email+plan', function () use ($secretB64) {
+    [$st, $iss] = refreshRig($secretB64);
+    $a1 = $iss->issue(polarOrder('ag@x.com','pro-monthly','o-a1','sub_A'))['record'];
+    $b1 = $iss->issue(polarOrder('ag@x.com','pro-monthly','o-b1','sub_B'))['record'];
+    assertEqual('sub_A', $a1['subscription_id']);
+    assertEqual('active', $st->findByJti($a1['jti'])['status'], 'sub B does not retire sub A');
+    $a2 = $iss->issue(polarOrder('ag@x.com','pro-monthly','o-a2','sub_A'))['record'];
+    assertEqual('superseded', $st->findByJti($a1['jti'])['status']);
+    assertEqual('active', $st->findByJti($b1['jti'])['status'], 'B untouched by A renewal');
+    assertEqual('active', $st->findByJti($a2['jti'])['status']);
+    // no subscription id: the old email+plan behaviour is kept
+    $l1 = $iss->issue(polarOrder('leg@x.com','pro-monthly','o-l1'))['record'];
+    $l2 = $iss->issue(polarOrder('leg@x.com','pro-monthly','o-l2'))['record'];
+    assertEqual('superseded', $st->findByJti($l1['jti'])['status']);
+});
+
+test('refresh: issued is strictly monotonic within a subscription even if the clock stepped back (issuedAtLeast)', function () use ($secretB64) {
+    $f = sys_get_temp_dir() . '/fxmono-' . bin2hex(random_bytes(4)) . '.sqlite';
+    $st = new LicenseStore($f); $iss = new LicenseIssuer(new LicenseSigner($secretB64), $st);
+    $a = $iss->issue(polarOrder('m@x.com','pro-monthly','o-m1','sub_M'))['record'];
+    // pretend the previous key was minted by a clock 1 h ahead of this one
+    $future = time() + 3600;
+    (new PDO('sqlite:' . $f))->exec("UPDATE licenses SET issued = {$future} WHERE jti = '{$a['jti']}'");
+    $b = $iss->issue(polarOrder('m@x.com','pro-monthly','o-m2','sub_M'))['record'];
+    assertEqual($future + 1, (int) $b['issued']);
+    $lm = (new LicenseSigner($secretB64))->verify($b['license_key']);
+    assertEqual($future + 1, $lm['issued'], 'signed payload too');
+    assertTrue((int) $b['expires'] >= $future + 31 * 86400, 'expiry follows issued');
+    $m = (new LicenseSigner($secretB64))->mint(['ttlDays'=>31,'issuedAtLeast'=>$future]);
+    assertEqual($future, $m['payload']['issued']);
+    foreach (glob($f . '*') as $x) { @unlink($x); }
+});
+
+test('refresh: LicenseSigner::verify accepts own keys, rejects wrong kid / tampered / foreign / oversize / malformed', function () use ($secretB64) {
+    $sg = new LicenseSigner($secretB64);
+    $k = $sg->mint(['edition'=>'pro','modules'=>['share']])['key'];
+    assertEqual('pro', $sg->verify($k)['edition']);
+    [$h,$p,$sig] = explode('.', $k);
+    $b = fn ($x) => rtrim(strtr(base64_encode($x), '+/', '-_'), '=');
+    $pl = json_decode(base64_decode(strtr($p, '-_', '+/')), true); $pl['edition'] = 'enterprise';
+    assertEqual(null, $sg->verify($h . '.' . $b(json_encode($pl)) . '.' . $sig), 'tampered payload');
+    assertEqual(null, $sg->verify($b('{"alg":"Ed25519","kid":"k2"}') . '.' . $p . '.' . $sig), 'unknown kid (sig no longer matches either)');
+    $other = new LicenseSigner(base64_encode(sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair())));
+    assertEqual(null, $sg->verify($other->mint([])['key']), 'foreign key');
+    assertEqual(null, $sg->verify($k . str_repeat('a', 5000)), 'oversize');
+    foreach (['', 'a.b', 'a.b.c.d', '..'] as $bad) { assertEqual(null, $sg->verify($bad), $bad); }
+    // a key signed by us with a different kid is refused too
+    $k2 = (new LicenseSigner($secretB64, 'k2'))->mint([])['key'];
+    assertEqual(null, $sg->verify($k2), 'wrong kid');
+});
+
+/** Rows with explicit issued/expires, to drive newestRefreshable precisely. */
+function putRow(LicenseStore $st, array $o): array {
+    static $n = 0; $n++;
+    return $st->record($o + ['jti'=>sprintf('%024x', $n),'email'=>'u@x.com','plan'=>'pro-monthly','edition'=>'pro','modules'=>['share','intake'],
+        'enforcement'=>'subscription','issued'=>1000 + $n,'expires'=>2000000000,'license_key'=>'key'.$n,'gateway'=>'polar','order_id'=>'ord'.$n,'grace_days'=>7]);
+}
+
+test('refresh: newestRefreshable follows a subscription chain to the newest, "current" when already newest', function () {
+    $st = new LicenseStore(':memory:');
+    $a = putRow($st, ['subscription_id'=>'S','issued'=>1000,'expires'=>2000000000,'status'=>'superseded']);
+    $b = putRow($st, ['subscription_id'=>'S','issued'=>1100,'expires'=>2000100000,'status'=>'superseded']);
+    $c = putRow($st, ['subscription_id'=>'S','issued'=>1200,'expires'=>2000200000]);
+    $r = $st->newestRefreshable($a, 1700000000);
+    assertEqual(['refreshed', $c['jti']], [$r['outcome'], $r['row']['jti']]);
+    assertEqual('current', $st->newestRefreshable($c, 1700000000)['outcome']);
+});
+
+test('refresh: two subscriptions of one email never cross', function () {
+    $st = new LicenseStore(':memory:');
+    $a1 = putRow($st, ['subscription_id'=>'A','issued'=>1000,'status'=>'superseded']);
+    putRow($st, ['subscription_id'=>'B','issued'=>5000]);
+    assertEqual('current', $st->newestRefreshable($a1, 1700000000)['outcome'], 'A has nothing newer; B is not offered');
+});
+
+test('refresh: renews_jti chain (one-time lifetime + updates renewals) is followed forward', function () {
+    $st = new LicenseStore(':memory:');
+    $base = putRow($st, ['plan'=>'pro-lifetime','enforcement'=>'perpetual','issued'=>1000,'expires'=>1800000000,'status'=>'superseded','gateway'=>'polar']);
+    $r1 = putRow($st, ['plan'=>'pro-renewal','enforcement'=>'perpetual','issued'=>2000,'expires'=>1900000000,'renews_jti'=>$base['jti'],'status'=>'superseded']);
+    $r2 = putRow($st, ['plan'=>'pro-renewal','enforcement'=>'perpetual','issued'=>3000,'expires'=>2000000000,'renews_jti'=>$r1['jti']]);
+    assertEqual($r2['jti'], $st->newestRefreshable($base, 1700000000)['row']['jti'], 'BFS reaches the grandchild');
+    assertEqual('current', $st->newestRefreshable($r2, 1700000000)['outcome']);
+});
+
+test('refresh: legacy Polar rows fall back to email+plan; two distinct subscriptions on it is ambiguous', function () {
+    $st = new LicenseStore(':memory:');
+    $l1 = putRow($st, ['email'=>'L@x.com','issued'=>1000,'status'=>'superseded','customer_id'=>'c1']);
+    $l2 = putRow($st, ['email'=>'l@x.com','issued'=>1100,'customer_id'=>'c1']);
+    assertEqual($l2['jti'], $st->newestRefreshable($l1, 1700000000)['row']['jti'], 'case-insensitive email, same plan');
+    $other = putRow($st, ['email'=>'l@x.com','issued'=>1500,'customer_id'=>'cX']);
+    assertEqual('current', $st->newestRefreshable($l2, 1700000000)['outcome'], 'a different known customer is not offered');
+    putRow($st, ['email'=>'l@x.com','issued'=>1200,'subscription_id'=>'S1','customer_id'=>'c1']);
+    assertEqual(['refused','ambiguous'], array_values(array_intersect_key($st->newestRefreshable($l1, 1700000000), ['outcome'=>1,'reason'=>1])), 'one subscription id plus newer id-less rows is ambiguous (A/B cross)');
+    putRow($st, ['email'=>'l@x.com','issued'=>1300,'subscription_id'=>'S2','customer_id'=>'c1']);
+    $r = $st->newestRefreshable($l1, 1700000000);
+    assertEqual(['refused','ambiguous'], [$r['outcome'], $r['reason']]);
+});
+
+test('refresh: manual rows with no chain are always "current"', function () {
+    $st = new LicenseStore(':memory:');
+    $m = putRow($st, ['gateway'=>'manual','plan'=>'pro-monthly']);
+    putRow($st, ['gateway'=>'manual','plan'=>'pro-monthly','issued'=>9999]);   // another manual key of the same buyer: not a chain
+    assertEqual('current', $st->newestRefreshable($m, 1700000000)['outcome']);
+});
+
+test('refresh: revoked / refunded / cascade-cancelled rows and dead chains are refused', function () {
+    $st = new LicenseStore(':memory:');
+    foreach (['revoked','refunded'] as $stt) {
+        $a = putRow($st, ['subscription_id'=>"D$stt",'issued'=>1000,'status'=>$stt]);
+        assertEqual('refused', $st->newestRefreshable($a, 1700000000)['outcome'], "presented $stt");
+    }
+    // newest order refunded while an older key is presented
+    $old = putRow($st, ['subscription_id'=>'R','issued'=>1000,'status'=>'superseded']);
+    $new = putRow($st, ['subscription_id'=>'R','issued'=>1100]);
+    assertEqual('refreshed', $st->newestRefreshable($old, 1700000000)['outcome']);
+    $st->setStatus($new['jti'], 'refunded');
+    assertEqual('chain-dead', $st->newestRefreshable($old, 1700000000)['reason'], 'latest refunded kills the chain');
+    // cascade: a refunded lifetime base cancels its renewal; the renewal presented is refused
+    $base = putRow($st, ['plan'=>'pro-lifetime','enforcement'=>'perpetual','issued'=>1000,'status'=>'superseded']);
+    $ren = putRow($st, ['plan'=>'pro-renewal','enforcement'=>'perpetual','issued'=>2000,'renews_jti'=>$base['jti']]);
+    $st->setStatusCascade($base['jti'], 'refunded');
+    assertEqual('refused', $st->newestRefreshable($st->findByJti($ren['jti']), 1700000000)['outcome']);
+});
+
+test('refresh: support-only, no-expiry and stale (beyond expires + grace + cap) are refused; inside the cap is allowed', function () {
+    $st = new LicenseStore(':memory:');
+    $sup = putRow($st, ['edition'=>'support','modules'=>[],'subscription_id'=>'SUP','issued'=>1000]);
+    putRow($st, ['edition'=>'support','modules'=>[],'subscription_id'=>'SUP','issued'=>1100]);
+    assertEqual('support', $st->newestRefreshable($sup, 1700000000)['reason']);
+    $nx = putRow($st, ['expires'=>null,'enforcement'=>'perpetual','plan'=>'pro','subscription_id'=>'NX']);
+    assertEqual('no-expiry', $st->newestRefreshable($nx, 1700000000)['reason']);
+    $exp = 1700000000;
+    $s1 = putRow($st, ['subscription_id'=>'ST','issued'=>1000,'expires'=>$exp,'status'=>'superseded']);
+    putRow($st, ['subscription_id'=>'ST','issued'=>1100,'expires'=>$exp + 86400 * 31]);
+    $edge = $exp + (7 + 90) * 86400;
+    assertEqual('refreshed', $st->newestRefreshable($s1, $edge, 90)['outcome'], 'at the cap');
+    assertEqual('stale', $st->newestRefreshable($s1, $edge + 1, 90)['reason'], 'one second past');
+    assertEqual('refreshed', $st->newestRefreshable($s1, $edge + 1, 91)['outcome'], 'cap is configurable');
+});
+
+test('refresh: never returns an older or earlier-expiring key; follows an edition change with a later expiry', function () {
+    $st = new LicenseStore(':memory:');
+    $p = putRow($st, ['subscription_id'=>'E','issued'=>1000,'expires'=>2000000000,'status'=>'superseded']);
+    putRow($st, ['subscription_id'=>'E','issued'=>900,'expires'=>2000500000,'status'=>'superseded']);   // older issued
+    putRow($st, ['subscription_id'=>'E','issued'=>1200,'expires'=>1999999999]);                          // earlier expiry (e.g. annual -> monthly)
+    $r = $st->newestRefreshable($p, 1700000000);
+    assertEqual('current', $r['outcome'], 'neither candidate qualifies');
+    $up = putRow($st, ['subscription_id'=>'E','issued'=>1300,'expires'=>2000100000,'edition'=>'studio','plan'=>'studio-monthly','modules'=>['share','intake','ai']]);
+    $r = $st->newestRefreshable($p, 1700000000);
+    assertEqual([$up['jti'], 'studio'], [$r['row']['jti'], $r['row']['edition']]);
+});
+
+test('refresh: setStatusForSubscription revokes every row, spares other subscriptions, and un-revokes to one active row', function () {
+    $st = new LicenseStore(':memory:');
+    $a1 = putRow($st, ['subscription_id'=>'X','issued'=>1000,'status'=>'superseded']);
+    $a2 = putRow($st, ['subscription_id'=>'X','issued'=>1100]);
+    $o = putRow($st, ['subscription_id'=>'Y','issued'=>1100]);
+    assertEqual(2, $st->setStatusForSubscription('X', 'revoked'));
+    assertEqual(['revoked','revoked','active'], [$st->findByJti($a1['jti'])['status'], $st->findByJti($a2['jti'])['status'], $st->findByJti($o['jti'])['status']]);
+    assertEqual(false, $st->isUpdateEligible($a2['jti']));
+    assertEqual('refused', $st->newestRefreshable($st->findByJti($a1['jti']), 1700000000)['outcome']);
+    $st->setStatusForSubscription('X', 'active');
+    assertEqual(['superseded','active'], [$st->findByJti($a1['jti'])['status'], $st->findByJti($a2['jti'])['status']]);
+    assertEqual(0, $st->setStatusForSubscription('', 'revoked'), 'empty id matches nothing');
+});
+
+test('refresh: rateHit buckets IPv6 by /64 via ProDownload::ipBucket (reused by /refresh)', function () {
+    assertEqual(\FluxFiles\LicenseServer\ProDownload::ipBucket('2001:db8:1:2:aaaa::1'), \FluxFiles\LicenseServer\ProDownload::ipBucket('2001:db8:1:2:bbbb::9'));
+    assertTrue(\FluxFiles\LicenseServer\ProDownload::ipBucket('2001:db8:1:2::1') !== \FluxFiles\LicenseServer\ProDownload::ipBucket('2001:db8:1:3::1'));
+});
+
+
+// ── Review fixes: throttle sweep, legacy supersede, fallback scope, un-revoke, chains ───
+
+test('rateHit: hits on one bucket/period never reset another bucket\'s current window (B2)', function () {
+    $st = new LicenseStore(':memory:');
+    $now = 1800000000;
+    for ($i = 0; $i < 11; $i++) { $st->rateHit('refresh-jti:abc', 3600, 10, $now); }
+    assertEqual(false, $st->rateHit('refresh-jti:abc', 3600, 10, $now), 'throttled');
+    for ($i = 0; $i < 600; $i++) { $st->rateHit('dl-ip:1.2.3.4', 600, 10, $now + $i % 3); }   // many sweeps by a 600 s caller
+    assertEqual(false, $st->rateHit('refresh-jti:abc', 3600, 10, $now + 5), 'the hourly window survived');
+    // old-format rows (small window numbers) are swept harmlessly
+    for ($i = 0; $i < 300; $i++) { $st->rateHit('x', 600, 1000, $now + 7300); }
+    assertEqual(true, $st->rateHit('refresh-jti:abc', 3600, 10, $now + 7300), 'a later window starts fresh');
+});
+
+test('supersede: legacy NULL-subscription rows are retired by the first subscription-linked order (B3), before and after backfill', function () use ($secretB64) {
+    [$st, $iss] = refreshRig($secretB64);
+    $o1 = $iss->issue(polarOrder('lg@x.com','pro-monthly','lg-1','','cusL',''))['record'];
+    // o2 is another legacy cycle that the (old) code left active next to o1
+    $o2 = $iss->issue(polarOrder('lg@x.com','pro-monthly','lg-2','','cusL',''))['record'];
+    $st->setStatus($o1['jti'], 'active');
+    $o3 = $iss->issue(polarOrder('lg@x.com','pro-monthly','lg-3','sub_A','cusL'))['record'];
+    $active = fn () => array_values(array_column(array_filter($st->all(), fn ($r) => $r['status'] === 'active'), 'jti'));
+    assertEqual([$o3['jti']], $active(), 'only the new row is active (deploy -> backfill gap)');
+    $due = $st->needingReminder([30,14,7,1], (int) $o2['expires'] + 86400);
+    assertTrue(!in_array($o2['jti'], array_column($due, 'jti'), true), 'no grace/expired reminder for the legacy row');
+    // after backfill: legacy rows that survived (resurrected here) get ids, then the per-subscription pass
+    $st->setStatus($o1['jti'], 'active'); $st->setStatus($o2['jti'], 'active');
+    $st->setSubscription($o1['jti'], 'sub_A', 'subscription_cycle'); $st->setSubscription($o2['jti'], 'sub_A', 'subscription_cycle');
+    assertEqual(['sub_A'], $st->subscriptionsWithMultipleActive());
+    assertEqual(2, $st->supersedeOlderInSubscription('sub_A'));
+    assertEqual([$o3['jti']], $active());
+    assertEqual(0, $st->supersedeOlderInSubscription('sub_A'), 'idempotent');
+    $due = $st->needingReminder([30,14,7,1], (int) $o2['expires'] + 86400);
+    assertTrue(!in_array($o2['jti'], array_column($due, 'jti'), true), 'still no reminder after backfill');
+    // another customer's legacy row is not touched
+    $x = $iss->issue(polarOrder('lg@x.com','pro-monthly','lg-x','','cusOTHER',''))['record'];
+    $iss->issue(polarOrder('lg@x.com','pro-monthly','lg-4','sub_A','cusL'));
+    assertEqual('active', $st->findByJti($x['jti'])['status'], 'a different known customer is spared');
+});
+
+test('refresh fallback never crosses one-time purchases (two lifetime orders by one buyer) (N1)', function () {
+    $st = new LicenseStore(':memory:');
+    $a = putRow($st, ['email'=>'t@x.com','plan'=>'lifetime','enforcement'=>'perpetual','billing_reason'=>'purchase','issued'=>1000,'expires'=>2000000000]);
+    putRow($st, ['email'=>'t@x.com','plan'=>'lifetime','enforcement'=>'perpetual','billing_reason'=>'purchase','issued'=>1100,'expires'=>2000000100]);
+    assertEqual('current', $st->newestRefreshable($a, 1700000000)['outcome'], 'classified one-time row has no fallback');
+    $l1 = putRow($st, ['email'=>'u1@x.com','issued'=>1000,'status'=>'superseded']);              // unclassified legacy
+    putRow($st, ['email'=>'u1@x.com','issued'=>1100,'billing_reason'=>'purchase']);                // classified: not a candidate
+    assertEqual('current', $st->newestRefreshable($l1, 1700000000)['outcome'], 'classified rows are not offered to a legacy row');
+    $l2 = putRow($st, ['email'=>'u1@x.com','issued'=>1200]);
+    assertEqual($l2['jti'], $st->newestRefreshable($l1, 1700000000)['row']['jti'], 'unclassified legacy still chains');
+});
+
+test('un-revoking a subscription never resurrects refunded rows (N2)', function () {
+    $st = new LicenseStore(':memory:');
+    $a = putRow($st, ['subscription_id'=>'U','issued'=>1000,'status'=>'superseded']);
+    $b = putRow($st, ['subscription_id'=>'U','issued'=>1100,'status'=>'superseded']);
+    $c = putRow($st, ['subscription_id'=>'U','issued'=>1200]);
+    $st->setStatus($b['jti'], 'refunded');
+    $st->setStatusForSubscription('U', 'revoked');
+    assertEqual('refunded', $st->findByJti($b['jti'])['status'], 'revoke does not rewrite a refund');
+    $st->setStatusForSubscription('U', 'active');
+    assertEqual(['superseded','refunded','active'], array_map(fn ($r) => $st->findByJti($r['jti'])['status'], [$a,$b,$c]));
+});
+
+test('renewal chain L -> R1 -> R2 with R2 refunded: L refreshes to the reactivated R1 (N3)', function () {
+    $st = new LicenseStore(':memory:');
+    $l = putRow($st, ['plan'=>'pro-lifetime','enforcement'=>'perpetual','issued'=>1000,'expires'=>1800000000,'status'=>'superseded']);
+    $r1 = putRow($st, ['plan'=>'pro-renewal','enforcement'=>'perpetual','issued'=>2000,'expires'=>1900000000,'renews_jti'=>$l['jti'],'status'=>'superseded']);
+    $r2 = putRow($st, ['plan'=>'pro-renewal','enforcement'=>'perpetual','issued'=>3000,'expires'=>2000000000,'renews_jti'=>$r1['jti']]);
+    $st->setStatusCascade($r2['jti'], 'refunded');
+    assertEqual('active', $st->findByJti($r1['jti'])['status'], 'cascade reactivated R1');
+    $r = $st->newestRefreshable($st->findByJti($l['jti']), 1700000000);
+    assertEqual(['refreshed', $r1['jti']], [$r['outcome'], $r['row']['jti']]);
+});
+
+test('revoke-by-subscription outlives the next order.paid: the paid order is recorded but stays revoked (N4)', function () use ($secretB64) {
+    [$st, $iss] = refreshRig($secretB64);
+    $a = $iss->issue(polarOrder('rv@x.com','pro-monthly','rv-1','sub_R'))['record'];
+    $st->setStatusForSubscription('sub_R', 'revoked');
+    assertEqual('revoked', $st->revokedSubscriptionStatus('sub_R'));
+    $b = $iss->issue(polarOrder('rv@x.com','pro-monthly','rv-2','sub_R'));
+    assertEqual('revoked', $b['record']['status'], 'new key is recorded revoked');
+    assertEqual('refused', $st->newestRefreshable($st->findByJti($a['jti']), time())['outcome']);
+    $st->setStatusForSubscription('sub_R', 'active');
+    assertEqual(null, $st->revokedSubscriptionStatus('sub_R'), 'marker cleared on un-revoke');
+    assertEqual('active', $st->findByJti($b['record']['jti'])['status'], 'newest comes back active');
+});
+
+test('ipBucket: an IPv4-mapped IPv6 client is bucketed as its IPv4 address, plain IPv6 still by /64 (N5)', function () {
+    $b = fn ($ip) => \FluxFiles\LicenseServer\ProDownload::ipBucket($ip);
+    assertEqual('203.0.113.7', $b('::ffff:203.0.113.7'));
+    assertTrue($b('::ffff:203.0.113.7') !== $b('::ffff:203.0.113.8'), 'two mapped clients do not share a bucket');
+    assertEqual('203.0.113.7', $b('203.0.113.7'));
+    assertTrue(str_ends_with($b('2001:db8::1'), '/64'));
+});
+
+
+test('A/B cross: legacy L1 -> id-less L2 -> sub A row is refused; a clean legacy -> sub row still refreshes', function () {
+    $st = new LicenseStore(':memory:');
+    $l1 = putRow($st, ['email'=>'ab@x.com','issued'=>1000,'status'=>'superseded']);
+    putRow($st, ['email'=>'ab@x.com','issued'=>1100,'status'=>'superseded']);
+    putRow($st, ['email'=>'ab@x.com','issued'=>1200,'subscription_id'=>'A']);
+    assertEqual('ambiguous', $st->newestRefreshable($l1, 1700000000)['reason']);
+    $c1 = putRow($st, ['email'=>'cl@x.com','issued'=>1000,'status'=>'superseded']);
+    $c2 = putRow($st, ['email'=>'cl@x.com','issued'=>1100,'subscription_id'=>'C']);
+    assertEqual($c2['jti'], $st->newestRefreshable($c1, 1700000000)['row']['jti']);
+});
+
+test('backfill repair: a wrongly superseded head is set back to active; revoked subscriptions are left alone (N-b)', function () {
+    $st = new LicenseStore(':memory:');
+    $a = putRow($st, ['subscription_id'=>'H','issued'=>1000,'status'=>'superseded']);
+    $b = putRow($st, ['subscription_id'=>'H','issued'=>1100,'status'=>'superseded']);
+    $r = putRow($st, ['subscription_id'=>'RV','issued'=>1000,'status'=>'revoked']);
+    assertEqual(['H'], $st->subscriptionsNeedingRepair(1700000000));
+    assertEqual($b['jti'], $st->repairableHead('H', 1700000000));
+    $st->supersedeOlderInSubscription('H', 1700000000);
+    assertEqual(['superseded','active'], [$st->findByJti($a['jti'])['status'], $st->findByJti($b['jti'])['status']]);
+    assertEqual([], $st->subscriptionsNeedingRepair(1700000000), 'idempotent');
+});
+
+test('rateHit refuses a period longer than the 2 h sweep horizon (N-e)', function () {
+    $st = new LicenseStore(':memory:');
+    $threw = false;
+    try { $st->rateHit('x', 7201, 1); } catch (\InvalidArgumentException) { $threw = true; }
+    assertTrue($threw);
+    assertTrue($st->rateHit('x', 7200, 1));
+});
+
+test('ipBucket unwraps NAT64 64:ff9b::/96 like ::ffff: (N-f)', function () {
+    $b = fn ($ip) => \FluxFiles\LicenseServer\ProDownload::ipBucket($ip);
+    assertEqual('203.0.113.7', $b('64:ff9b::203.0.113.7'));
+    assertTrue($b('64:ff9b::203.0.113.7') !== $b('64:ff9b::203.0.113.8'));
+});
+
+
+test('B5: a replaced/cancelled subscription (lapsed head) and a refunded head are NOT revived', function () {
+    $st = new LicenseStore(':memory:');
+    $now = 1800000000;
+    // replaced: A (a1,a2) cancelled long ago, B bought later retired a2; a2 is out of term
+    $a1 = putRow($st, ['subscription_id'=>'A','issued'=>1000,'expires'=>$now - 90 * 86400,'status'=>'superseded']);
+    $a2 = putRow($st, ['subscription_id'=>'A','issued'=>1100,'expires'=>$now - 60 * 86400,'status'=>'superseded']);
+    putRow($st, ['subscription_id'=>'B','issued'=>1200,'expires'=>$now + 20 * 86400]);
+    assertEqual(null, $st->repairableHead('A', $now));
+    assertEqual([], $st->subscriptionsNeedingRepair($now), 'nothing to repair');
+    assertEqual(0, $st->supersedeOlderInSubscription('A', $now));
+    assertEqual(['superseded','superseded'], [$st->findByJti($a1['jti'])['status'], $st->findByJti($a2['jti'])['status']]);
+    $due = array_column($st->needingReminder([30,14,7,1], $now), 'jti');
+    assertTrue(!in_array($a2['jti'], $due, true), 'no wrong "expired" mail for the replaced subscription');
+    // refunded head: m3 refunded, m2 still in term must stay superseded
+    putRow($st, ['subscription_id'=>'R','issued'=>1000,'expires'=>$now + 5 * 86400,'status'=>'superseded']);
+    $m2 = putRow($st, ['subscription_id'=>'R','issued'=>1100,'expires'=>$now + 6 * 86400,'status'=>'superseded']);
+    putRow($st, ['subscription_id'=>'R','issued'=>1200,'expires'=>$now + 7 * 86400,'status'=>'refunded']);
+    assertEqual(null, $st->repairableHead('R', $now), 'a newer refunded row rules revival out');
+    $st->supersedeOlderInSubscription('R', $now);
+    assertEqual('superseded', $st->findByJti($m2['jti'])['status']);
+});
+
+test('B5: the A/B concurrent wrong retirement (both in term) is still repaired', function () {
+    $st = new LicenseStore(':memory:');
+    $now = 1800000000;
+    $a = putRow($st, ['subscription_id'=>'A','issued'=>1000,'expires'=>$now + 10 * 86400,'status'=>'superseded']);   // wrongly retired by B's order
+    putRow($st, ['subscription_id'=>'B','issued'=>1100,'expires'=>$now + 20 * 86400]);
+    assertEqual($a['jti'], $st->repairableHead('A', $now));
+    assertEqual(['A'], $st->subscriptionsNeedingRepair($now));
+    $st->supersedeOlderInSubscription('A', $now);
+    assertEqual('active', $st->findByJti($a['jti'])['status']);
+    // grace still counts as in term
+    $g = putRow($st, ['subscription_id'=>'G','issued'=>1000,'expires'=>$now - 3 * 86400,'status'=>'superseded','grace_days'=>7]);
+    assertEqual($g['jti'], $st->repairableHead('G', $now));
+});
+
 
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f>0?1:0);
