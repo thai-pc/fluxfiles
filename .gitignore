@@ -23,9 +23,7 @@ packages/core/storage/rate_limit.json
 packages/core/storage/rate_limit.d/
 packages/core/storage/demo_ip.json
 # Refreshed licence key (fluxfiles license refresh): a secret, never committed
-packages/core/storage/license-refresh.json
-packages/core/storage/license-refresh.json.lock
-packages/core/storage/.license-refresh-*
+packages/core/storage/license/
 # tus resumable-upload staging (partial bytes, swept after 24h)
 packages/core/storage/tus/
 

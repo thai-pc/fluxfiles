@@ -121,13 +121,13 @@ test('an env key that does not verify: used as given (free), file ignored', func
 });
 test('a relative FLUXFILES_LICENSE_FILE is ignored (default path used) and warned about', function () use ($A) {
     $e = ['FLUXFILES_LICENSE_KEY' => $A, 'FLUXFILES_LICENSE_FILE' => 'rel/path.json', 'FLUXFILES_STORAGE_PATH' => '/srv/ff-storage'];
-    assertEqual('/srv/ff-storage/license-refresh.json', LicenseKeyFile::path($e));
+    assertEqual('/srv/ff-storage/license/license-refresh.json', LicenseKeyFile::path($e));
     assertTrue(LicenseKeyFile::pathWarning($e) !== null);
     assertEqual(null, LicenseKeyFile::pathWarning(['FLUXFILES_LICENSE_FILE' => '/abs/x.json']));
 });
 test('default path follows FLUXFILES_STORAGE_PATH, else the package storage dir', function () {
-    assertEqual('/data/ff/license-refresh.json', LicenseKeyFile::path(['FLUXFILES_STORAGE_PATH' => '/data/ff/']));
-    assertTrue(str_ends_with(LicenseKeyFile::path([]), '/storage/license-refresh.json'));
+    assertEqual('/data/ff/license/license-refresh.json', LicenseKeyFile::path(['FLUXFILES_STORAGE_PATH' => '/data/ff/']));
+    assertTrue(str_ends_with(LicenseKeyFile::path([]), '/storage/license/license-refresh.json'));
 });
 test('the memo invalidates when the file changes', function () use ($env, $A, $A2, $writeFile, $file) {
     $writeFile($A, $A2);

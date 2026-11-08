@@ -177,5 +177,25 @@ if (strncasecmp($uri, '/storage/', 9) === 0) {
     return true;
 }
 
+// Aliases the prefix tests cannot see (Windows 8.3 short names `STORAG~1`, symlinks): whatever
+// resolves under storage/ but not under storage/uploads/ is runtime state, and bookkeeping
+// directories stay private even inside uploads/.
+$realUri = realpath(__DIR__ . $uri);
+$realStorage = realpath(__DIR__ . '/storage');
+if ($realUri !== false && $realStorage !== false && strncasecmp($realUri, $realStorage . DIRECTORY_SEPARATOR, strlen($realStorage) + 1) === 0) {
+    $realUploads = realpath(__DIR__ . '/storage/uploads');
+    $inUploads = $realUploads !== false && strncasecmp($realUri, $realUploads . DIRECTORY_SEPARATOR, strlen($realUploads) + 1) === 0;
+    $hasBookkeeping = false;
+    foreach (explode(DIRECTORY_SEPARATOR, $realUri) as $seg) {
+        if (strcasecmp($seg, '_fluxfiles') === 0) { $hasBookkeeping = true; }
+    }
+    if (!$inUploads || $hasBookkeeping) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Forbidden';
+        return true;
+    }
+}
+
 // Serve static files normally
 return false;

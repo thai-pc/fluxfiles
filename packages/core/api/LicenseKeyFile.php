@@ -26,6 +26,8 @@ namespace FluxFiles;
 final class LicenseKeyFile
 {
     public const MAX_BYTES = 16384;
+    /** File name of the default location, `<storage>/license/license-refresh.json`. */
+    public const FILE = 'license-refresh.json';
 
     /** @var array<string,array{key:string,source:string,fetched_at:?int}> per-process memo */
     private static array $memo = [];
@@ -49,7 +51,7 @@ final class LicenseKeyFile
             return $explicit;
         }
         $storage = rtrim((string) ($env['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage')), '/');
-        return $storage . '/license-refresh.json';
+        return $storage . '/license/' . self::FILE;
     }
 
     /** A message when FLUXFILES_LICENSE_FILE is set but relative (and therefore ignored), else null. */
@@ -168,7 +170,7 @@ final class LicenseKeyFile
      * 0600, except when the directory belongs to another group than this process (the CLI
      * runs as root or a deploy user, PHP-FPM as www-data): it then gets the directory's group
      * (when we may) and 0640, so the web user can read it. The lock file follows the same
-     * rule with 0660, since a locker has to open it for writing.
+     * rule with 0640 (it is only ever flock()ed; a locker that cannot open it for writing falls back to read-only).
      *
      * @return string 'written' | 'kept' (the file already held a key at least as good)
      * @throws \RuntimeException with a message that never contains the key
@@ -181,8 +183,21 @@ final class LicenseKeyFile
             throw new \RuntimeException('refusing to store a key that does not verify');
         }
         $dir = dirname($path);
-        if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
-            throw new \RuntimeException('licence file directory is not writable');
+        if (!is_dir($dir)) {
+            // A directory we create: 0750, or 0770 with the parent's group when the CLI runs as
+            // another group than PHP-FPM (then the web user can reach and, if it ever refreshes,
+            // write in it). Created up to the nearest existing ancestor.
+            $parent = $dir;
+            while (!is_dir($parent) && dirname($parent) !== $parent) {
+                $parent = dirname($parent);
+            }
+            $parentGid = self::sharedGid($parent);
+            if (!@mkdir($dir, 0750, true) && !is_dir($dir)) {
+                throw new \RuntimeException('licence file directory is not writable');
+            }
+            if ($parentGid !== null && @chgrp($dir, $parentGid)) {
+                @chmod($dir, 0770);
+            }
         }
         $dirGid = self::sharedGid($dir);
 
@@ -191,11 +206,20 @@ final class LicenseKeyFile
             $lockPath = $path . '.lock';
             $fresh = !file_exists($lockPath);
             $lock = @fopen($lockPath, 'c') ?: @fopen($lockPath, 'r');   // flock needs no write access
-            if ($lock === false || !flock($lock, LOCK_EX)) {
-                throw new \RuntimeException('could not lock the licence file (is the lock file owned by another user?)');
+            if ($lock === false) {
+                throw new \RuntimeException('could not open the licence lock file (is it owned by another user?)');
+            }
+            // Bounded wait (~30 s): a stuck holder or an NFS mount must not hang the CLI forever.
+            $locked = false;
+            for ($i = 0; $i < 300 && !($locked = flock($lock, LOCK_EX | LOCK_NB)); $i++) {
+                usleep(100000);
+            }
+            if (!$locked) {
+                fclose($lock);
+                throw new \RuntimeException('could not lock the licence file (another refresh is running?)');
             }
             if ($fresh && $dirGid !== null && @chgrp($lockPath, $dirGid)) {
-                @chmod($lockPath, 0660);
+                @chmod($lockPath, 0640);   // never written by a locker, so group-read is enough
             }
             $tmp = null;
             try {
@@ -238,7 +262,7 @@ final class LicenseKeyFile
                     throw new \RuntimeException('could not replace the licence file');
                 }
                 $tmp = null;
-                self::guardDir($dir);
+                self::guardDir($dir, basename($dir) === 'license' && basename($path) === self::FILE);
                 return 'written';
             } finally {
                 if (is_string($tmp)) {
@@ -274,19 +298,22 @@ final class LicenseKeyFile
 
     /**
      * Keep the directory closed to the web like FluxDirGuard does for `_fluxfiles/`: a deny-all
-     * .htaccess and an empty index.html, only when missing. Skipped for a directory that also
-     * holds public uploads (the default storage dir): a deny-all there would break them, and
-     * /storage/ is denied by router.php and nginx instead.
+     * .htaccess and an empty index.html, only when missing (never overwritten).
+     *
+     * $own = the default `<storage>/license/` directory FluxFiles created for this file: always
+     * guarded. For an operator-chosen FLUXFILES_LICENSE_FILE directory we write nothing when it
+     * looks like something else lives there (an index.php or index.html, or public uploads/).
+     * nginx ignores .htaccess; /storage/ is denied by router.php and docker/nginx.conf.
      */
-    private static function guardDir(string $dir): void
+    private static function guardDir(string $dir, bool $own): void
     {
-        if (is_dir($dir . '/uploads')) {
+        if (!$own && (is_dir($dir . '/uploads') || is_file($dir . '/index.php') || is_file($dir . '/index.html'))) {
             return;
         }
         if (!file_exists($dir . '/.htaccess')) {
             @file_put_contents($dir . '/.htaccess', FluxDirGuard::HTACCESS);
         }
-        if (!file_exists($dir . '/index.html')) {
+        if (!file_exists($dir . '/index.html') && ($own || !is_file($dir . '/index.php'))) {
             @file_put_contents($dir . '/index.html', '');
         }
     }
@@ -300,7 +327,15 @@ final class LicenseKeyFile
     {
         $f = @stat($path);
         $d = @stat(dirname($path));
-        if ($f === false || $d === false || $f['uid'] === $d['uid']) {
+        if ($f === false || $d === false) {
+            return null;
+        }
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0 && $f['uid'] === 0 && ($f['mode'] & 0044) === 0) {
+            return 'The licence file is owned by root and readable only by root, so PHP-FPM (the web user) will probably not be able to read it '
+                . 'and would ignore the refreshed key. Run the command as the web user (sudo -u www-data php vendor/bin/fluxfiles ...) or fix it: '
+                . 'chgrp <web group> ' . ($withPath ? $path : '<licence file>') . ' && chmod 0640 ' . ($withPath ? $path : '<licence file>');
+        }
+        if ($f['uid'] === $d['uid']) {
             return null;
         }
         if ($f['gid'] === $d['gid'] && ($f['mode'] & 0040) !== 0) {

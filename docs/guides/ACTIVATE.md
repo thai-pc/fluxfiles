@@ -207,7 +207,7 @@ pre-create the file 0640 with the FPM group. Cron and PHP-FPM must also see the 
 unreliable on some NFS mounts: keep the file on a local disk.
 
 The key you pasted stays in `FLUXFILES_LICENSE_KEY`. The new one is kept in a separate
-server-local file (`FLUXFILES_LICENSE_FILE`, default `<storage>/license-refresh.json`, mode 0600,
+server-local file (`FLUXFILES_LICENSE_FILE`, default `<storage>/license/license-refresh.json` in a directory FluxFiles creates (0750, deny-all `.htaccess`); the file is 0600, or 0640 with the storage directory's group when the CLI runs as another group than PHP-FPM,
 never web-served) that is used only while it was derived from that exact key and is newer.
 Paste a different key and the file steps aside until the next refresh; delete the file to
 revert. On a Composer or Laravel install the default path is inside `vendor/`, which `composer install`

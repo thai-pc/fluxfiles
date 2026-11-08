@@ -82,14 +82,14 @@ class LicenseManager implements LicenseCheckInterface
     /**
      * Test seam: trust these `kid => base64 public key` pairs instead of the embedded ones,
      * process-wide, until called again with null. Lets a test mint keys with a throwaway
-     * keypair. A no-op unless the CLI runs with FLUXFILES_TESTING defined, so web code can
-     * never swap the trust anchor.
+     * keypair. A no-op unless the CLI runs with FLUXFILES_TESTING defined (and never inside
+     * WordPress), so web code can never swap the trust anchor.
      *
      * @param array<string,string>|null $keys
      */
     public static function overridePublicKeys(?array $keys): void
     {
-        if (PHP_SAPI !== 'cli' || !defined('FLUXFILES_TESTING')) {
+        if (PHP_SAPI !== 'cli' || !defined('FLUXFILES_TESTING') || defined('ABSPATH')) {
             return;
         }
         self::$keyOverride = $keys;

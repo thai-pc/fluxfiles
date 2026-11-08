@@ -131,18 +131,20 @@ try {
     });
 
     test('case, encoding, dot and double-slash spellings of /storage/ are denied too', function () use ($BASE) {
-        file_put_contents(__DIR__ . '/../../storage/license-refresh.json', '{"secret":"licence overlay"}');
+        @mkdir(__DIR__ . '/../../storage/license', 0777, true);
+        file_put_contents(__DIR__ . '/../../storage/license/license-refresh.json', '{"secret":"licence overlay"}');
         try {
             foreach (['/Storage/rate_limit.json', '/STORAGE/rate_limit.json', '/storage//rate_limit.json', '/%73torage/rate_limit.json',
-                      '/./storage/rate_limit.json', '/Storage/license-refresh.json', '/%53torage/license-refresh.json', '/storage/license-refresh.json'] as $p) {
+                      '/./storage/rate_limit.json', '/Storage/license/license-refresh.json', '/%53torage/license/license-refresh.json', '/storage/license/license-refresh.json'] as $p) {
                 [$st, $body] = get("{$BASE}{$p}");
                 assertEqual(403, $st, $p);
                 assertTrue(strpos($body, 'secret') === false, "{$p} leaked");
             }
-            [$st] = get("{$BASE}/public/../storage/license-refresh.json");
+            [$st] = get("{$BASE}/public/../storage/license/license-refresh.json");
             assertEqual(403, $st, 'dot-dot refused');
         } finally {
-            @unlink(__DIR__ . '/../../storage/license-refresh.json');
+            @unlink(__DIR__ . '/../../storage/license/license-refresh.json');
+            @rmdir(__DIR__ . '/../../storage/license');
         }
     });
 
