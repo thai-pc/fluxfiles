@@ -37,6 +37,29 @@ the implementing agent.** It is self-contained, but read §2 and §5 before writ
 | F4 (ops email not loaded in prod) | **Confirmed.** The deploy bootstrap and L-secret allow-lists now include `FLUXFILES_OPS_EMAIL` and `FLUXFILES_RENEWAL_URL`. |
 | F1 (`/redeliver` mails manual keys) | **Fixed** on `feat/license-refresh-server`: `undelivered()` now requires `gateway != 'manual'`. |
 | New scope | Statistics and growth (§7) and alerts and operations (§8) are approved. Phasing is in §15. |
+| Two instances | One admin codebase serves **both** licence instances (production and sandbox), deployed **once per instance**, fully isolated. See §0.3. |
+
+### 0.3 Multi-instance (production + sandbox)
+
+Two licence-server instances run on the same host, and each gets its **own** admin UI and ops worker. The code is the same; only the config differs.
+
+| | Production | Sandbox |
+|---|---|---|
+| `FLUXFILES_LICENSE_INSTANCE` | unset (`production`) | `sandbox` |
+| Licence API loopback | `127.0.0.1:9471` | `127.0.0.1:9473` |
+| Admin UI loopback | `127.0.0.1:9472` | `127.0.0.1:9474` |
+| Unix users | `fluxfiles-license`, `-admin`, `-ops` | `fluxfiles-license-sbx`, `-sbx-admin`, `-sbx-ops` |
+| Admin accounts and TOTP | own `admin.sqlite` | own `admin.sqlite` (separate enrolment) |
+| UI and ops tokens | own | own. A token from one instance is **never** valid on the other. |
+| Telegram | `TAG=FluxFiles`, all alerts | **Off by default**. If enabled: `TAG=FluxFiles SANDBOX`, `crit` severity only, the same bot and chat |
+
+Rules:
+- **There is no cross-instance code path.** The UI talks only to its own instance's API URL (config). It never offers a switch between instances, never shows both in one page, and never copies a row from one to the other.
+- **The instance must be obvious.** When `instance != production`, every page shows a fixed, high-contrast banner ("SANDBOX: test data, keys do not unlock real modules"), the `<title>` is prefixed with `[SANDBOX]`, and the theme accent switches to an amber palette. The login page shows the banner too.
+- The sandbox's statistics (A1 revenue and others) are labelled "test" and never added into production numbers.
+- **Telegram:** a sandbox alert is always prefixed with its tag and is never sent without one. Production never sends sandbox alerts, and the reverse also holds.
+- **Deploy:** the parametrised `LIC_INSTANCE=sandbox` deploy scripts (users, ports, sockets, nginx zones with `-sbx`/`sbx` names) gain the admin and ops pieces. The PR lists the per-instance server changes for both instances.
+- **Tests:** the banner and title prefix render iff `FLUXFILES_LICENSE_INSTANCE` is set. An API token minted for one instance gets 401 from the other (separate token files). Two worker configs produce distinct tags.
 
 ---
 
