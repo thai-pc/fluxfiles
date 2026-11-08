@@ -43,12 +43,13 @@ $h->test('Password plus TOTP rotates session, stores hash only, rejects replay',
     Harness::eq(401,$post('/login',['username'=>'owner','password'=>$password,'code'=>Totp::code($secret,intdiv($now,30))])['code']);
 });
 $jti='';$key='';
-$h->test('All MVP pages render without key or inline code, hostile strings escaped throughout',function() use($h,$api,$get,&$jti,&$key):void {
+$h->test('All admin pages render without key or inline code, hostile strings escaped throughout',function() use($h,$api,$get,&$jti,&$key):void {
     $r=$h->call($api,'POST','/issue',['email'=>'victim@example.test','customer'=>'"><img src=x onerror=alert(1)>','plan'=>'pro','deliver'=>'manual','note'=>'</script><script>alert(1)</script>']);$jti=$r['body']['record']['jti'];
     $db=$h->db();$key=$db->query('SELECT license_key FROM licenses')->fetchColumn();
     $db->prepare('INSERT INTO install_pings VALUES(?,?,?,?,?,?,0,1,1,?,?)')->execute([gmdate('Y-m-d'),$jti,'"><img src=x onerror=alert(1)>','','javascript:</script><script>','<img src=x onerror=1>',time(),time()]);
     $db->prepare("INSERT INTO webhook_events(source,webhook_id,received_at,last_at,type,verify,outcome,http_status,error,product_id) VALUES('polar','hostile',?,?,?,'ok','error',500,?,?)")->execute([time(),time(),'</script><script>','"><img src=x onerror=alert(1)>','javascript:<img>']);
-    foreach (['/','/licences','/licences/'.$jti,'/events','/events/1','/audit','/system','/stats/revenue','/stats/installs','/stats/mail','/issue','/missing'] as $url) {
+    $h->call($api,'POST','/admin/advisories',['id'=>'FF-UI-1','component'=>'share','affected'=>'<2.0.0','fixed_in'=>'2.0.0','severity'=>'high','title'=>'UI test']);
+    foreach (['/customers','/customers/'.substr(hash('sha256','victim@example.test'),0,16),'/mail','/activity','/advisories','/notices','/notices/new?advisory=FF-UI-1','/export','/stats/customers','/stats/versions','/stats/downloads','/stats/growth','/stats/demo','/stats/anomalies','/','/licences','/licences/'.$jti,'/events','/events/1','/audit','/system','/stats/revenue','/stats/installs','/stats/mail','/issue','/missing'] as $url) {
         $out=$get($url);Harness::eq($url==='/missing'?404:200,$out['code'],$url);
         Harness::ok(!str_contains($out['raw'],$key),$url);Harness::ok(!preg_match(Mask::KEY,$out['raw']),$url);
         Harness::ok(!str_contains($out['raw'],'<img src=x'),$url);Harness::ok(!str_contains($out['raw'],'</script><script>'),$url);
@@ -61,6 +62,8 @@ $h->test('Issue needs a delivery choice; action GET is 405; fresh step-up requir
     Harness::eq(405,$get('/licences/'.$jti.'/reveal')['code']);Harness::eq(405,$get('/logout')['code']);
     $future=$now+650;$headers=['X-FluxFiles-Test-Time: '.$future,'Accept: application/json'];
     Harness::eq(403,$post('/licences/'.$jti.'/reveal',[],$headers)['code']);
+    Harness::eq(403,$get('/export/orders.csv',$headers)['code']);
+    foreach(['/system/backup','/advisories','/notices/send','/events/1/replay'] as $route){Harness::eq(403,$post($route,[],$headers)['code'],$route);}
     $r=$post('/licences/'.$jti.'/reveal',['code'=>Totp::code($secret,intdiv($future,30))],$headers);Harness::eq(200,$r['code']);Harness::ok(isset($r['body']['license_key']));
     Harness::ok(str_contains($r['headers'],'no-store'));
 });
@@ -94,5 +97,25 @@ $h->test('Sandbox banner and title on login and errors, own cookie namespace, pr
     $sbx=$h->start(dirname(__DIR__).'/admin/public/index.php',['FLUXFILES_LICENSE_INSTANCE'=>'sandbox','FLUXFILES_ADMIN_DB'=>$h->dir.'/sbx-admin.sqlite']+$env);
     foreach (['/login','/assets/admin.css'] as $route) { $r=$h->request($sbx,'GET',$route);Harness::eq(200,$r['code']);if($route==='/login') { Harness::ok(str_contains($r['raw'],'[SANDBOX]'));Harness::ok(str_contains($r['raw'],'class="sandbox-banner"'));Harness::ok(str_contains($r['headers'],'fxadm_sbx=')); } }
     Harness::ok(!str_contains($get('/login')['raw'],'[SANDBOX]'));
+});
+$h->test('Viewer HTTP session can read all screens but cannot obtain keys, export or submit writes',function()use($h,$api,$password):void {
+    $path=$h->dir.'/viewer.sqlite';$a=new Auth($path);$secret=Totp::secret();
+    $a->db->prepare('INSERT INTO users(name,pass_hash,totp_secret,created_at,role) VALUES(?,?,?,?,?)')->execute(['reader',password_hash($password,PASSWORD_BCRYPT),$secret,time(),'viewer']);
+    $ui=$h->start(dirname(__DIR__).'/admin/public/index.php',['PATH'=>(string)getenv('PATH'),'FLUXFILES_ADMIN_API'=>'http://127.0.0.1:'.$api,'FLUXFILES_ADMIN_UI_TOKEN'=>'ui-secret','FLUXFILES_ADMIN_DB'=>$path]);
+    $r=$h->request($ui,'GET','/login');preg_match('/Set-Cookie: (fxadm=[^;]+)/i',$r['headers'],$m);$cookie=$m[1];preg_match('/name="_csrf" value="([a-f0-9]+)"/',$r['raw'],$m);$csrf=$m[1];
+    $r=$h->request($ui,'POST','/login',['username'=>'reader','password'=>$password,'code'=>Totp::code($secret,intdiv(time(),30)),'_csrf'=>$csrf],['Cookie: '.$cookie,'Origin: http://127.0.0.1:'.$ui,'Content-Type: application/x-www-form-urlencoded'],true);Harness::eq(303,$r['code']);preg_match('/Set-Cookie: (fxadm=[^;]+)/i',$r['headers'],$m);$cookie=$m[1];
+    foreach(['/','/licences','/customers','/mail','/activity','/advisories','/notices','/system','/stats/customers','/stats/anomalies'] as $route){$r=$h->request($ui,'GET',$route,null,['Cookie: '.$cookie]);Harness::eq(200,$r['code'],$route);Harness::ok(!preg_match('~action="/(?:issue|system/backup|notices/send|mail/redeliver)"~',$r['raw']),$route);}
+    foreach(['/issue','/export','/export/orders.csv','/notices/new?advisory=FF-UI-1'] as $route){Harness::eq(403,$h->request($ui,'GET',$route,null,['Cookie: '.$cookie])['code'],$route);}
+    $r=$h->request($ui,'GET','/licences',null,['Cookie: '.$cookie]);preg_match('/name="_csrf" value="([a-f0-9]+)"/',$r['raw'],$m);$csrf=$m[1];
+    foreach(['/system/backup','/issue','/notices/send','/mail/redeliver'] as $route){Harness::eq(403,$h->request($ui,'POST',$route,['_csrf'=>$csrf],['Cookie: '.$cookie,'Origin: http://127.0.0.1:'.$ui,'Content-Type: application/x-www-form-urlencoded'],true)['code'],$route);}
+});
+$h->test('Optional Access gate protects pages and assets; valid assertion still requires local password/TOTP',function()use($h):void {
+    $rsa=openssl_pkey_new(['private_key_bits'=>2048,'private_key_type'=>OPENSSL_KEYTYPE_RSA]);$detail=openssl_pkey_get_details($rsa);$b64=static fn(string $x):string=>rtrim(strtr(base64_encode($x),'+/','-_'),'=');
+    $keys=['keys'=>[['kid'=>'fixture','kty'=>'RSA','n'=>$b64($detail['rsa']['n']),'e'=>$b64($detail['rsa']['e'])]]];file_put_contents($h->dir.'/jwks.json',json_encode($keys));
+    $issuer='https://fixture.cloudflareaccess.com';$data=$b64(json_encode(['alg'=>'RS256','kid'=>'fixture'])).'.'.$b64(json_encode(['iss'=>$issuer,'aud'=>['fixture-aud'],'iat'=>time()-1,'exp'=>time()+120]));openssl_sign($data,$sig,$rsa,OPENSSL_ALGO_SHA256);$token=$data.'.'.$b64($sig);
+    $ui=$h->start(dirname(__DIR__).'/admin/public/index.php',['PATH'=>(string)getenv('PATH'),'FLUXFILES_ADMIN_DB'=>$h->dir.'/access.sqlite','FLUXFILES_ADMIN_ACCESS_ENABLED'=>'1','FLUXFILES_ADMIN_ACCESS_HOST'=>'admin.example.test','FLUXFILES_ADMIN_ACCESS_ISSUER'=>$issuer,'FLUXFILES_ADMIN_ACCESS_AUD'=>'fixture-aud','FLUXFILES_ADMIN_ACCESS_JWKS_FILE'=>$h->dir.'/jwks.json']);
+    foreach(['/login','/assets/admin.js'] as $route){Harness::eq(403,$h->request($ui,'GET',$route,null,['Host: admin.example.test'])['code']);}
+    $headers=['Host: admin.example.test','Cf-Access-Jwt-Assertion: '.$token,'X-Forwarded-Proto: https'];$r=$h->request($ui,'GET','/login',null,$headers);Harness::eq(200,$r['code']);Harness::ok(str_contains($r['raw'],'name="password"'));Harness::ok(stripos($r['headers'],'; Secure')!==false);Harness::eq(303,$h->request($ui,'GET','/',null,$headers)['code']);
+    touch($h->dir.'/jwks.json',time()-90000);Harness::eq(403,$h->request($ui,'GET','/login',null,$headers)['code']);
 });
 $h->finish();

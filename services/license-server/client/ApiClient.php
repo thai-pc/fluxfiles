@@ -10,9 +10,20 @@ final class ApiClient
 {
     private string $base;
 
-    public function __construct(private string $token, private string $actor = '', ?string $base = null, private int $timeout = 30)
+    public function __construct(private string $token, private string $actor = '', ?string $base = null, private int $timeout = 30, private string $accessRole = 'admin')
     {
         $this->base = $base === null ? Config::api(): Config::loopback($base);
+    }
+
+    public function csv(string $path,array $query): string
+    {
+        if ($path !== '/admin/export/orders.csv') { throw new \InvalidArgumentException('invalid_input'); }
+        $ch = curl_init($this->base.$path.'?'.http_build_query($query));
+        curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>2,CURLOPT_TIMEOUT=>$this->timeout,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_PROXY=>'',CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$this->token,'X-FluxFiles-Actor: '.$this->actor,'X-FluxFiles-Role: '.$this->accessRole]]);
+        $raw = curl_exec($ch); $status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
+        if ($raw===false || $status===0) { throw new \RuntimeException('api_unreachable'); }
+        if ($status!==200 || !str_starts_with($raw,"\xEF\xBB\xBF")) { throw new \RuntimeException('invalid_input'); }
+        return $raw;
     }
 
     public function request(string $method, string $path, array $data = []): array
@@ -21,7 +32,7 @@ final class ApiClient
             throw new \InvalidArgumentException('invalid API path');
         }
         $ch = curl_init($this->base . $path . ($method === 'GET' && $data !== [] ? '?' . http_build_query($data): ''));
-        curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => $method, CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 2, CURLOPT_TIMEOUT => $this->timeout, CURLOPT_FOLLOWLOCATION => false, CURLOPT_PROXY => '', CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $this->token, 'Content-Type: application/json', 'X-FluxFiles-Actor: ' . $this->actor], CURLOPT_POSTFIELDS => $method === 'GET' ? null: json_encode($data)]);
+        curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => $method, CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 2, CURLOPT_TIMEOUT => $this->timeout, CURLOPT_FOLLOWLOCATION => false, CURLOPT_PROXY => '', CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $this->token, 'Content-Type: application/json', 'X-FluxFiles-Actor: ' . $this->actor, 'X-FluxFiles-Role: ' . $this->accessRole], CURLOPT_POSTFIELDS => $method === 'GET' ? null: json_encode($data)]);
         $raw = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);

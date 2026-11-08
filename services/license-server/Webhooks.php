@@ -48,6 +48,14 @@ final class Webhooks
     {
         $s = $this->store;
         $s->setActor($source);
+        if (str_starts_with((string) ($body['type'] ?? ''), 'subscription.')) {
+            try { $updated = $s->subscriptionEvent($body, substr($source, strpos($source, ':') + 1)); }
+            catch (\Throwable $e) {
+                error_log('subscription event needs operator replay');
+                return [200, ['subscription_updated'=>false,'needs_review'=>true], 'error'];
+            }
+            return [200, ['subscription_updated' => $updated], $updated ? 'sub_updated' : 'ignored'];
+        }
         $refunded = PolarWebhook::refundedOrderId($body);
         if ($refunded !== null) {
             $r = $s->findByOrder('polar', $refunded);
@@ -55,6 +63,7 @@ final class Webhooks
                 $s->setStatusCascade((string) $r['jti'], 'refunded');
                 $this->cascadeNotice($s, 'refunded licence ' . $r['jti']);
             }
+            try { $facts = PolarWebhook::orderFacts($body); if ($facts) { $s->refundSubscriptionItem($facts + ['jti' => $r['jti'] ?? null]); } } catch (\Throwable $e) { error_log('refund item recording failed'); }
             $this->alert('order.refund', 'warn', 'refund:' . $refunded, 'Order refunded · ' . Mask::id($refunded));
             return [200, ['refunded' => $r !== null], 'refunded'];
         }
@@ -119,6 +128,7 @@ final class Webhooks
                 // Do not let delayed retries overwrite a bounce/complaint with an older delivery.
                 $db->prepare("UPDATE mail_log SET status=?,status_at=? WHERE provider_id=? AND (status_at IS NULL OR status_at<=?) AND (status NOT IN ('bounced','complained') OR ? IN ('bounced','complained'))")->execute([$status, $at, $pid, $at, $status]);
                 if ($status === 'bounced' && $row['kind'] === 'licence') {
+                    $this->store->opsItem('mail_failed', 'Licence email bounced · '.$row['recipient'], $row['jti']);
                     $this->alert('mail.bounced', 'warn', 'bounce:' . $pid, 'Licence email bounced · ' . $row['recipient']);
                 }
             }
@@ -131,6 +141,11 @@ final class Webhooks
     {
         try {
             $this->store->recordEvent($source, $id, $verify, $body, $raw, $outcome, $http, $jti);
+            if ($verify === 'ok') {
+                $q = $this->store->pdo()->prepare('SELECT id,order_id FROM webhook_events WHERE source=? AND webhook_id=?'); $q->execute([$source,$id]); $event = $q->fetch();
+                if ($event && in_array($outcome, ['unmapped_product','renewal_unmatched','mail_failed','error'], true)) { $this->store->opsItem($outcome, 'Webhook: '.$outcome, $jti, $event['order_id'], (int) $event['id']); }
+                elseif ($event) { $this->store->resolveEventItems((int) $event['id']); }
+            }
         } catch (\Throwable $e) {
             error_log('webhook event recording failed');
         }
@@ -173,6 +188,8 @@ final class Webhooks
         if ($store->lastCascade() === []) {
             return;
         }
+        try { foreach ($store->lastCascade() as $row) { $store->opsItem('cascade', 'Paid renewal cancelled by cascade · '.Mask::id($row['jti']), $row['jti']); } }
+        catch (\Throwable $e) { error_log('cascade item recording failed'); }
         $lines = [];
         foreach ($store->lastCascade() as $r) {
             $lines[] = $r['jti'] . ' ' . $r['plan'] . ' ' . Mask::email($r['email']);

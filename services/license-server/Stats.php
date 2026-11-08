@@ -160,7 +160,18 @@ final class Stats
         $historical = array_values($points);
         usort($historical, static fn(array $x, array $y): int => [$x['month'], $x['currency']]<=>[$y['month'], $y['currency']]);
         usort($series, static fn(array $x, array $y): int => [$x['month'], $x['currency'], $x['plan']]<=>[$y['month'], $y['currency'], $y['plan']]);
-        return ['currencies' => array_values($by), 'series' => array_values($series), 'mrr_series' => $historical, 'plans' => array_values($plans), 'discounts' => array_values($discounts), 'refunds' => $refunds, 'founding' => $this->founding(), 'estimate' => true];
+        $monthlyRefunds=[];
+        foreach ($series as $point) {
+            $key=$point['currency'].':'.$point['month'];
+            $monthlyRefunds[$key]??=['currency'=>$point['currency'],'month'=>$point['month'],'net'=>0,'refund_net'=>0,'count'=>0];
+            $monthlyRefunds[$key]['net']+=$point['net'];$monthlyRefunds[$key]['refund_net']+=$point['refund_net'];
+        }
+        foreach ($refunds as $refund) {
+            $month=(new \DateTimeImmutable('@'.(int)$refund['refunded_at']))->setTimezone($this->tz())->format('Y-m');
+            $key=$refund['currency'].':'.$month;if (isset($monthlyRefunds[$key])) { $monthlyRefunds[$key]['count']++; }
+        }
+        foreach ($monthlyRefunds as &$point) { $point['refund_rate']=$point['net']>0?round($point['refund_net']/$point['net']*100,2):null; }unset($point);
+        return ['currencies' => array_values($by), 'series' => array_values($series), 'mrr_series' => $historical, 'plans' => array_values($plans), 'discounts' => array_values($discounts), 'refunds' => $refunds, 'refunds_monthly' => array_values($monthlyRefunds), 'founding' => $this->founding(), 'estimate' => true, 'past_due' => $this->rows("SELECT subscription_id,current_period_end FROM subscriptions WHERE status='past_due'")];
     }
 
     private function mrrAt(int $asOf, array $q): array
@@ -178,6 +189,8 @@ final class Stats
             if ($rows === []) {
                 continue;
             }
+            $subscription = $this->rows('SELECT status,cancel_at_period_end,revoked_at FROM subscriptions WHERE subscription_id=?', [$l['subscription_id']])[0] ?? null;
+            if ($subscription && $asOf >= time()-60 && ($subscription['cancel_at_period_end'] || $subscription['status'] !== 'active')) { continue; }
             $o = $rows[0];
             $c = $o['currency'];
             if (($q['currency'] ?? '') !== '' && strtolower((string) $q['currency']) !== $c) {
@@ -247,10 +260,18 @@ final class Stats
         return ['periods' => $out, 'bounces' => $this->rows("SELECT at,kind,jti,recipient,status FROM mail_log WHERE status IN ('bounced','complained') ORDER BY id DESC LIMIT 50"), 'webhook_enabled' => Config::secret('FLUXFILES_RESEND_WEBHOOK_SECRET') !== ''];
     }
 
+    private function attentionTotal(): int
+    {
+        $sql="SELECT (SELECT COUNT(*) FROM ops_items WHERE resolved_at IS NULL)
+          +(SELECT COUNT(*) FROM webhook_events w WHERE w.resolved_at IS NULL AND (w.http_status>=400 OR w.outcome IN ('renewal_unmatched','mail_failed','error')) AND NOT EXISTS(SELECT 1 FROM ops_items i WHERE i.ref_event=w.id AND i.resolved_at IS NULL))
+          +(SELECT COUNT(*) FROM licenses l WHERE l.gateway!='manual' AND l.mailed_at IS NULL AND l.status='active' AND l.is_test=0 AND l.archived_at IS NULL AND NOT EXISTS(SELECT 1 FROM ops_items i WHERE i.ref_jti=l.jti AND i.kind='mail_failed' AND i.resolved_at IS NULL))";
+        return (int)$this->db->query($sql)->fetchColumn();
+    }
+
     public function dashboard(): array
     {
         $now = time();
         $needs = $this->rows("SELECT id,type,outcome,product_id,attempts FROM webhook_events WHERE resolved_at IS NULL AND (http_status>=400 OR outcome IN ('renewal_unmatched','mail_failed','error')) ORDER BY id DESC LIMIT 20");
-        return ['revenue' => $this->revenue(), 'installs' => $this->installs(), 'mail' => $this->mail(), 'needs_attention' => $needs, 'undelivered_rows' => $this->rows("SELECT jti,email,plan,created_at FROM licenses WHERE gateway!='manual' AND mailed_at IS NULL AND status='active' AND is_test=0 AND archived_at IS NULL ORDER BY id LIMIT 20"), 'needs_attention_total' => (int) $this->rows("SELECT COUNT(*) n FROM webhook_events WHERE resolved_at IS NULL AND (http_status>=400 OR outcome IN ('renewal_unmatched','mail_failed','error'))")[0]['n'], 'undelivered' => (int) $this->rows("SELECT COUNT(*) n FROM licenses WHERE gateway!='manual' AND mailed_at IS NULL AND status='active' AND is_test=0 AND archived_at IS NULL")[0]['n'], 'plans' => $this->rows("SELECT plan,COUNT(*) n FROM licenses WHERE status='active' AND is_test=0 AND archived_at IS NULL GROUP BY plan"), 'new_7d' => $this->rows('SELECT billing_reason,COUNT(*) n FROM orders o WHERE ' . $this->orderFilter() . ' AND paid_at>=? GROUP BY billing_reason', [$now - 7 * 86400]), 'expiring' => $this->rows("SELECT enforcement,COUNT(*) n FROM licenses WHERE status='active' AND is_test=0 AND archived_at IS NULL AND expires>=? AND expires<=? GROUP BY enforcement", [$now, $now + 30 * 86400]), 'webhook_errors_7d' => (int) $this->rows('SELECT COUNT(*) n FROM webhook_events WHERE received_at>=? AND http_status>=400', [$now - 7 * 86400])[0]['n'], 'telegram' => $this->rows("SELECT MAX(sent_at) last_sent,SUM(sent_at IS NULL AND dropped_at IS NULL) queue_depth FROM ops_outbox WHERE channel='telegram'")[0], 'instance' => Config::get('FLUXFILES_LICENSE_INSTANCE', 'production')];
+        return ['revenue' => $this->revenue(), 'installs' => $this->installs(), 'mail' => $this->mail(), 'ops_items' => $this->rows('SELECT * FROM ops_items WHERE resolved_at IS NULL ORDER BY at DESC,id DESC LIMIT 20'), 'past_due' => $this->rows("SELECT subscription_id,current_period_end FROM subscriptions WHERE status='past_due'"), 'attention_total' => $this->attentionTotal(), 'needs_attention' => $needs, 'undelivered_rows' => $this->rows("SELECT jti,email,plan,created_at FROM licenses WHERE gateway!='manual' AND mailed_at IS NULL AND status='active' AND is_test=0 AND archived_at IS NULL ORDER BY id LIMIT 20"), 'needs_attention_total' => (int) $this->rows("SELECT COUNT(*) n FROM webhook_events WHERE resolved_at IS NULL AND (http_status>=400 OR outcome IN ('renewal_unmatched','mail_failed','error'))")[0]['n'], 'undelivered' => (int) $this->rows("SELECT COUNT(*) n FROM licenses WHERE gateway!='manual' AND mailed_at IS NULL AND status='active' AND is_test=0 AND archived_at IS NULL")[0]['n'], 'plans' => $this->rows("SELECT plan,COUNT(*) n FROM licenses WHERE status='active' AND is_test=0 AND archived_at IS NULL GROUP BY plan"), 'new_7d' => $this->rows('SELECT billing_reason,COUNT(*) n FROM orders o WHERE ' . $this->orderFilter() . ' AND paid_at>=? GROUP BY billing_reason', [$now - 7 * 86400]), 'expiring' => $this->rows("SELECT enforcement,COUNT(*) n FROM licenses WHERE status='active' AND is_test=0 AND archived_at IS NULL AND expires>=? AND expires<=? GROUP BY enforcement", [$now, $now + 30 * 86400]), 'webhook_errors_7d' => (int) $this->rows('SELECT COUNT(*) n FROM webhook_events WHERE received_at>=? AND http_status>=400', [$now - 7 * 86400])[0]['n'], 'telegram' => $this->rows("SELECT MAX(sent_at) last_sent,SUM(sent_at IS NULL AND dropped_at IS NULL) queue_depth FROM ops_outbox WHERE channel='telegram'")[0], 'instance' => Config::get('FLUXFILES_LICENSE_INSTANCE', 'production')];
     }
 }

@@ -30,6 +30,9 @@ final class LicenseMailer
     private ?\Closure $onResult;
     private string $kind = 'licence';
     private ?string $providerId = null;
+    private int $timeout = 15;
+    private string $idempotencyKey = '';
+    private float $deadline = 0;
 
     private const SITE = 'https://fluxfiles.thai-pc.com';
 
@@ -43,6 +46,19 @@ final class LicenseMailer
         $this->transport = $transport !== '' ? $transport : (string) (getenv('FLUXFILES_MAIL_TRANSPORT') ?: 'log');
         $this->from = $from !== '' ? $from : (string) (getenv('FLUXFILES_MAIL_FROM') ?: 'licenses@localhost');
         $this->fromName = $fromName !== '' ? $fromName : (string) (getenv('FLUXFILES_MAIL_FROM_NAME') ?: 'FluxFiles');
+    }
+
+    public function setTimeout(int $seconds): void { $this->timeout = max(1,min(30,$seconds)); }
+    public function setIdempotencyKey(string $value): void
+    {
+        if (!preg_match('/^[A-Za-z0-9_-]{1,100}$/D',$value)) { throw new \InvalidArgumentException('invalid_input'); }
+        $this->idempotencyKey=$value;
+    }
+    public function sendStructured(string $kind,string $to,string $subject,string $body): bool
+    {
+        if (!in_array($kind,['notice','report'],true) || !filter_var($to,FILTER_VALIDATE_EMAIL) || strpbrk($subject,"\r\n")!==false) { return false; }
+        $this->kind=$kind;
+        return $this->deliverContent($to,$subject,['heading'=>$subject,'intro'=>preg_split('/\n\n|\n/',$body)?:[$body]],'structured mail failed for ');
     }
 
     /**
@@ -114,6 +130,7 @@ final class LicenseMailer
         }
         $ops = (string) (getenv('FLUXFILES_OPS_EMAIL') ?: '');
         if ($ops !== '' && filter_var($ops, FILTER_VALIDATE_EMAIL)) {
+            $this->kind = 'ops';
             $this->deliver($ops, "Unmatched renewal: {$plan} ({$orderId})",
                 "Order {$orderId} ({$plan}) by {$email} matched no active Lifetime licence.\n"
                 . "Fix: POST /issue {\"plan\":\"{$plan}\",\"email\":\"<the LIFETIME purchase email>\"}, or refund in Polar.");
@@ -165,7 +182,7 @@ final class LicenseMailer
 
     private function deliver(string $to, string $subject, string $body, ?string $html = null, string $failPrefix = 'license mail failed for '): bool
     {
-        $ok = false; $error = null; $this->providerId = null;
+        $ok = false; $error = null; $this->providerId = null; $this->deadline = microtime(true) + $this->timeout;
         try {
             if (!$this->recipientAllowed($to)) {
                 error_log('mail suppressed by FLUXFILES_MAIL_ALLOW_TO (to=' . self::maskEmail($to) . ')');
@@ -718,23 +735,13 @@ final class LicenseMailer
 
     private function sendLog(string $to, string $subject, string $body): bool
     {
-        // Server logs are read by more people and kept longer than a mailbox: show
-        // the message, but not the working key in it — unless the operator asks
-        // (FLUXFILES_MAIL_LOG_FULL=1, e.g. while testing a setup).
-        if (PHP_SAPI !== 'cli' || $this->onResult !== null || getenv('FLUXFILES_MAIL_LOG_FULL') !== '1') {
-            $body = (string) preg_replace_callback(
-                '/[A-Za-z0-9_-]{16,}(?:\.[A-Za-z0-9_+\/=-]{16,})+/',
-                static fn (array $m): string => substr($m[0], 0, 12) . '…[redacted]',
-                $body
-            );
-        }
-        if (PHP_SAPI !== 'cli' || $this->onResult !== null) {
-            $to = self::maskEmail($to);
-            if (class_exists(\FluxFiles\LicenseServer\Client\Mask::class, false)) {
-                $subject = \FluxFiles\LicenseServer\Client\Mask::clean($subject);
-                $body = \FluxFiles\LicenseServer\Client\Mask::clean($body);
-            }
-        }
+        // A diagnostic transport is still a log: no opt-in can expose a working key.
+        $redact = static function (string $value): string {
+            $value = (string) preg_replace_callback('/[A-Za-z0-9_-]{16,}(?:\.[A-Za-z0-9_+\/=-]{16,})+/', static fn(array $m):string=>substr($m[0],0,12).'…[redacted]', $value);
+            if (class_exists(\FluxFiles\LicenseServer\Client\Mask::class,false)) { return \FluxFiles\LicenseServer\Client\Mask::clean($value); }
+            return (string) preg_replace_callback('/[A-Z0-9.!#$%&\x27+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i',static fn(array $m):string=>self::maskEmail($m[0]),$value);
+        };
+        $to = self::maskEmail($to); $subject=$redact($subject); $body=$redact($body);
         error_log("license mail [log transport] to={$to} subject={$subject}\n{$body}");
         return true;
     }
@@ -787,11 +794,12 @@ final class LicenseMailer
             CURLOPT_POST => true,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT => 15,
+            CURLOPT_CONNECTTIMEOUT => min(2,$this->timeout),
+            CURLOPT_TIMEOUT => $this->timeout,
             CURLOPT_HTTPHEADER => [
                 'Authorization: Bearer ' . $apiKey,
                 'Content-Type: application/json',
+                'Idempotency-Key: ' . ($this->idempotencyKey !== '' ? $this->idempotencyKey : bin2hex(random_bytes(16))),
             ],
             CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_SLASHES),
         ]);
@@ -828,15 +836,19 @@ final class LicenseMailer
         }
 
         $target = ($tls === 'ssl' ? 'ssl://' : '') . $host . ':' . $port;
-        $fp = @stream_socket_client($target, $errno, $errstr, 15);
+        $fp = @stream_socket_client($target, $errno, $errstr, $this->timeout);
         if ($fp === false) {
             throw new \RuntimeException("connect {$target}: {$errstr}");
         }
-        stream_set_timeout($fp, 15);
-
-        $read = static function () use ($fp): string {
+        stream_set_timeout($fp, $this->timeout);
+        $deadline = $this->deadline;
+        $read = static function () use ($fp, $deadline): string {
             $out = '';
-            while (($line = fgets($fp, 515)) !== false) {
+            while (true) {
+                $remaining = $deadline - microtime(true);
+                if ($remaining <= 0 || strlen($out)>65536) { throw new \RuntimeException("mail timeout"); }
+                stream_set_timeout($fp, max(0,(int)floor($remaining)), max(1,(int)(($remaining-floor($remaining))*1000000)));
+                $line=fgets($fp,515);if ($line===false) { break; }
                 $out .= $line;
                 // A multi-line reply keeps a '-' in the 4th column until the last line.
                 if (strlen($line) < 4 || $line[3] !== '-') { break; }

@@ -51,6 +51,13 @@ final class MachineAuth
         return $role === 'ui' && preg_match('/^ui:[A-Za-z0-9_.-]{1,64}$/D', $actor) ? $actor: ($role === 'ui'?'ui:unknown': ($role === 'ops'?'ops': 'cli'));
     }
 
+    public static function viewerDenied(string $role,string $method,string $path,array $server): bool
+    {
+        if ($role!=='ui' || ($server['HTTP_X_FLUXFILES_ROLE']??'')!=='viewer') { return false; }
+        if ($method==='POST' && $path==='/admin/audit') { return false; }
+        return $method!=='GET' || !str_starts_with($path,'/admin/') || str_starts_with($path,'/admin/ops/') || str_starts_with($path,'/admin/export/');
+    }
+
     public static function poolAllows(string $path): bool
     {
         $role = Config::get('FLUXFILES_LICENSE_ROLE', 'all');

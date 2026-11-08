@@ -8,6 +8,8 @@ use PDO;
 
 require_once __DIR__ . '/AdminSchema.php';
 require_once __DIR__ . '/AdminStore.php';
+require_once __DIR__ . '/PhaseSchema.php';
+require_once __DIR__ . '/OperationsStore.php';
 
 /**
  * The vendor customer/license DB (SQLite). This is the stateful back-office — kept
@@ -16,6 +18,7 @@ require_once __DIR__ . '/AdminStore.php';
 final class LicenseStore
 {
     use AdminStore;
+    use OperationsStore;
 
     private PDO $db;
     private string $actor = 'system';
@@ -137,6 +140,7 @@ final class LicenseStore
             error_log('license store: duplicate (gateway, order_id) rows exist; uniq_order not created — ' . $e->getMessage());
         }
         AdminSchema::migrate($this->db);
+        PhaseSchema::migrate($this->db);
     }
 
     /** ADD COLUMN that survives a concurrent first request adding it at the same moment. */
@@ -157,6 +161,10 @@ final class LicenseStore
     {
         $s = $this->db->prepare('UPDATE licenses SET mailed_at = ? WHERE jti = ?');
         $s->execute([$at ?? time(), $jti]);
+        if ($s->rowCount() > 0) {
+            try { $this->resolveOps('mail_failed', $jti); }
+            catch (\Throwable $e) { error_log('mail item resolution failed'); }
+        }
         return $s->rowCount() > 0;
     }
 
@@ -398,6 +406,7 @@ final class LicenseStore
             $graceDays = ($row['grace_days'] ?? null) !== null ? (int) $row['grace_days'] : 14;
             $stage = $row['reminder_stage'] ?? null;
 
+            if ($now <= $expires && $this->reminderSuppressed($row)) { continue; }
             if ($now <= $expires) {
                 // Still before expiry: find the most urgent configured threshold the
                 // remaining days have crossed, and only report it if that's more

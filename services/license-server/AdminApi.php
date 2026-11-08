@@ -10,10 +10,12 @@ use FluxFiles\LicenseServer\Client\Mask;
 
 require_once __DIR__ . '/Stats.php';
 require_once __DIR__ . '/LicenseMailer.php';
+require_once __DIR__ . '/AdminExtensions.php';
+require_once __DIR__ . '/SystemChecks.php';
 
 final class AdminApi
 {
-    public function __construct(private LicenseStore $store, private string $role)
+    public function __construct(private LicenseStore $store, private string $role, private ?\Closure $issuer = null)
     {
     }
 
@@ -29,7 +31,8 @@ final class AdminApi
         try {
             return $this->dispatch($method, $path, $b, $q);
         } catch (\InvalidArgumentException $e) {
-            return [400, ['error' => in_array($e->getMessage(), ['archive_not_allowed', 'invalid_status'], true)?$e->getMessage(): 'invalid_input']];
+            $error=in_array($e->getMessage(),['archive_not_allowed','invalid_status','not_found','preview_changed','replay_unavailable','feature_disabled','export_too_large'],true)?$e->getMessage():'invalid_input';
+            return [['not_found'=>404,'preview_changed'=>409,'replay_unavailable'=>409,'feature_disabled'=>409][$error]??400,['error'=>$error]];
         }
     }
 
@@ -41,8 +44,10 @@ final class AdminApi
         if (str_starts_with($path, '/admin/ops/')) {
             return $this->ops($method, $path, $b, $q);
         }
+        $extended = (new AdminExtensions($s, $this->role, $this->issuer))->handle($method, $path, $b, $q);
+        if ($extended !== null) { return $extended; }
         if ($method === 'GET' && $path === '/admin/meta') {
-            return [200, ['plans' => Plans::all(), 'plan_map' => json_decode(Config::get('FLUXFILES_POLAR_PLAN_MAP', '{}'), true), 'statuses' => ['active', 'superseded', 'revoked', 'refunded'], 'tracked_discounts' => $stats->founding()]];
+            return [200, ['plans' => Plans::all(), 'plan_map' => json_decode(Config::get('FLUXFILES_POLAR_PLAN_MAP', '{}'), true), 'statuses' => ['active', 'superseded', 'revoked', 'refunded'], 'tracked_discounts' => $stats->founding(), 'capabilities' => ['polar_cancel' => Config::get('FLUXFILES_ADMIN_POLAR_ACTIONS') === '1']]];
         }
         if ($method === 'GET' && $path === '/admin/licences') {
             return [200, $s->searchLicences($q)];
@@ -51,10 +56,7 @@ final class AdminApi
             return [200, $stats->dashboard() + ['backup' => $s->backupStatus(), 'heartbeat' => $s->state('heartbeat')]];
         }
         if ($method === 'GET' && preg_match('~^/admin/stats/(revenue|installs|mail)$~D', $path, $m)) {
-            return [200, $stats-> {
-                $m[1]
-            }
-            ($q)];
+            return [200, $stats->{$m[1]}($q)];
         }
         if ($method === 'POST' && $path === '/admin/lookup-key') {
             if (!is_string($b['license_key'] ?? null)) {
@@ -159,6 +161,7 @@ final class AdminApi
             if ($method === 'POST' && ($m[2] ?? '') === 'resolve') {
                 $s->transaction(function() use($db, $s, $id): void {
                     $db->prepare('UPDATE webhook_events SET body=NULL,body_expires_at=NULL,resolved_at=?,resolved_by=? WHERE id=?')->execute([time(), MachineAuth::actor($this->role, $_SERVER), $id]);
+                    $s->resolveEventItems($id);
                     $s->audit('webhook.resolve', (string) $id);
                 });
                 return [200, ['ok' => true]];
@@ -229,9 +232,25 @@ final class AdminApi
                 $mapped[] = ['product' => $product, 'plan' => $plan, 'ok' => Plans::get((string) $plan) !== null];
             }
             $queue = $this->rows("SELECT MAX(sent_at) last_sent,SUM(sent_at IS NULL AND dropped_at IS NULL) queue_depth FROM ops_outbox")[0];
-            return [200, ['tokens' => $presence, 'tokens_distinct' => true, 'polar_webhook' => Config::secret('FLUXFILES_POLAR_WEBHOOK_SECRET') !== '', 'resend_webhook' => Config::secret('FLUXFILES_RESEND_WEBHOOK_SECRET') !== '', 'mail_tls' => $this->mailTls(), 'mail_transport' => Config::get('FLUXFILES_MAIL_TRANSPORT', 'log'), 'mail_from' => Mask::email(Config::get('FLUXFILES_MAIL_FROM', 'licenses@localhost')), 'plan_map' => $mapped, 'unmapped_products' => $this->rows("SELECT DISTINCT product_id FROM webhook_events WHERE outcome='unmapped_product' AND resolved_at IS NULL"), 'db' => ['rows' => $counts, 'version' => (int) $db->query('PRAGMA user_version')->fetchColumn(), 'bytes' => (int) $db->query('PRAGMA page_count')->fetchColumn() * (int) $db->query('PRAGMA page_size')->fetchColumn(), 'journal' => $db->query('PRAGMA journal_mode')->fetchColumn()], 'telegram' => $queue + ['last_error' => $this->rows('SELECT last_error FROM ops_outbox WHERE last_error IS NOT NULL ORDER BY id DESC LIMIT 1')[0]['last_error'] ?? null], 'heartbeat' => $s->state('heartbeat'), 'backup' => $s->backupStatus()]];
+            $health = (new Analytics($s))->health();
+            return [200, ['site_checks' => SystemChecks::sites(), 'health' => $health, 'signing' => $this->signingStatus(), 'build' => $this->build(), 'tokens' => $presence, 'tokens_distinct' => true, 'polar_webhook' => Config::secret('FLUXFILES_POLAR_WEBHOOK_SECRET') !== '', 'resend_webhook' => Config::secret('FLUXFILES_RESEND_WEBHOOK_SECRET') !== '', 'mail_tls' => $this->mailTls(), 'mail_transport' => Config::get('FLUXFILES_MAIL_TRANSPORT', 'log'), 'mail_from' => Mask::email(Config::get('FLUXFILES_MAIL_FROM', 'licenses@localhost')), 'plan_map' => $mapped, 'unmapped_products' => $this->rows("SELECT DISTINCT product_id FROM webhook_events WHERE outcome='unmapped_product' AND resolved_at IS NULL"), 'db' => ['rows' => $counts, 'version' => (int) $db->query('PRAGMA user_version')->fetchColumn(), 'bytes' => (int) $db->query('PRAGMA page_count')->fetchColumn() * (int) $db->query('PRAGMA page_size')->fetchColumn(), 'journal' => $db->query('PRAGMA journal_mode')->fetchColumn()], 'telegram' => $queue + ['last_error' => $this->rows('SELECT last_error FROM ops_outbox WHERE last_error IS NOT NULL ORDER BY id DESC LIMIT 1')[0]['last_error'] ?? null], 'heartbeat' => $s->state('heartbeat'), 'backup' => $s->backupStatus()]];
         }
         return [404, ['error' => 'not_found']];
+    }
+
+    private function signingStatus(): array
+    {
+        $expected = Config::get('FLUXFILES_LICENSE_K1_PUB');
+        try {
+            $public = (new LicenseSigner())->publicKey();
+            return ['configured' => true, 'fingerprint' => substr(hash('sha256',base64_decode($public,true)),0,10), 'expected_configured' => $expected !== '', 'matches' => $expected !== '' && hash_equals($public,trim($expected))];
+        } catch (\Throwable $e) { return ['configured' => false, 'expected_configured' => $expected !== '', 'matches' => false]; }
+    }
+
+    private function build(): ?string
+    {
+        $source = is_file(__DIR__.'/SOURCE') ? trim((string)file_get_contents(__DIR__.'/SOURCE',false,null,0,200)) : '';
+        return preg_match('/^[A-Za-z0-9_. -]{1,100}$/D',$source) ? $source : null;
     }
 
     private function mailTls(): ?bool
@@ -267,6 +286,12 @@ final class AdminApi
         }
         $s = $this->store;
         $db = $s->pdo();
+        if ($method === 'POST' && $path === '/admin/ops/ingest') {
+            if (!is_string($b['type'] ?? null) || !is_string($b['day'] ?? null) || !is_array($b['rows'] ?? null)) { throw new \InvalidArgumentException(); }
+            $s->ingest($b['type'], $b['day'], $b['rows']); return [200, ['ok' => true]];
+        }
+        if ($method === 'POST' && $path === '/admin/ops/report/weekly') { return [200, (new Communications($s, 'ops'))->weekly((string)($b['week'] ?? ''))]; }
+        if ($method === 'POST' && $path === '/admin/ops/mail-jobs') { return [200, (new Communications($s, 'ops'))->jobs((int)($b['limit'] ?? 10))]; }
         if ($method === 'POST' && $path === '/admin/ops/outbox/claim') {
             if (($b['channel'] ?? 'telegram') !== 'telegram') {
                 throw new \InvalidArgumentException();
@@ -290,7 +315,7 @@ final class AdminApi
                 throw new \InvalidArgumentException();
             }
             foreach ($results as $r) {
-                if (!is_array($r) || !preg_match('/^[a-zA-Z0-9_.-]{1,64}$/D', (string) ($r['target'] ?? '')) || !is_bool($r['ok'] ?? null)) {
+                if (!is_array($r) || !preg_match('/^[a-zA-Z0-9_.:-]{1,64}$/D', (string) ($r['target'] ?? '')) || !is_bool($r['ok'] ?? null)) {
                     throw new \InvalidArgumentException();
                 }
                 Mask::safe((string) ($r['detail'] ?? ''), true);
@@ -299,6 +324,7 @@ final class AdminApi
             $s->state('heartbeat', ['at' => time(), 'telegram' => ($b['telegram'] ?? false) === true, 'fingerprint' => preg_match('/^[a-f0-9]{10}$/D', (string) ($b['fingerprint'] ?? ''))?$b['fingerprint']: null]);
             if (($s->state('pruned')['day'] ?? '') !== gmdate('Y-m-d')) {
                 $s->prune();
+                $s->sweepOpsItems();
                 $s->state('pruned', ['day' => gmdate('Y-m-d')]);
             }
             return [200, ['ok' => true]];

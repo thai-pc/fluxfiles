@@ -58,7 +58,7 @@ test('prefix is applied to licence, support, reminder, grace, unmatched-renewal 
 });
 test('prefix: CR/LF and control chars stripped (no header injection), capped at 32 chars', function () use ($m) {
     $l = logged(['FLUXFILES_MAIL_SUBJECT_PREFIX' => "[X]\r\nBcc: evil@example.test\x00\x07"], fn () => $m->sendLicense(rec('a@example.test')));
-    ok(str_contains($l, 'subject=[X]Bcc: evil@example.test Your FluxFiles licence key'), $l);
+    ok(str_contains($l, 'subject=[X]Bcc: e***@example.test Your FluxFiles licence key'), $l);
     ok(!str_contains($l, "\r") && !preg_match('/subject=[^\n]*\x00/', $l));
     $l = logged(['FLUXFILES_MAIL_SUBJECT_PREFIX' => str_repeat('A', 100)], fn () => $m->sendLicense(rec('a@example.test')));
     ok(str_contains($l, 'subject=' . str_repeat('A', 32) . ' Your'), $l);

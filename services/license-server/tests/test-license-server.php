@@ -196,15 +196,16 @@ function captureMail(callable $fn): string {
 
 test('mail: the key and the activation line reach the body', function () use ($secretB64) {
     $rec = issuer($secretB64)->issue(['email'=>'buyer@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'MAIL-1'])['record'];
-    putenv('FLUXFILES_MAIL_LOG_FULL=1');   // the log transport shows the key only when asked
-    try {
-        $out = captureMail(fn () => assertTrue((new LicenseMailer('log'))->sendLicense($rec), 'send reports success'));
-    } finally {
-        putenv('FLUXFILES_MAIL_LOG_FULL');
-    }
-    assertTrue(str_contains($out, (string) $rec['license_key']), 'the key itself is in the mail');
-    assertTrue(str_contains($out, 'FLUXFILES_LICENSE_KEY='), 'tells them how to activate it');
-    assertTrue(str_contains($out, 'buyer@acme.com'), 'addressed to the buyer');
+    $mailer = new LicenseMailer('log');
+    $method = new ReflectionMethod($mailer, 'renderBody'); $method->setAccessible(true);
+    $body = $method->invoke($mailer, $rec);
+    assertTrue(str_contains($body, (string) $rec['license_key']), 'rendered mail contains the key');
+    assertTrue(str_contains($body, 'FLUXFILES_LICENSE_KEY='), 'tells them how to activate it');
+    putenv('FLUXFILES_MAIL_LOG_FULL=1');
+    try { $out = captureMail(fn () => assertTrue($mailer->sendLicense($rec), 'send reports success')); }
+    finally { putenv('FLUXFILES_MAIL_LOG_FULL'); }
+    assertTrue(!str_contains($out, (string) $rec['license_key']), 'even the retired diagnostic flag cannot expose keys');
+    assertTrue(str_contains($out, 'b***@acme.com'), 'logged recipient is masked');
 });
 
 test('mail: a bad recipient fails soft, never throws', function () use ($secretB64) {
@@ -245,7 +246,7 @@ test('mail: a Support-only record gets no activation line', function () use ($se
     $out = captureMail(fn () => assertTrue((new LicenseMailer('log'))->sendLicense($rec), 'send reports success'));
     assertTrue(str_contains($out, 'Priority Support'), 'subject reflects the support subscription');
     assertTrue(!str_contains($out, 'FLUXFILES_LICENSE_KEY='), 'no activation instruction for a support-only purchase');
-    assertTrue(str_contains($out, 'sup@acme.com'), 'addressed to the buyer');
+    assertTrue(str_contains($out, 's***@acme.com'), 'addressed to the buyer');
 });
 
 // ── Renewal/expiry reminders (LICENSE-EXPIRY-NOTIFICATIONS-DESIGN.md §6) ─────
@@ -854,7 +855,7 @@ test('mail: renewal text is truthful (key above, old key updates end on its date
     putenv('FLUXFILES_OPS_EMAIL=ops@x.com');
     $out = captureMail(fn () => (new LicenseMailer('log'))->sendRenewalUnmatched('nobody@x.com', 'pro-renewal', 'ORD-9'));
     putenv('FLUXFILES_OPS_EMAIL');
-    assertTrue(str_contains($out, 'nobody@x.com') && str_contains($out, 'ops@x.com'), 'buyer and ops notified');
+    assertTrue(str_contains($out, 'n***@x.com') && str_contains($out, 'o***@x.com'), 'buyer and ops notified');
 });
 
 test('mail: reminders for one-time plans point at the renewal and the same-email rule', function () use ($secretB64) {

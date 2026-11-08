@@ -40,7 +40,10 @@ $h->test('Currency exponents, escaping and SVG table parity',function():void {
     Harness::eq('12.34 USD',View::money(1234,'usd'));Harness::eq('1,234 VND',View::money(1234,'vnd'));Harness::eq('-1.00 EUR',View::money(-100,'eur'));
     Harness::eq('&lt;&quot;&#039;&amp;',View::h('<"\'&'));
     $svg=Svg::bar([['label'=>'<img src=x onerror=1>','n'=>21]],'label','n','<script>','Table');
-    Harness::ok(str_contains($svg,'&lt;img'));Harness::ok(str_contains($svg,'<td>21</td>'));Harness::ok(!str_contains($svg,'style='));Harness::ok(!str_contains($svg,'<script>'));Harness::ok(str_contains($svg,'aria-labelledby'));
+    Harness::ok(str_contains($svg,'&lt;img'));Harness::ok(preg_match('~<td[^>]*>21</td>~',$svg) === 1);Harness::ok(!str_contains($svg,'style='));Harness::ok(!str_contains($svg,'<script>'));Harness::ok(str_contains($svg,'aria-labelledby'));
+    $negative=Svg::bar([['label'=>'positive','n'=>10],['label'=>'negative','n'=>-10]],'label','n','Net','Table');
+    preg_match_all('/<rect[^>]* y="([0-9.]+)"[^>]*height="([0-9.]+)"/',$negative,$bars,PREG_SET_ORDER);Harness::eq(2,count($bars));Harness::ok((float)$bars[1][1]>(float)$bars[0][1],'negative bar must start below positive');
+
 });
 $h->test('i18n parity and all literal translation keys exist',function():void {
     $base=dirname(__DIR__).'/admin';$en=require "$base/lang/en.php";$vi=require "$base/lang/vi.php";

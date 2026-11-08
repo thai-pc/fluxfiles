@@ -11,6 +11,8 @@ use FluxFiles\LicenseServer\Client\Mask;
 require_once __DIR__ . '/../../client/ApiClient.php';
 require_once __DIR__ . '/Telegram.php';
 require_once __DIR__ . '/Health.php';
+require_once __DIR__ . '/Counters.php';
+require_once __DIR__ . '/Inbox.php';
 
 final class Worker
 {
@@ -50,10 +52,14 @@ final class Worker
                 $this->state['instance'] = $instance;
                 $this->state['sends'] = array_values(array_filter($this->state['sends'] ?? [], static fn($t): bool => is_int($t) && $t > time() - 3600));
                 $this->health();
+                if ($this->remaining() > 22) { $this->request('POST','/admin/ops/mail-jobs',['limit'=>10]); }
+                if ($this->remaining() > 22) { $this->inbox(); }
+                if ($this->remaining() > 22) { $this->weekly(); }
                 if ($this->telegram->enabled() && $this->remaining() > 22) {
                     $this->outbox();
                 }
-                if ($this->telegram->enabled() && Config::get('FLUXFILES_TELEGRAM_COMMANDS') === '1' && $this->remaining() > 22) {
+                if ($this->remaining() > 27) { $this->counters(); }
+                if ($this->telegram->enabled() && !Config::sandbox() && Config::get('FLUXFILES_TELEGRAM_COMMANDS') === '1' && $this->remaining() > 22) {
                     $this->commands();
                 }
             } finally {
@@ -69,6 +75,34 @@ final class Worker
     private function request(string $method, string $path, array $data = []): array
     {
         return (new ApiClient(Config::secret('FLUXFILES_LICENSE_OPS_TOKEN'), 'ops', null, max(1, min(20, $this->remaining()))))->request($method, $path, $data);
+    }
+
+    private function inbox(): void
+    {
+        Inbox::consume($this->dir.'/inbox',function(array $request):void { $this->request('POST','/admin/ops/ingest',$request); },fn():bool=>$this->remaining()>22);
+    }
+
+    private function counters(): void
+    {
+        $today=gmdate('Y-m-d');$service=new Counters();$targets=$service->targets();
+        if (($this->state['counters']['day']??'')!==$today) { $this->state['counters']=['day'=>$today,'done'=>[]]; }
+        $results=[];
+        foreach ($targets as $target) {
+            $key=$target['source'].':'.$target['subject'];if (isset($this->state['counters']['done'][$key])) { continue; }
+            if ($this->remaining()<28) { break; }$result=$service->fetch($target,min(5,$this->remaining()-22));
+            if ($result['ok']) { $this->request('POST','/admin/ops/ingest',['type'=>'public_counters','day'=>$today,'rows'=>$result['rows']]); }
+            $name='counter:'.$target['source'];if (!isset($results[$name]) || !$result['ok']) { $results[$name]=['target'=>$name,'ok'=>$result['ok'],'ms'=>$result['ms'],'detail'=>$result['detail']]; }
+            $this->state['counters']['done'][$key]=true;$this->save();
+        }
+        if ($results!==[] && $this->remaining()>21) { $this->request('POST','/admin/ops/health',['results'=>array_values($results),'telegram'=>$this->telegram->enabled(),'fingerprint'=>$this->telegram->fingerprint()]); }
+    }
+
+    private function weekly(): void
+    {
+        $now=new \DateTimeImmutable('now',new \DateTimeZone(Config::get('FLUXFILES_ADMIN_TZ','Asia/Ho_Chi_Minh')));
+        $monday=$now->modify('monday this week')->setTime(8,0);if ($now<$monday) { return; }
+        $week=$monday->modify('-1 week')->format('o-\WW');if (($this->state['weekly_report']??'')===$week) { return; }
+        $result=$this->request('POST','/admin/ops/report/weekly',['week'=>$week]);if ($result['ok']??false) { $this->state['weekly_report']=$week;$this->save(); }
     }
 
     private function remaining(): int

@@ -347,7 +347,7 @@ browser history, a screen share or a referrer header, and the window keeps that 
 being a permanent handle on the key. After it closes, email is the way — or the operator
 looks it up through `/licenses`.
 
-## Private admin UI (MVP)
+## Private admin UI (all phases)
 
 The implementation follows [the approved design](../../docs/design/LICENSE-ADMIN-UI-DESIGN.md),
 §0, §2–6, §7.1/3/4/7, §8.1/3 and §15. There is no new JWT claim, framework,
@@ -372,7 +372,7 @@ ssh -N -L 127.0.0.1:8471:127.0.0.1:9472 <licence-host>
 
 Open `http://localhost:8471`. Forward sandbox to a different laptop port, e.g.
 `8473:127.0.0.1:9474`. Do not expose either UI through a public vhost. Both the
-application and nginx must check Host; only localhost/127.0.0.1 are permitted.
+application and nginx must check Host; SSH mode permits only localhost/127.0.0.1.
 A `FLUXFILES_ADMIN_HOSTS` value narrows that list and cannot enable a public host.
 
 Enroll an account as the appropriate **UI Unix user**, with its UI config loaded:
@@ -394,8 +394,8 @@ backed up; loss requires reenrolment.
 Login uses password plus six-digit RFC 6238 TOTP, with replay prevention, rolling
 username/global failure limits and 15-minute lockouts. Session tokens are random
 32-byte values, stored only as SHA-256 hashes. They rotate at login and expire after
-30 minutes idle or 12 hours absolute. Reveal, manual issue, restore and archive
-require a TOTP accepted within the last 10 minutes. Revoke requires the typed final
+30 minutes idle or 12 hours absolute. Reveal, manual issue, restore, archive, replay, CSV, backup, advisory/notice changes
+and optional Polar actions require a TOTP accepted within the last 10 minutes. Revoke requires the typed final
 six jti characters and a server-rendered cascade preview. Read-only pages retain native links and forms;
 reveal is an explicit POST and clears after 60 seconds when JS is available. Close
 or navigate away after a reveal when scripting is disabled. Never share a screenshot
@@ -403,13 +403,15 @@ of a revealed key. Copying to the clipboard is explicit.
 
 The screens are Dashboard, Licences (filters, cycle collapse, lookup by POST, detail,
 manual issue, flags, notes, archive and subscription revoke), Webhooks (read/resolve),
-Audit, basic System and Revenue / Installs / Mail statistics. Vietnamese is the
+Audit, Customers, Mail log, Activity, advisories/notices, System/health/backup and
+all revenue, install, version, cohort, download, growth, demo and anomaly statistics.
+Vietnamese is the
 default; English and light/dark/auto are session preferences. Times use
 Asia/Ho_Chi_Minh with UTC on hover. Charts are server-generated SVG with table
 fallbacks; each currency has its own chart. `j/k`, Enter, `/`, `x`, `g d/l/s/w/a`,
 `?` and Escape provide keyboard navigation.
 
-`licenses.sqlite` migrations are guarded by `PRAGMA user_version=2` and preserve
+`licenses.sqlite` migrations are guarded by `PRAGMA user_version=3` and preserve
 existing rows. Back up before migrating. History is written by connection-local
 SQLite triggers, in the same transaction as the mutation, including bulk supersedes
 and cascades. Offline SQLite tools do not depend on a PHP UDF; edits made outside
@@ -433,13 +435,12 @@ Tokens must also differ across instances, checked by the operator before install
 | `FLUXFILES_POLAR_WEBHOOK_SECRET` / `_FILE` | Existing Polar verification secret |
 | `FLUXFILES_RESEND_WEBHOOK_SECRET` / `_FILE` | Unset; Svix delivery webhook verification secret |
 | `FLUXFILES_LICENSE_NET_PEPPER_FILE` | Unset; 32 random bytes, owner-only, HMAC of network prefixes; without it no network identifier is stored |
-| `FLUXFILES_LICENSE_K1_PUB` | Unset; reserved public value for the Phase 2 key comparison; never a signing key |
-| `FLUXFILES_LICENSE_BACKUP_STATUS` | `/var/lib/fluxfiles-license/backup-status.json` (sandbox `license-sbx`), JSON `{"ok":true,"at":<unix seconds>}` written atomically by root's existing backup tool |
+| `FLUXFILES_LICENSE_K1_PUB` | Unset; base64 Ed25519 public key for refresh verification and signing-key comparison; never a signing key |
+| `FLUXFILES_LICENSE_BACKUP_STATUS` | `/var/lib/fluxfiles-license/backup-status.json` (sandbox `license-sbx`), root backup JSON described below; the legacy `{"ok":true,"at":<unix seconds>}` is also accepted |
 | `FLUXFILES_ADMIN_TRACKED_DISCOUNTS` | Unset; `CODE:CAP[,CODE:CAP]`, e.g. `FOUNDING40:50` |
 | `FLUXFILES_ADMIN_TZ` | `Asia/Ho_Chi_Minh`; accounting month boundaries and UI display |
 
-Set the status role without signing-key env. The signer is lazy: only issuing and
-refresh verification initialize it. Admin reads and update-status do not require it.
+Set the status role without signing-key env. The signer is lazy: issuing initializes it; refresh uses the configured public key and falls back to the signer only when that value is unset. Admin reads and update-status do not require it.
 nginx must still route each location to the correct pool; the role check is defence
 in depth, not a replacement for that split. No HTTP route downloads a DB or backup.
 
@@ -471,7 +472,7 @@ renewal cannot match. Amounts are strict integer minor units; currencies are nev
 summed. Net revenue subtracts refund-net in the month of the refund, in
 `FLUXFILES_ADMIN_TZ`. MRR uses the newest active, unexpired subscription licence and
 its latest non-refunded order; annual plans divide by 12. Historical MRR is labelled
-an estimate because Phase 2 subscription state is unavailable. Refunded discount
+an estimate because subscription state history before migration cannot be reconstructed. Refunded discount
 redemptions remain separate and conservatively consume cap slots. Manual orders
 and test licences are excluded from accounting.
 
@@ -517,8 +518,7 @@ Retention: history, licences and orders forever; webhook metadata 180 days, bodi
 Run `php ops/ops-worker.php run` as the separate ops user from a one-minute systemd
 timer. It takes a nonblocking file lock, uses atomic 0600 state files, and has a
 53-second application budget plus a 55-second systemd timeout. No signing-key or
-licence-DB env is passed. It only calls its own loopback API, Telegram and configured
-health targets. Health URLs use HTTPS (literal HTTP loopback is allowed for tests),
+licence-DB env is passed. It calls its own loopback API, Telegram, configured health targets and the four hardcoded public counter APIs. Health URLs use HTTPS (literal HTTP loopback is allowed for tests),
 with no redirects; do not configure any URL that starts an update-status call.
 
 | Worker setting | Default / purpose |
@@ -560,9 +560,9 @@ is disabled. Health checks run every five minutes: two failures trigger down, th
 recovery; TLS under 14 days, disk under 10%, and backups older than 26 hours alert.
 The heartbeat reports Telegram's token fingerprint, never its token.
 
-MVP intentionally excludes Phase 2/3 tables and endpoints: CSV/export, replay,
-mail-log screen, customers, subscription webhooks, public counters, inbox ingest,
-weekly reports, notices and full system health/backup UI. See
+Phase 2 and Phase 3 are implemented: CSV/export, replay, mail-log screen, customers,
+subscription webhooks, public counters, inbox ingest, weekly reports, notices,
+anomalies, viewer permissions and optional Access/Polar actions. See
 [ADMIN-PR.md](ADMIN-PR.md) for the exact ordered server-change checklist, deviations
 and validation. No server configuration or deployment is changed by this branch.
 
@@ -573,3 +573,128 @@ not weaken its Origin check to accommodate native POSTs; browsers with that
 behaviour require JS for sign-in and mutations. Read-only pages and server-rendered
 confirmation forms remain available. This browser-policy conflict is recorded in
 the PR deviations.
+
+### Phase 2 and Phase 3 API
+
+The UI credential accesses `/admin/*` reads and operator actions. The UI forwards a
+trusted `X-FluxFiles-Role: admin|viewer` derived from its local user record; a viewer
+can read but cannot reveal keys, export, issue or mutate. Only login audit writes
+are permitted. The API independently enforces this restriction for the UI token.
+The root CLI credential ignores spoofed UI actor/role headers. The ops token can
+call only `/admin/ops/*`; it cannot read customers, keys or accounting exports.
+
+| Routes | Behaviour |
+|---|---|
+| `GET /admin/customers`, `GET /admin/customers/{chash}`, `POST …/{chash}/note` | Prefix search, keyset cursor, lower-case email grouping, identity-conflict flag, currency-separated net, timeline and audited 500-character notes. The URL uses the first 16 hex characters of SHA-256(email); collision fails closed. |
+| `GET /admin/mail`, `POST /admin/mail/{id}/resend` | Date/kind/failure filters and keyset pagination. Resend only licence/support mail with a linked eligible licence. `/redeliver` is capped at ten and a 20-second send budget; the browser repeats batches until drained or a failure. |
+| `POST /admin/events/{id}/replay` | Reuses only a verified, retained, unexpired Polar body through the normal idempotent issue path. No raw webhook body is exposed. Step-up in UI, audit, and resolve associated items on success. |
+| `GET /admin/activity`, `GET /admin/ops-items`, `POST …/{id}/resolve` | Aggregated public outcomes and the operator backlog. Unknown requests have empty jti; no IP or key is kept. |
+| `GET /admin/stats/{customers,versions,downloads,growth,demo,anomalies}` | Customer/cohort tables, reported field versions, distinct download sources, keyless public counters, demo counts and informational anomalies. |
+| `POST /admin/advisories`, `GET /admin/advisories`, `GET …/{id}/affected` | Version constraints support attached `< <= = != >= >`, whitespace AND and `||` OR, with optional `v` versions. Invalid constraints are rejected. Unknown installed versions remain explicit and optionally affected. |
+| `GET /admin/export/orders.csv` | Step-up UI download, audited; major-unit amounts per currency, UTC/local dates, UTF-8 BOM, formula prefix protection, no keys. At most 24 months/50,000 rows. Manual/test/archived orders excluded. |
+| `GET /admin/health`, `POST /admin/backup` | Uptime/latest TLS/disk/heartbeat; integrity-checked 0600 SQLite snapshot into a private staging directory. Never downloads backups. Six manual snapshots/hour maximum. |
+| `GET /admin/notices`, `GET /admin/notices/preview`, `POST /admin/notices/send` | Deduplicated eligible emails, five masked samples, rendered preview, typed advisory confirmation and step-up. A cohort fingerprint detects changes since preview; request receipts prevent duplicate queueing. Approved templates/advisory/versions are snapshotted. |
+| `POST /admin/ops/ingest` | Strict counts-only `{type,day,rows}`; types `public_counters`, `downloads_daily`, `demo_daily`. Daily UPSERTs are idempotent. Unknown fields, raw identities, invalid days and negative/noninteger counts fail closed. |
+| `POST /admin/ops/mail-jobs`, `POST /admin/ops/report/weekly` | API sends mail with its own credentials; worker never receives a mail token or licence key. Jobs claim up to ten for 120 seconds, bounded to 12 seconds of sends, with retry/backoff and exhaustion after ten attempts. |
+| `POST /admin/subscriptions/{id}/cancel` | Optional, off by default. Per-request `subscriptions:write` token, typed subscription id, UI step-up and audit. Requests `cancel_at_period_end=true`; no token is persisted or returned. |
+
+Subscription canceled/uncanceled events toggle reminder suppression without
+revoking a paid period. Past-due subscriptions appear separately and are excluded
+from current MRR. A revoked event revokes all subscription rows only when the
+newest active licence has **more than 48 hours** remaining. Unknown subscriptions
+ACK 200; older events cannot undo newer state. Refunds leave an operator item until
+cancellation is observed. Enable these four subscription events at Polar after
+migration. `subscription.created/updated` are also accepted for known subscriptions.
+
+Reported versions use the latest ping per jti/component over 30 days. Downloads
+keep `zip_log`, `pro_link_claim` and `pro_link_download` separate from update checks.
+Retention uses recorded licence history at month end; pre-migration history and
+historical MRR are estimates. A refund rate with nonpositive net is undefined.
+Anomalies show thresholds and **never automatically revoke**. The weekly report
+covers the previous completed ISO week at the first run after Monday 08:00 in the
+configured timezone, plus current month-to-date data. A per-week receipt and a
+Resend idempotency key prevent duplicate sends. An interrupted ambiguous `sending`
+receipt requires operator inspection before retry; SMTP cannot guarantee exactly
+once after a process crash.
+
+The mail logger always masks real keys and email addresses, including CLI log
+transport. The old `FLUXFILES_MAIL_LOG_FULL` diagnostic flag no longer bypasses it.
+
+### Additional configuration and root collector
+
+| API setting | Default / purpose |
+|---|---|
+| `FLUXFILES_LICENSE_BACKUP_STAGE` | `/var/lib/fluxfiles-license/backup-stage`, sandbox `license-sbx`; private snapshot staging for root's existing backup sweep |
+| `FLUXFILES_ADMIN_POLAR_ACTIONS` | `0`; enable the optional cancel button only after choosing a scoped runtime token workflow |
+| `FLUXFILES_POLAR_API_BASE` | `https://api.polar.sh/v1`, sandbox `https://sandbox-api.polar.sh/v1`; override only to literal HTTP loopback for tests |
+| `FLUXFILES_ADMIN_ANALYTICS_URL` | `https://dash.cloudflare.com/`; link only, HTTPS Cloudflare dashboard host required |
+| `FLUXFILES_ADMIN_DEMO_BUDGET_BYTES` | `0` (no gauge denominator); operator's upload-byte budget |
+
+| Worker setting | Default / purpose |
+|---|---|
+| `FLUXFILES_OPS_PUBLIC_COUNTERS` | `{}`; source-to-subject arrays, e.g. `{"wporg":["fluxfiles"],"github":["owner/repo"],"packagist":["vendor/pkg"],"npm":["@scope/pkg"]}`; at most 20 distinct requests/day, no credentials |
+| `FLUXFILES_OPS_COUNTER_API_BASE` | Unset; literal HTTP loopback fake-provider override only |
+| `FLUXFILES_ADMIN_TZ` | `Asia/Ho_Chi_Minh`; weekly scheduling |
+
+Failed counter fetches preserve the previous snapshot and record
+`counter:<source>` health failures. Sandbox never polls bot commands, so it cannot
+consume production's update cursor when sharing the product's bot.
+
+Root runs `collect-ops.php` at 00:10 local with **yesterday's** update/demo logs:
+
+```text
+php collect-ops.php --day=2026-11-07 --update-log=/private/update-access.log \
+  --demo-log=/private/demo-access.log --cleaner-log=/private/demo-cleaner.log \
+  --mint-path=/sandbox/mint --output=/var/lib/fluxfiles-license-ops/inbox/2026-11-07.json
+```
+
+Omit `--day` for yesterday in Asia/Ho_Chi_Minh. The reference parser accepts nginx
+combined logs or JSON with `uri`/`request_uri`, `status`, `time_iso8601`/`time`.
+Cleaner summaries accept JSON counts (optionally `day`) or
+`sandboxes_live=N uploads_bytes=N`. Adapt the **root helper**, after reviewing the
+private log format; never give log permissions to API/UI/ops. Query strings,
+client IPs and identities never enter its output. It writes `<day>.json` atomically
+as 0640 ops:ops-group. The root CLI requires PHP POSIX and irreversibly drops
+to the inbox owner before filesystem writes, preventing privileged writes in a
+worker-writable directory. Make the inbox **ops-owned 0750**, enabling worker
+acknowledgement/unlink, unlike an unwritable root-owned inbox. Valid files are
+posted then deleted, malformed files renamed `.bad`; API failure preserves input.
+
+Root's backup tool writes status atomically, readable only by the licence API:
+`{last_ok_at,file,bytes,integrity:"ok",kept,oldest_at,last_error}`. Timestamps are
+integer Unix seconds; preserve `last_ok_at` across failures and set `last_error`.
+The operator retains/sweeps staged snapshots and backups; HTTP never serves them.
+Retention adds 730 days of daily counters, 90 days activity and 180 days resolved
+ops items; notices/advisories/notes and request receipts persist.
+
+### Optional Cloudflare Access and viewer accounts
+
+Default access remains an SSH tunnel to loopback. Access is an **additional** gate;
+password/TOTP and step-up remain required. No public nginx admin vhost is added.
+A separately reviewed Tunnel/Access policy may forward only to that loopback UI.
+
+| UI setting | Default / purpose |
+|---|---|
+| `FLUXFILES_ADMIN_ACCESS_ENABLED` | `0` |
+| `FLUXFILES_ADMIN_ACCESS_HOST` | Unset; exact application hostname when Access is enabled |
+| `FLUXFILES_ADMIN_ACCESS_ISSUER` | Unset; `https://<team>.cloudflareaccess.com` |
+| `FLUXFILES_ADMIN_ACCESS_AUD` | Unset; application audience |
+| `FLUXFILES_ADMIN_ACCESS_JWKS_FILE` | Unset; root-refreshed, UI-readable JWKS; stale after 24 hours |
+
+Before enabling, configure the expected issuer/audience and run root's
+`php admin/cli/access-keys.php`. Refresh hourly with the same UI-specific config;
+failures preserve the last valid file. It validates RS256, kid, signature,
+issuer/audience and time; missing/expired/invalid assertion or stale/missing keys
+fail closed, including assets. API/UI do not fetch JWKS on requests. Forward the
+Access assertion and original HTTPS scheme only through the trusted loopback
+proxy. Route assets through the gate too; a direct static nginx asset route would
+bypass application validation.
+
+Use `admin-user.php add <name> [admin|viewer]` or
+`admin-user.php role <name> <admin|viewer>` under the UI Unix user. Existing users
+migrate to admin; changing role invalidates their sessions. Viewers retain language,
+theme and logout controls but cannot reveal, export or mutate business data.
+
+Browser smoke (uses an already installed Playwright, no package installation):
+`node services/license-server/tests/browser-admin.cjs`. Override the module path
+with `FLUXFILES_TEST_PLAYWRIGHT_MODULE` if necessary. It starts only local fixtures.

@@ -41,7 +41,7 @@ $h->test('Install and mail fixture definitions, send and delivery rates',functio
 $h->test('Guarded migration on an old DB copy preserves key, repeat migrations are safe',function() use($h):void {
     $old=$h->dir.'/old.sqlite';$db=new PDO('sqlite:'.$old);$db->exec("CREATE TABLE licenses(id INTEGER PRIMARY KEY AUTOINCREMENT,jti TEXT UNIQUE NOT NULL,email TEXT NOT NULL,customer TEXT,plan TEXT,edition TEXT,modules TEXT,enforcement TEXT,issued INTEGER,expires INTEGER,license_key TEXT NOT NULL,gateway TEXT,order_id TEXT,status TEXT DEFAULT 'active',created_at INTEGER)");
     $db->exec("INSERT INTO licenses(jti,email,license_key) VALUES('legacy','legacy@example.test','unchanged')");$db=null;copy($old,$h->dir.'/copy.sqlite');
-    for($i=0;$i<2;$i++) { $s=new LicenseStore($h->dir.'/copy.sqlite');Harness::eq('unchanged',$s->findByJti('legacy')['license_key']);Harness::eq(2,(int)$s->pdo()->query('PRAGMA user_version')->fetchColumn()); }
+    for($i=0;$i<2;$i++) { $s=new LicenseStore($h->dir.'/copy.sqlite');Harness::eq('unchanged',$s->findByJti('legacy')['license_key']);Harness::eq(3,(int)$s->pdo()->query('PRAGMA user_version')->fetchColumn()); }
     $db=new PDO('sqlite:'.$old);Harness::eq(0,(int)$db->query('PRAGMA user_version')->fetchColumn());
 });
 $h->test('Order backfill dry-run writes nothing, apply uses fake Polar and is idempotent',function() use($h,$port,$db):void {

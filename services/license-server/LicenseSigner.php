@@ -32,6 +32,11 @@ final class LicenseSigner
         $this->kid = $kid;
     }
 
+    public function publicKey(): string
+    {
+        return base64_encode(sodium_crypto_sign_publickey_from_secretkey($this->secret));
+    }
+
     /** Load the secret from FLUXFILES_LICENSE_PRIVATE_KEY_FILE (path) or _KEY (raw). */
     private static function loadSecretB64(): string
     {
@@ -96,6 +101,11 @@ final class LicenseSigner
      */
     public function verify(#[\SensitiveParameter] string $key): ?array
     {
+        return self::verifyPublic($key, $this->publicKey(), $this->kid);
+    }
+
+    public static function verifyPublic(string $key, string $publicB64, string $kid = 'k1'): ?array
+    {
         if ($key === '' || strlen($key) > 4096) {
             return null;
         }
@@ -104,14 +114,15 @@ final class LicenseSigner
             return null;
         }
         $header = json_decode((string) self::unb64url($parts[0]), true);
-        if (!is_array($header) || ($header['alg'] ?? null) !== 'Ed25519' || ($header['kid'] ?? null) !== $this->kid) {
+        if (!is_array($header) || ($header['alg'] ?? null) !== 'Ed25519' || ($header['kid'] ?? null) !== $kid) {
             return null;
         }
         $sig = self::unb64url($parts[2]);
         if ($sig === null || strlen($sig) !== SODIUM_CRYPTO_SIGN_BYTES) {
             return null;
         }
-        $pub = sodium_crypto_sign_publickey_from_secretkey($this->secret);
+        $pub = base64_decode($publicB64, true);
+        if ($pub === false || strlen($pub) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES) { return null; }
         if (!sodium_crypto_sign_verify_detached($sig, $parts[0] . '.' . $parts[1], $pub)) {
             return null;
         }

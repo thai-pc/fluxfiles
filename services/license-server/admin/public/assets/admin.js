@@ -36,7 +36,7 @@
     } catch (_) { error.textContent = form.dataset.error; }
     finally { button.disabled = false; form.removeAttribute('aria-busy'); }
   }));
-  document.querySelectorAll('form[method=post]:not([data-reveal-form])').forEach(form => form.addEventListener('submit', async event => {
+  document.querySelectorAll('form[method=post]:not([data-reveal-form]):not([data-redeliver])').forEach(form => form.addEventListener('submit', async event => {
     // Native Chromium POST navigations serialize Origin as null under no-referrer.
     // Fetch in CORS mode preserves the real Origin while keeping referrers private.
     event.preventDefault();
@@ -56,7 +56,29 @@
     } catch (_) { error.textContent = document.body.getAttribute('data-error-api-unreachable'); }
     finally { if (button) button.disabled = false; form.removeAttribute('aria-busy'); }
   }));
-  window.addEventListener('pagehide', () => document.querySelectorAll('dialog').forEach(clearKey));
+  document.querySelectorAll('[data-redeliver]').forEach(form => form.addEventListener('submit', async event => {
+    event.preventDefault(); const button = event.submitter; const status = form.querySelector('[data-backlog-status]'); if (button) button.disabled = true;
+    try {
+      for (let batch = 0; batch < 100; batch++) {
+        const response = await fetch(form.action, { method: 'POST', mode: 'cors', credentials: 'same-origin', headers: { Accept: 'application/json' }, body: new URLSearchParams(new FormData(form)) });
+        const data = await response.json(); if (!response.ok) throw new Error();
+        status.textContent = form.dataset.remaining + ': ' + data.remaining;
+        if (data.failed > 0 || (data.sent === 0 && data.remaining > 0)) { status.textContent += ' · ' + form.dataset.failed; break; }
+        if (data.remaining === 0) break;
+      }
+    } catch (_) { status.textContent = document.body.getAttribute('data-error-api-unreachable'); }
+    finally { if (button) button.disabled = false; }
+  }));
+  document.querySelectorAll('[data-notice-form]').forEach(form => {
+    const replace = value => value.replace(/\{(edition|version|fixed_in|url)\}/g, (_, key) => form.getAttribute('data-example-' + key) || 'unknown');
+    const refresh = () => {
+      document.querySelector('[data-preview-subject]').textContent = replace(form.elements.subject.value);
+      document.querySelector('[data-preview-body]').textContent = replace(form.elements.body_text.value) + '\n\n' + form.dataset.footer;
+    };
+    form.addEventListener('input', refresh);
+  });
+  window.addEventListener('pagehide', () => { document.querySelectorAll('dialog').forEach(clearKey); document.querySelectorAll('[name=polar_token]').forEach(input => { input.value = ''; }); });
+  window.addEventListener('pageshow', () => document.querySelectorAll('[name=polar_token]').forEach(input => { input.value = ''; }));
   window.setTimeout(() => document.querySelectorAll('.toast').forEach(toast => { toast.hidden = true; }), 5000);
   const panel = document.querySelector('[data-confirm-panel]');
   if (panel) {

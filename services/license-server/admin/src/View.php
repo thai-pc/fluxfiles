@@ -20,6 +20,7 @@ final class View
     {
         return htmlspecialchars((string) $s, ENT_QUOTES|ENT_SUBSTITUTE, 'UTF-8');
     }
+    public function canWrite(): bool { return ($this->session['role'] ?? 'admin') === 'admin'; }
     public function t(string $key): string
     {
         return $this->i18n->t($key);
@@ -78,21 +79,23 @@ final class View
         }
         $html.='</tr></thead><tbody>';
         foreach ($rows as $r) {
-            $url = $link !== null?$link . rawurlencode((string) ($r[$link === '/licences/'?'jti': 'id'] ?? '')): null;
-            $html.='<tr' . ($url?' data-row-link="' . $this->e($url) . '" tabindex="0"': '') . '>';
+            $url = $link !== null?$link . rawurlencode((string) ($r[$link === '/licences/'?'jti': ($link === '/customers/'?'chash':'id')] ?? '')): null;
+            $html.='<tr' . (!empty($r['archived_at'])?' class="archived-row"':'') . ($url?' data-row-link="' . $this->e($url) . '" tabindex="0"': '') . '>';
             foreach ($cols as $i => $col) {
                 $val = $r[$col] ?? null;
                 $html.='<td data-label="' . $this->e($this->t($col)) . '">';
                 $text = is_array($val)?json_encode($val, JSON_UNESCAPED_UNICODE): ($val === null?$this->t('none'): (string) $val);
                 if ($col === 'select') {
-                    $allowed = !empty($r['is_test']) && $r['status'] !== 'active';
+                    $allowed = $this->canWrite() && !empty($r['is_test']) && $r['status'] !== 'active';
                     $cell = '<input type="checkbox" name="jtis[]" form="archive-selected" value="' . $this->e($r['jti']) . '" aria-label="' . $this->e($this->t('selected')) . ' ' . $this->e($r['jti']) . '"' . ($allowed?'': ' disabled') . '>';
                 } elseif ($col === 'is_test') {
                     $cell = $val ? '<span class="pill test">'.$this->e($this->t('test')).'</span>' : $this->e($this->t('none'));
-                } elseif (in_array($col, ['created_at', 'issued', 'expires', 'mailed_at', 'archived_at', 'status_at', 'body_expires_at', 'refunded_at', 'last_seen_at', 'first_seen_at', 'at', 'received_at', 'last_at', 'resolved_at', 'last_sent'], true)) {
+                } elseif (in_array($col, ['created_at', 'issued', 'expires', 'mailed_at', 'archived_at', 'status_at', 'body_expires_at', 'refunded_at', 'first_purchase', 'last_purchase', 'paid_at', 'current_period_end', 'last_seen_at', 'first_seen_at', 'at', 'received_at', 'last_at', 'resolved_at', 'last_sent'], true)) {
                     $cell = $this->time($val);
-                } elseif ($col === 'status' && in_array($val, ['active', 'superseded', 'revoked', 'refunded'], true)) {
+                } elseif ($col === 'status' && in_array($val, ['active','superseded','revoked','refunded','accepted','delivered','bounced','complained','failed','delayed','sending','done','past_due','canceled'], true)) {
                     $cell = '<span class="pill ' . $this->e($val) . '" title="' . $this->e($val) . '">' . $this->e($this->t($val)) . '</span>';
+                } elseif (in_array($col,['jti','order_id','subscription_id','checkout_id','customer_id','product_id','ref_jti','ref_order','webhook_id'],true) && is_string($val) && $val !== '') {
+                    $cell = '<code title="'.$this->e($val).'">'.$this->e(Mask::id($val)).'</code> <button type="button" class="copy-id" data-copy="'.$this->e($val).'" aria-label="'.$this->e($this->t('copy')).'">⧉</button>';
                 } else {
                     $cell = $this->e($text);
                 }

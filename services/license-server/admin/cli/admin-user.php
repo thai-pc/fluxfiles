@@ -14,9 +14,12 @@ require_once __DIR__ . '/../src/Auth.php';
 try {
     $action = $argv[1] ?? '';
     $name = $argv[2] ?? '';
-    if (!in_array($action, ['add', 'passwd', 'totp-reset', 'disable', 'logout-all'], true) || !preg_match('/^[A-Za-z0-9_.-]{1,64}$/D', $name)) {
-        throw new RuntimeException('Usage: admin-user.php add|passwd|totp-reset|disable|logout-all NAME');
+    if (!in_array($action, ['add', 'passwd', 'totp-reset', 'disable', 'logout-all', 'role'], true) || !preg_match('/^[A-Za-z0-9_.-]{1,64}$/D', $name)) {
+        throw new RuntimeException('Usage: admin-user.php add|passwd|totp-reset|disable|logout-all|role NAME [admin|viewer]');
     }
+    if ($action === 'role' && !isset($argv[3])) { throw new RuntimeException('Provide admin or viewer'); }
+    $role = $argv[3] ?? 'admin';
+    if (!in_array($role,['admin','viewer'],true)) { throw new RuntimeException('Role must be admin or viewer'); }
     $auth = new Auth();
     $db = $auth->db;
     $q = $db->prepare('SELECT id FROM users WHERE name=?');
@@ -58,11 +61,13 @@ try {
     }
     $db->beginTransaction();
     if ($action === 'add') {
-        $db->prepare('INSERT INTO users(name,pass_hash,totp_secret,created_at) VALUES(?,?,?,?)')->execute([$name, password_hash($password, defined('PASSWORD_ARGON2ID')?PASSWORD_ARGON2ID: PASSWORD_BCRYPT), $secret, time()]);
+        $db->prepare('INSERT INTO users(name,pass_hash,totp_secret,created_at,role) VALUES(?,?,?,?,?)')->execute([$name, password_hash($password, defined('PASSWORD_ARGON2ID')?PASSWORD_ARGON2ID: PASSWORD_BCRYPT), $secret, time(), $role]);
     } elseif ($action === 'passwd') {
         $db->prepare('UPDATE users SET pass_hash=? WHERE id=?')->execute([password_hash($password, defined('PASSWORD_ARGON2ID')?PASSWORD_ARGON2ID: PASSWORD_BCRYPT), $id]);
     } elseif ($action === 'totp-reset') {
         $db->prepare('UPDATE users SET totp_secret=?,totp_last_step=-1 WHERE id=?')->execute([$secret, $id]);
+    } elseif ($action === 'role') {
+        $db->prepare('UPDATE users SET role=? WHERE id=?')->execute([$role,$id]);
     } elseif ($action === 'disable') {
         $db->prepare('UPDATE users SET disabled=1 WHERE id=?')->execute([$id]);
     }

@@ -29,6 +29,8 @@ final class Auth
             $this->db->exec('CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,name TEXT UNIQUE NOT NULL,pass_hash TEXT NOT NULL,totp_secret TEXT NOT NULL,totp_last_step INTEGER NOT NULL DEFAULT -1,disabled INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL);
                 CREATE TABLE IF NOT EXISTS sessions(id_hash TEXT PRIMARY KEY,user_id INTEGER,created_at INTEGER NOT NULL,last_seen INTEGER NOT NULL,stepup_at INTEGER,csrf TEXT NOT NULL,lang TEXT NOT NULL,theme TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS login_hits(bucket TEXT NOT NULL,win INTEGER NOT NULL,n INTEGER NOT NULL,locked_until INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(bucket,win));');
+            $columns = $this->db->query('PRAGMA table_info(users)')->fetchAll(PDO::FETCH_COLUMN,1);
+            if (!in_array('role',$columns,true)) { $this->db->exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'"); }
         } finally {
             umask($mask);
         }
@@ -49,7 +51,7 @@ final class Auth
         if (!preg_match('/^[a-f0-9]{64}$/D', $cookie)) {
             return;
         }
-        $s = $this->db->prepare('SELECT s.*,u.name,u.disabled FROM sessions s LEFT JOIN users u ON u.id=s.user_id WHERE s.id_hash=?');
+        $s = $this->db->prepare('SELECT s.*,u.name,u.disabled,u.role FROM sessions s LEFT JOIN users u ON u.id=s.user_id WHERE s.id_hash=?');
         $s->execute([hash('sha256', $cookie)]);
         $r = $s->fetch();
         $now = self::now();
@@ -132,6 +134,8 @@ final class Auth
         if ((int) $this->session['stepup_at'] >= self::now() - 600) {
             return true;
         }
+        // Opening an action while step-up is stale is a prompt, not a guessed code.
+        if ($code === '') { return false; }
         $this->db->exec('BEGIN IMMEDIATE');
         try {
             $s = $this->db->prepare('SELECT * FROM users WHERE id=? AND disabled=0');

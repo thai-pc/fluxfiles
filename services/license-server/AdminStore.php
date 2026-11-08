@@ -304,6 +304,7 @@ SQL);
     {
         $this->db->prepare('INSERT INTO mail_log(at,kind,jti,recipient,transport,ok,error,provider_id,status,status_at,actor) VALUES(?,?,?,?,?,?,?,?,?,?,?)') ->execute([time(), $kind, $jti, Mask::email($to), Config::get('FLUXFILES_MAIL_TRANSPORT', 'log'), (int) $ok, $error === null ? null: mb_substr(Mask::clean($error), 0, 300), $providerId, $ok ? 'accepted': 'failed', time(), $this->actor]);
         if (!$ok) {
+            $this->opsItem('mail_failed', 'Mail failed · '.Mask::email($to), $jti);
             $this->enqueueAlert('mail.failed', 'warn', 'mailfail:' . Config::get('FLUXFILES_MAIL_TRANSPORT', 'log'), 'Mail failed · ' . Mask::email($to), 3600);
         }
     }
@@ -399,7 +400,7 @@ SQL);
         if (!is_array($v)) {
             return ['ok' => false, 'at' => null];
         }
-        return ['ok' => ($v['ok'] ?? false) === true, 'at' => is_int($v['at'] ?? null)?$v['at']: null];
+        return ['ok' => array_key_exists('ok',$v) ? $v['ok'] === true : ($v['integrity'] ?? '') === 'ok', 'at' => is_int($v['last_ok_at'] ?? $v['at'] ?? null) ? ($v['last_ok_at'] ?? $v['at']) : null, 'file' => isset($v['file']) ? basename((string)$v['file']) : null, 'bytes' => max(0,(int)($v['bytes'] ?? 0)), 'integrity' => ($v['integrity'] ?? '') === 'ok' ? 'ok' : null, 'kept' => max(0,(int)($v['kept'] ?? 0)), 'oldest_at' => is_int($v['oldest_at'] ?? null) ? $v['oldest_at'] : null, 'last_error' => isset($v['last_error']) ? mb_substr(Mask::clean((string)$v['last_error']),0,300) : null];
     }
 
     public function prune(): void
@@ -410,6 +411,8 @@ SQL);
             $this->db->prepare("DELETE FROM $table WHERE $col<?")->execute([$now - $days * 86400]);
         }
         $this->db->prepare("INSERT OR IGNORE INTO ops_state(key,value,updated_at) SELECT 'alert-dedup:' || ff_sha256(dedup_key),NULL,? FROM ops_outbox WHERE COALESCE(sent_at,dropped_at)>0 AND COALESCE(sent_at,dropped_at)<CAST(? AS INTEGER)")->execute([$now, $now - self::OPS_DAYS * 86400]);
+        foreach (['activity_daily'=>90,'downloads_daily'=>730,'public_counters'=>730,'demo_daily'=>730] as $table=>$days) { $this->db->prepare("DELETE FROM $table WHERE day<?")->execute([gmdate('Y-m-d',$now-$days*86400)]); }
+        $this->db->prepare('DELETE FROM ops_items WHERE resolved_at<?')->execute([$now-180*86400]);
         $this->db->prepare('DELETE FROM ops_outbox WHERE COALESCE(sent_at,dropped_at)>0 AND COALESCE(sent_at,dropped_at)<CAST(? AS INTEGER)')->execute([$now - self::OPS_DAYS * 86400]);
     }
 }

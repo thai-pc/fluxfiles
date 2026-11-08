@@ -55,6 +55,7 @@ use FluxFiles\LicenseServer\MachineAuth;
 use FluxFiles\LicenseServer\AdminApi;
 use FluxFiles\LicenseServer\Webhooks;
 use FluxFiles\LicenseServer\Client\Mask;
+use FluxFiles\LicenseServer\Client\Config;
 
 header('Content-Type: application/json; charset=utf-8');
 // Responses can carry licence keys (/claim, /issue, /licenses): never cache them.
@@ -66,6 +67,15 @@ $raw = file_get_contents('php://input') ?: '';
 
 function respond(int $code, array $body): void
 {
+    if (isset($GLOBALS['store']) && $GLOBALS['store'] instanceof LicenseStore) {
+        $path = $GLOBALS['uri'] ?? '';
+        $kind = ['/claim'=>'claim','/pro-download'=>'pro_download','/refresh'=>'refresh'][$path] ?? null;
+        if ($kind !== null && ($GLOBALS['method'] ?? '') !== 'OPTIONS') {
+            $jti = (string) ($GLOBALS['activityJti'] ?? '');
+            $result = $code === 429 ? 'rate_limited' : ($code < 300 ? ($body['status'] ?? 'ok') : ($code === 410 ? 'expired' : ($code === 401 ? 'invalid' : 'refused')));
+            $GLOBALS['store']->recordActivity($kind, $result, $jti);
+        }
+    }
     http_response_code($code);
     echo json_encode($body);
     exit;
@@ -98,17 +108,22 @@ try {
     if ($protected && !MachineAuth::allowed($role, $uri)) {
         respond($role === 'ops' ? 403 : 401, ['error' => $role === 'ops' ? 'forbidden_scope' : 'unauthorized']);
     }
+    if ($protected && MachineAuth::viewerDenied($role,$method,$uri,$_SERVER)) { respond(403,['error'=>'forbidden_scope']); }
     // The status and read-only routes boot without even reading the signing-key env.
     $signer = static function (): LicenseSigner { static $instance; return $instance ??= new LicenseSigner(); };
     $store = new LicenseStore();
     if ($protected) { $store->setActor(MachineAuth::actor($role, $_SERVER)); }
     $issuer = static fn (): LicenseIssuer => new LicenseIssuer($signer(), $store);
-    $api = new AdminApi($store, $role);
+    $api = new AdminApi($store, $role, $issuer);
     if (str_starts_with($uri, '/admin/')) {
-        if (strlen($raw) > 65536) { respond(400, ['error' => 'invalid_input']); }
+        if (strlen($raw) > ($uri === '/admin/ops/ingest' ? 262144 : 65536)) { respond(400, ['error' => 'invalid_input']); }
         $input = $raw === '' ? [] : json_decode($raw, true);
         if (!is_array($input)) { respond(400, ['error' => 'invalid_input']); }
         [$status, $out] = $api->handle($method, $uri, $input, $_GET);
+        if ($uri === '/admin/export/orders.csv' && $status === 200 && isset($out['csv'])) {
+            header('Content-Type: text/csv; charset=utf-8'); header('Content-Disposition: attachment; filename=fluxfiles-orders.csv');
+            echo Mask::safe($out['csv']); exit;
+        }
         if (!str_ends_with($uri, '/reveal')) { $out = Mask::row($out); }
         respond($status, $out);
     }
@@ -172,6 +187,7 @@ try {
         if (!empty($rec['renews_jti']) || isset((\FluxFiles\LicenseServer\Plans::get($recPlan) ?? [])['renews']) || str_ends_with($recPlan, '-renewal')) {
             respond(404, ['error' => 'not found', 'hint' => 'renewal keys are emailed to the address of the licence they extend']);
         }
+        $activityJti = (string) $rec['jti'];
         $age = time() - (int) ($rec['created_at'] ?? 0);   // stored as a unix int
         if ($age > CLAIM_WINDOW) {
             respond(410, ['error' => 'claim window expired', 'hint' => 'the key was emailed to you']);
@@ -188,6 +204,7 @@ try {
         $dl = ProDownload::linkFor($rec, $store, ProDownload::TIMEOUT_CLAIM);
         if ($dl !== null) {
             $out['pro_download'] = $dl;
+            $store->recordDownload('fluxfiles-pro', 'pro_link_claim', (string) ($dl['version'] ?? ''));
         }
         respond(200, $out);
     }
@@ -224,6 +241,7 @@ try {
         if ($rec === null) {
             $fail();
         }
+        $activityJti = (string) $rec['jti'];
         // Count the licence bucket for EVERY known key before judging it, so a revoked, a
         // superseded and a live key behave the same from outside.
         if (!$store->rateHit('dl-jti:' . $rec['jti'], 600, 5)) {
@@ -239,6 +257,7 @@ try {
         if ($dl === null) {
             $fail();
         }
+        $store->recordDownload('fluxfiles-pro', 'pro_link_download', (string) ($dl['version'] ?? ''));
         respond(200, ['pro_download' => $dl]);
     }
 
@@ -259,7 +278,8 @@ try {
         }
         $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
         $key = preg_match('/^Bearer\s+(\S+)\s*$/i', $auth, $bm) === 1 ? $bm[1] : '';
-        $payload = $key !== '' ? $signer()->verify($key) : null;
+        $public = Config::get('FLUXFILES_LICENSE_K1_PUB');
+        $payload = $key !== '' ? ($public !== '' ? LicenseSigner::verifyPublic($key, $public) : $signer()->verify($key)) : null;
         if ($payload === null) {
             respond(401, ['error' => 'invalid key']);
         }
@@ -270,6 +290,7 @@ try {
         $client = preg_match('/^[a-z0-9.\/-]{1,64}$/', (string) ($b['client'] ?? '')) === 1 ? (string) $b['client'] : '-';
 
         $jti = (string) $payload['jti'];
+        $activityJti = $jti;
         // Per IP (IPv6 as its /64) as well as per licence. The licence bucket is the tight one, so
         // an agency with many sites behind one NAT is bounded by the looser IP bucket only.
         if (!$store->rateHit('refresh-ip:' . ProDownload::ipBucket((string) ($_SERVER['REMOTE_ADDR'] ?? '')), 3600, 120)
@@ -360,9 +381,10 @@ try {
         $mailer = $api->mailer();
         $b = json_decode($raw, true) ?: [];
         $limit = max(1, min($role === 'ui' ? 10 : 100, (int) ($b['limit'] ?? 100)));
-        $sent = 0; $failed = 0;
+        $sent = 0; $failed = 0; $deliveryDeadline = microtime(true) + 20;
         foreach ($store->undelivered($limit) as $rec) {
-            $mailer = $api->mailer((string) $rec['jti']);
+            $remainingSeconds = (int)floor($deliveryDeadline-microtime(true)); if ($remainingSeconds < 1) { break; }
+            $mailer = $api->mailer((string) $rec['jti']); $mailer->setTimeout(min(15,$remainingSeconds));
             if ($mailer->sendLicense($rec)) {
                 $store->markMailed((string) $rec['jti']);
                 $sent++;
