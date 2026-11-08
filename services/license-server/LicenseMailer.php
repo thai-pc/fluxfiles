@@ -156,6 +156,15 @@ final class LicenseMailer
     private function deliver(string $to, string $subject, string $body, ?string $html = null, string $failPrefix = 'license mail failed for '): bool
     {
         try {
+            // Sandbox guard: a recipient outside FLUXFILES_MAIL_ALLOW_TO is NOT sent. It
+            // reports true ("handled") on purpose: sendLicense()'s result drives mailed_at,
+            // and false would leave the row unmailed so every Polar retry and /redeliver
+            // run would attempt (and fail to) deliver it again, forever.
+            if (!$this->recipientAllowed($to)) {
+                error_log('mail suppressed by FLUXFILES_MAIL_ALLOW_TO (to=' . self::maskEmail($to) . ')');
+                return true;
+            }
+            $subject = self::subjectPrefix() . $subject;
             return match ($this->transport) {
                 'resend' => $this->sendResend($to, $subject, $body, $html),
                 'smtp' => $this->sendSmtp($to, $subject, $body, $html),
@@ -166,6 +175,47 @@ final class LicenseMailer
             error_log($failPrefix . $to . ': ' . $e->getMessage());
             return false;
         }
+    }
+
+    /**
+     * FLUXFILES_MAIL_SUBJECT_PREFIX with a trailing space, or '' when unset. Control
+     * characters (CR/LF included, so it can never inject a header) are stripped and the
+     * value is capped at 32 characters.
+     */
+    private static function subjectPrefix(): string
+    {
+        $p = (string) preg_replace('/[\x00-\x1F\x7F]+/', '', (string) getenv('FLUXFILES_MAIL_SUBJECT_PREFIX'));
+        $p = trim(substr($p, 0, 32));
+        return $p === '' ? '' : $p . ' ';
+    }
+
+    /**
+     * FLUXFILES_MAIL_ALLOW_TO: comma-separated exact addresses and/or "@domain" suffixes,
+     * case-insensitive. Unset or empty = no restriction.
+     */
+    private function recipientAllowed(string $to): bool
+    {
+        $raw = trim((string) getenv('FLUXFILES_MAIL_ALLOW_TO'));
+        if ($raw === '') {
+            return true;
+        }
+        $to = strtolower(trim($to));
+        foreach (explode(',', $raw) as $rule) {
+            $rule = strtolower(trim($rule));
+            if ($rule === '') {
+                continue;
+            }
+            if ($rule[0] === '@' ? str_ends_with($to, $rule) : $to === $rule) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static function maskEmail(string $e): string
+    {
+        $at = strrpos($e, '@');
+        return $at === false ? '***' : substr($e, 0, 1) . '***' . substr($e, $at);
     }
 
     // ── Content model ────────────────────────────────────────────────────────

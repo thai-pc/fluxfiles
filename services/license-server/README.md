@@ -61,6 +61,34 @@ because implementations disagree and guessing wrong silently drops every purchas
 Delivery is at-least-once; issuing is idempotent on `(gateway, order_id)`, so a retry
 returns the same key rather than minting a second one.
 
+## Sandbox instance (Polar sandbox)
+
+Polar sandbox purchases must never reach the production instance. Run a second copy of
+this server with its own state and three extra env vars:
+
+| Var | Effect |
+| --- | --- |
+| `FLUXFILES_MAIL_SUBJECT_PREFIX` | Prepended, plus one space, to every outgoing subject (customer and ops), e.g. `[SANDBOX]`. Control characters (CR/LF included) are stripped, so it cannot inject a header; capped at 32 characters. Default empty. |
+| `FLUXFILES_MAIL_ALLOW_TO` | Comma-separated exact addresses and/or `@domain` suffixes, case-insensitive. When set, mail to anyone else is **not sent** (licence, reminder, unmatched-renewal and ops mail alike) and the log says `mail suppressed by FLUXFILES_MAIL_ALLOW_TO (to=j***@host)`. Default empty = no restriction. Protects the reputation of the shared sending domain. |
+| `FLUXFILES_LICENSE_INSTANCE` | Shown in `GET /health` as `{"ok":true,"instance":"sandbox"}`. Unset keeps the exact `{"ok":true}` body. |
+
+A suppressed mail counts as **handled** (the mailer returns `true`), so `mailed_at` is
+stamped and the Polar webhook answers 200 as usual. Returning `false` would leave the row
+unmailed and every Polar retry and `/redeliver` run would try (and be suppressed) again,
+forever. The consequence is that a suppressed licence is not re-sent later; read the key
+through the admin `/licenses` endpoint if you need it.
+
+What makes it a real sandbox, not just a labelled copy:
+
+- **Own DB** (`FLUXFILES_LICENSE_DB`) and own admin/update tokens.
+- **Own test signing key.** Generate any Ed25519 keypair that is NOT listed in core's
+  `LicenseManager::PUBLIC_KEYS` (never reuse `k1`). Core does not trust it, so sandbox
+  keys cannot unlock real modules. Generate it on the sandbox host; the secret never leaves it.
+- **Polar sandbox organisation** with its own products (`POLAR_TOKEN_SANDBOX` in `polar-setup.php`),
+  its own `FLUXFILES_POLAR_PLAN_MAP` and its **own webhook secret**, pointed at the sandbox host's
+  `/webhook/polar`.
+- Mail: `FLUXFILES_MAIL_ALLOW_TO` set to your own addresses, `FLUXFILES_MAIL_SUBJECT_PREFIX=[SANDBOX]`.
+
 ## FluxFiles Pro download (WordPress add-on)
 
 Set `FLUXFILES_PRO_UPDATE_URL` (the update server's https base URL) and `FLUXFILES_LANDING_ORIGIN`.
