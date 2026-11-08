@@ -81,6 +81,18 @@ final class LicenseIssuer
             $plan['modules'] = array_values(array_filter(explode(',', (string) $base['modules'])));
         }
 
+        // Keep `issued` strictly above everything this subscription/chain has produced, so a
+        // clock that stepped backwards cannot mint a key a refreshing client would reject.
+        $subId = trim((string) ($order['subscription_id'] ?? ''));
+        $floor = 0;
+        if ($base !== null) {
+            $floor = (int) $base['issued'];
+        } elseif ($subId !== '') {
+            $floor = $this->store->maxIssuedForSubscription($subId);
+        } elseif (($order['gateway'] ?? 'manual') !== 'manual') {
+            $floor = $this->store->maxIssuedForBuyerPlan($email, $planId);
+        }
+
         $minted = $this->signer->mint([
             'customer'    => (string) ($order['customer'] ?? $email),
             'edition'     => (string) $plan['edition'],
@@ -89,6 +101,7 @@ final class LicenseIssuer
             'ttlDays'     => $plan['ttlDays'],
             'graceDays'   => (int) ($plan['graceDays'] ?? 14),
             'extendFrom'  => $extendFrom,
+            'issuedAtLeast' => $floor > 0 ? $floor + 1 : 0,
         ]);
         $p = $minted['payload'];
 
@@ -114,6 +127,8 @@ final class LicenseIssuer
             'grace_days'  => $graceDays,
             'customer_id' => $customerId,
             'renews_jti'  => $base !== null ? (string) $base['jti'] : '',
+            'subscription_id' => $subId,
+            'billing_reason'  => (string) ($order['billing_reason'] ?? ''),
         ]);
 
         if ((string) $record['jti'] !== (string) $p['jti']) {
@@ -127,8 +142,12 @@ final class LicenseIssuer
             // so that row stops reminding and a second lifetime under the same email
             // stays independently renewable.
             $this->store->supersedeJti((string) $base['jti']);
+        } elseif ((string) $record['gateway'] !== 'manual' && $subId !== '') {
+            // The subscription is known: retire only ITS earlier keys, so a buyer's second
+            // subscription on the same plan keeps running.
+            $this->store->supersedeActiveForSubscription($subId, (string) $record['jti']);
         } elseif ((string) $record['gateway'] !== 'manual') {
-            // A recurring subscription renewal is a NEW order (fresh order_id) but the
+            // No subscription id (legacy / one-time): A recurring subscription renewal is a NEW order (fresh order_id) but the
             // SAME buyer+plan — retire any other still-`active` gateway row for that pair
             // so only this newest one stays eligible for reminders (see the store
             // method's docblock for why the duplicate-row is otherwise unavoidable here).

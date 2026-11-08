@@ -1204,5 +1204,215 @@ test('html mail: the log transport shows the text part with the key redacted', f
 });
 
 
+// ── Key refresh: subscription linkage, newestRefreshable, verify, migration ─────────────
+
+/** @return array{0:LicenseStore,1:LicenseIssuer} one shared in-memory DB */
+function refreshRig(string $secretB64): array {
+    $store = new LicenseStore(':memory:');
+    return [$store, new LicenseIssuer(new LicenseSigner($secretB64), $store)];
+}
+function polarOrder(string $email, string $plan, string $order, string $sub = '', string $cid = 'cus1', string $reason = 'subscription_cycle'): array {
+    return ['email'=>$email,'plan'=>$plan,'gateway'=>'polar','order_id'=>$order,'customer_id'=>$cid,'subscription_id'=>$sub,'billing_reason'=>$reason];
+}
+
+test('refresh: extract carries subscription_id and billing_reason (flat id, nested object, or absent)', function () {
+    $d = ['id'=>'ord_1','status'=>'paid','product_id'=>'prod_pm','customer'=>['email'=>'a@x.com']];
+    $o = PolarWebhook::extract(['type'=>'order.paid','data'=>$d + ['subscription_id'=>'sub_1','billing_reason'=>'subscription_cycle']], ['prod_pm'=>'pro-monthly']);
+    assertEqual(['sub_1','subscription_cycle'], [$o['subscription_id'], $o['billing_reason']]);
+    $o = PolarWebhook::extract(['type'=>'order.paid','data'=>$d + ['subscription'=>['id'=>'sub_2']]], ['prod_pm'=>'pro-monthly']);
+    assertEqual(['sub_2',''], [$o['subscription_id'], $o['billing_reason']]);
+    $o = PolarWebhook::extract(['type'=>'order.paid','data'=>$d + ['subscription_id'=>"bad id\n"]], ['prod_pm'=>'pro-monthly']);
+    assertEqual('', $o['subscription_id'], 'a non-token value is dropped');
+});
+
+test('refresh: migration adds the columns and index to a pre-existing DB, idempotently, keeping rows', function () {
+    $f = sys_get_temp_dir() . '/fxold-' . bin2hex(random_bytes(4)) . '.sqlite';
+    $pdo = new PDO('sqlite:' . $f);
+    $pdo->exec("CREATE TABLE licenses (id INTEGER PRIMARY KEY AUTOINCREMENT, jti TEXT UNIQUE NOT NULL, email TEXT NOT NULL, customer TEXT, plan TEXT, edition TEXT, modules TEXT, enforcement TEXT, issued INTEGER, expires INTEGER, license_key TEXT NOT NULL, gateway TEXT, order_id TEXT, status TEXT DEFAULT 'active', created_at INTEGER)");
+    $pdo->exec("INSERT INTO licenses (jti,email,plan,license_key,gateway,order_id,issued) VALUES ('old1','o@x.com','pro','k','polar','ord-old',5)");
+    $pdo = null;
+    foreach ([1, 2] as $run) {
+        $st = new LicenseStore($f);
+        $chk = new PDO('sqlite:' . $f);
+        $cols = $chk->query('PRAGMA table_info(licenses)')->fetchAll(PDO::FETCH_COLUMN, 1);
+        assertTrue(in_array('subscription_id', $cols, true) && in_array('billing_reason', $cols, true), "columns (run $run)");
+        assertEqual(1, (int) $chk->query("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_subscription'")->fetchColumn(), 'index');
+        assertEqual(null, $st->findByJti('old1')['subscription_id'], 'old row has NULL');
+    }
+    foreach (glob($f . '*') as $x) { @unlink($x); }
+});
+
+test('refresh: issue stores the subscription and supersedes by subscription, not by email+plan', function () use ($secretB64) {
+    [$st, $iss] = refreshRig($secretB64);
+    $a1 = $iss->issue(polarOrder('ag@x.com','pro-monthly','o-a1','sub_A'))['record'];
+    $b1 = $iss->issue(polarOrder('ag@x.com','pro-monthly','o-b1','sub_B'))['record'];
+    assertEqual('sub_A', $a1['subscription_id']);
+    assertEqual('active', $st->findByJti($a1['jti'])['status'], 'sub B does not retire sub A');
+    $a2 = $iss->issue(polarOrder('ag@x.com','pro-monthly','o-a2','sub_A'))['record'];
+    assertEqual('superseded', $st->findByJti($a1['jti'])['status']);
+    assertEqual('active', $st->findByJti($b1['jti'])['status'], 'B untouched by A renewal');
+    assertEqual('active', $st->findByJti($a2['jti'])['status']);
+    // no subscription id: the old email+plan behaviour is kept
+    $l1 = $iss->issue(polarOrder('leg@x.com','pro-monthly','o-l1'))['record'];
+    $l2 = $iss->issue(polarOrder('leg@x.com','pro-monthly','o-l2'))['record'];
+    assertEqual('superseded', $st->findByJti($l1['jti'])['status']);
+});
+
+test('refresh: issued is strictly monotonic within a subscription even if the clock stepped back (issuedAtLeast)', function () use ($secretB64) {
+    $f = sys_get_temp_dir() . '/fxmono-' . bin2hex(random_bytes(4)) . '.sqlite';
+    $st = new LicenseStore($f); $iss = new LicenseIssuer(new LicenseSigner($secretB64), $st);
+    $a = $iss->issue(polarOrder('m@x.com','pro-monthly','o-m1','sub_M'))['record'];
+    // pretend the previous key was minted by a clock 1 h ahead of this one
+    $future = time() + 3600;
+    (new PDO('sqlite:' . $f))->exec("UPDATE licenses SET issued = {$future} WHERE jti = '{$a['jti']}'");
+    $b = $iss->issue(polarOrder('m@x.com','pro-monthly','o-m2','sub_M'))['record'];
+    assertEqual($future + 1, (int) $b['issued']);
+    $lm = (new LicenseSigner($secretB64))->verify($b['license_key']);
+    assertEqual($future + 1, $lm['issued'], 'signed payload too');
+    assertTrue((int) $b['expires'] >= $future + 31 * 86400, 'expiry follows issued');
+    $m = (new LicenseSigner($secretB64))->mint(['ttlDays'=>31,'issuedAtLeast'=>$future]);
+    assertEqual($future, $m['payload']['issued']);
+    foreach (glob($f . '*') as $x) { @unlink($x); }
+});
+
+test('refresh: LicenseSigner::verify accepts own keys, rejects wrong kid / tampered / foreign / oversize / malformed', function () use ($secretB64) {
+    $sg = new LicenseSigner($secretB64);
+    $k = $sg->mint(['edition'=>'pro','modules'=>['share']])['key'];
+    assertEqual('pro', $sg->verify($k)['edition']);
+    [$h,$p,$sig] = explode('.', $k);
+    $b = fn ($x) => rtrim(strtr(base64_encode($x), '+/', '-_'), '=');
+    $pl = json_decode(base64_decode(strtr($p, '-_', '+/')), true); $pl['edition'] = 'enterprise';
+    assertEqual(null, $sg->verify($h . '.' . $b(json_encode($pl)) . '.' . $sig), 'tampered payload');
+    assertEqual(null, $sg->verify($b('{"alg":"Ed25519","kid":"k2"}') . '.' . $p . '.' . $sig), 'unknown kid (sig no longer matches either)');
+    $other = new LicenseSigner(base64_encode(sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair())));
+    assertEqual(null, $sg->verify($other->mint([])['key']), 'foreign key');
+    assertEqual(null, $sg->verify($k . str_repeat('a', 5000)), 'oversize');
+    foreach (['', 'a.b', 'a.b.c.d', '..'] as $bad) { assertEqual(null, $sg->verify($bad), $bad); }
+    // a key signed by us with a different kid is refused too
+    $k2 = (new LicenseSigner($secretB64, 'k2'))->mint([])['key'];
+    assertEqual(null, $sg->verify($k2), 'wrong kid');
+});
+
+/** Rows with explicit issued/expires, to drive newestRefreshable precisely. */
+function putRow(LicenseStore $st, array $o): array {
+    static $n = 0; $n++;
+    return $st->record($o + ['jti'=>sprintf('%024x', $n),'email'=>'u@x.com','plan'=>'pro-monthly','edition'=>'pro','modules'=>['share','intake'],
+        'enforcement'=>'subscription','issued'=>1000 + $n,'expires'=>2000000000,'license_key'=>'key'.$n,'gateway'=>'polar','order_id'=>'ord'.$n,'grace_days'=>7]);
+}
+
+test('refresh: newestRefreshable follows a subscription chain to the newest, "current" when already newest', function () {
+    $st = new LicenseStore(':memory:');
+    $a = putRow($st, ['subscription_id'=>'S','issued'=>1000,'expires'=>2000000000,'status'=>'superseded']);
+    $b = putRow($st, ['subscription_id'=>'S','issued'=>1100,'expires'=>2000100000,'status'=>'superseded']);
+    $c = putRow($st, ['subscription_id'=>'S','issued'=>1200,'expires'=>2000200000]);
+    $r = $st->newestRefreshable($a, 1700000000);
+    assertEqual(['refreshed', $c['jti']], [$r['outcome'], $r['row']['jti']]);
+    assertEqual('current', $st->newestRefreshable($c, 1700000000)['outcome']);
+});
+
+test('refresh: two subscriptions of one email never cross', function () {
+    $st = new LicenseStore(':memory:');
+    $a1 = putRow($st, ['subscription_id'=>'A','issued'=>1000,'status'=>'superseded']);
+    putRow($st, ['subscription_id'=>'B','issued'=>5000]);
+    assertEqual('current', $st->newestRefreshable($a1, 1700000000)['outcome'], 'A has nothing newer; B is not offered');
+});
+
+test('refresh: renews_jti chain (one-time lifetime + updates renewals) is followed forward', function () {
+    $st = new LicenseStore(':memory:');
+    $base = putRow($st, ['plan'=>'pro-lifetime','enforcement'=>'perpetual','issued'=>1000,'expires'=>1800000000,'status'=>'superseded','gateway'=>'polar']);
+    $r1 = putRow($st, ['plan'=>'pro-renewal','enforcement'=>'perpetual','issued'=>2000,'expires'=>1900000000,'renews_jti'=>$base['jti'],'status'=>'superseded']);
+    $r2 = putRow($st, ['plan'=>'pro-renewal','enforcement'=>'perpetual','issued'=>3000,'expires'=>2000000000,'renews_jti'=>$r1['jti']]);
+    assertEqual($r2['jti'], $st->newestRefreshable($base, 1700000000)['row']['jti'], 'BFS reaches the grandchild');
+    assertEqual('current', $st->newestRefreshable($r2, 1700000000)['outcome']);
+});
+
+test('refresh: legacy Polar rows fall back to email+plan; two distinct subscriptions on it is ambiguous', function () {
+    $st = new LicenseStore(':memory:');
+    $l1 = putRow($st, ['email'=>'L@x.com','issued'=>1000,'status'=>'superseded','customer_id'=>'c1']);
+    $l2 = putRow($st, ['email'=>'l@x.com','issued'=>1100,'customer_id'=>'c1']);
+    assertEqual($l2['jti'], $st->newestRefreshable($l1, 1700000000)['row']['jti'], 'case-insensitive email, same plan');
+    $other = putRow($st, ['email'=>'l@x.com','issued'=>1500,'customer_id'=>'cX']);
+    assertEqual('current', $st->newestRefreshable($l2, 1700000000)['outcome'], 'a different known customer is not offered');
+    putRow($st, ['email'=>'l@x.com','issued'=>1200,'subscription_id'=>'S1','customer_id'=>'c1']);
+    assertEqual('refreshed', $st->newestRefreshable($l1, 1700000000)['outcome'], 'one subscription id is still unambiguous');
+    putRow($st, ['email'=>'l@x.com','issued'=>1300,'subscription_id'=>'S2','customer_id'=>'c1']);
+    $r = $st->newestRefreshable($l1, 1700000000);
+    assertEqual(['refused','ambiguous'], [$r['outcome'], $r['reason']]);
+});
+
+test('refresh: manual rows with no chain are always "current"', function () {
+    $st = new LicenseStore(':memory:');
+    $m = putRow($st, ['gateway'=>'manual','plan'=>'pro-monthly']);
+    putRow($st, ['gateway'=>'manual','plan'=>'pro-monthly','issued'=>9999]);   // another manual key of the same buyer: not a chain
+    assertEqual('current', $st->newestRefreshable($m, 1700000000)['outcome']);
+});
+
+test('refresh: revoked / refunded / cascade-cancelled rows and dead chains are refused', function () {
+    $st = new LicenseStore(':memory:');
+    foreach (['revoked','refunded'] as $stt) {
+        $a = putRow($st, ['subscription_id'=>"D$stt",'issued'=>1000,'status'=>$stt]);
+        assertEqual('refused', $st->newestRefreshable($a, 1700000000)['outcome'], "presented $stt");
+    }
+    // newest order refunded while an older key is presented
+    $old = putRow($st, ['subscription_id'=>'R','issued'=>1000,'status'=>'superseded']);
+    $new = putRow($st, ['subscription_id'=>'R','issued'=>1100]);
+    assertEqual('refreshed', $st->newestRefreshable($old, 1700000000)['outcome']);
+    $st->setStatus($new['jti'], 'refunded');
+    assertEqual('chain-dead', $st->newestRefreshable($old, 1700000000)['reason'], 'latest refunded kills the chain');
+    // cascade: a refunded lifetime base cancels its renewal; the renewal presented is refused
+    $base = putRow($st, ['plan'=>'pro-lifetime','enforcement'=>'perpetual','issued'=>1000,'status'=>'superseded']);
+    $ren = putRow($st, ['plan'=>'pro-renewal','enforcement'=>'perpetual','issued'=>2000,'renews_jti'=>$base['jti']]);
+    $st->setStatusCascade($base['jti'], 'refunded');
+    assertEqual('refused', $st->newestRefreshable($st->findByJti($ren['jti']), 1700000000)['outcome']);
+});
+
+test('refresh: support-only, no-expiry and stale (beyond expires + grace + cap) are refused; inside the cap is allowed', function () {
+    $st = new LicenseStore(':memory:');
+    $sup = putRow($st, ['edition'=>'support','modules'=>[],'subscription_id'=>'SUP','issued'=>1000]);
+    putRow($st, ['edition'=>'support','modules'=>[],'subscription_id'=>'SUP','issued'=>1100]);
+    assertEqual('support', $st->newestRefreshable($sup, 1700000000)['reason']);
+    $nx = putRow($st, ['expires'=>null,'enforcement'=>'perpetual','plan'=>'pro','subscription_id'=>'NX']);
+    assertEqual('no-expiry', $st->newestRefreshable($nx, 1700000000)['reason']);
+    $exp = 1700000000;
+    $s1 = putRow($st, ['subscription_id'=>'ST','issued'=>1000,'expires'=>$exp,'status'=>'superseded']);
+    putRow($st, ['subscription_id'=>'ST','issued'=>1100,'expires'=>$exp + 86400 * 31]);
+    $edge = $exp + (7 + 90) * 86400;
+    assertEqual('refreshed', $st->newestRefreshable($s1, $edge, 90)['outcome'], 'at the cap');
+    assertEqual('stale', $st->newestRefreshable($s1, $edge + 1, 90)['reason'], 'one second past');
+    assertEqual('refreshed', $st->newestRefreshable($s1, $edge + 1, 91)['outcome'], 'cap is configurable');
+});
+
+test('refresh: never returns an older or earlier-expiring key; follows an edition change with a later expiry', function () {
+    $st = new LicenseStore(':memory:');
+    $p = putRow($st, ['subscription_id'=>'E','issued'=>1000,'expires'=>2000000000,'status'=>'superseded']);
+    putRow($st, ['subscription_id'=>'E','issued'=>900,'expires'=>2000500000,'status'=>'superseded']);   // older issued
+    putRow($st, ['subscription_id'=>'E','issued'=>1200,'expires'=>1999999999]);                          // earlier expiry (e.g. annual -> monthly)
+    $r = $st->newestRefreshable($p, 1700000000);
+    assertEqual('current', $r['outcome'], 'neither candidate qualifies');
+    $up = putRow($st, ['subscription_id'=>'E','issued'=>1300,'expires'=>2000100000,'edition'=>'studio','plan'=>'studio-monthly','modules'=>['share','intake','ai']]);
+    $r = $st->newestRefreshable($p, 1700000000);
+    assertEqual([$up['jti'], 'studio'], [$r['row']['jti'], $r['row']['edition']]);
+});
+
+test('refresh: setStatusForSubscription revokes every row, spares other subscriptions, and un-revokes to one active row', function () {
+    $st = new LicenseStore(':memory:');
+    $a1 = putRow($st, ['subscription_id'=>'X','issued'=>1000,'status'=>'superseded']);
+    $a2 = putRow($st, ['subscription_id'=>'X','issued'=>1100]);
+    $o = putRow($st, ['subscription_id'=>'Y','issued'=>1100]);
+    assertEqual(2, $st->setStatusForSubscription('X', 'revoked'));
+    assertEqual(['revoked','revoked','active'], [$st->findByJti($a1['jti'])['status'], $st->findByJti($a2['jti'])['status'], $st->findByJti($o['jti'])['status']]);
+    assertEqual(false, $st->isUpdateEligible($a2['jti']));
+    assertEqual('refused', $st->newestRefreshable($st->findByJti($a1['jti']), 1700000000)['outcome']);
+    $st->setStatusForSubscription('X', 'active');
+    assertEqual(['superseded','active'], [$st->findByJti($a1['jti'])['status'], $st->findByJti($a2['jti'])['status']]);
+    assertEqual(0, $st->setStatusForSubscription('', 'revoked'), 'empty id matches nothing');
+});
+
+test('refresh: rateHit buckets IPv6 by /64 via ProDownload::ipBucket (reused by /refresh)', function () {
+    assertEqual(\FluxFiles\LicenseServer\ProDownload::ipBucket('2001:db8:1:2:aaaa::1'), \FluxFiles\LicenseServer\ProDownload::ipBucket('2001:db8:1:2:bbbb::9'));
+    assertTrue(\FluxFiles\LicenseServer\ProDownload::ipBucket('2001:db8:1:2::1') !== \FluxFiles\LicenseServer\ProDownload::ipBucket('2001:db8:1:3::1'));
+});
+
+
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f>0?1:0);
