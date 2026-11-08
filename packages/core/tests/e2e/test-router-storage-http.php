@@ -77,7 +77,7 @@ for ($i = 0; $i < 50; $i++) { $c = @fsockopen('127.0.0.1', $PORT, $e, $s, 0.2); 
 
 function get(string $url): array {
     $ch = curl_init($url);
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true]);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_PATH_AS_IS => true]);
     $body = (string) curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     return [$st, $body];
 }
@@ -127,6 +127,22 @@ try {
             [$st, $body] = get("{$BASE}{$p}");
             assertEqual(403, $st, $p);
             assertTrue(strpos($body, 'PRIVATE KEY') === false, "{$p} leaked key material");
+        }
+    });
+
+    test('case, encoding, dot and double-slash spellings of /storage/ are denied too', function () use ($BASE) {
+        file_put_contents(__DIR__ . '/../../storage/license-refresh.json', '{"secret":"licence overlay"}');
+        try {
+            foreach (['/Storage/rate_limit.json', '/STORAGE/rate_limit.json', '/storage//rate_limit.json', '/%73torage/rate_limit.json',
+                      '/./storage/rate_limit.json', '/Storage/license-refresh.json', '/%53torage/license-refresh.json', '/storage/license-refresh.json'] as $p) {
+                [$st, $body] = get("{$BASE}{$p}");
+                assertEqual(403, $st, $p);
+                assertTrue(strpos($body, 'secret') === false, "{$p} leaked");
+            }
+            [$st] = get("{$BASE}/public/../storage/license-refresh.json");
+            assertEqual(403, $st, 'dot-dot refused');
+        } finally {
+            @unlink(__DIR__ . '/../../storage/license-refresh.json');
         }
     });
 

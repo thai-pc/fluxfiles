@@ -140,15 +140,15 @@ final class LicenseKeyFile
         if ($file === null) {
             return ['key' => $raw, 'source' => 'unreadable', 'fetched_at' => null];
         }
-        $fileLm = new LicenseManager($file['key']);
-        if (!$fileLm->isVerified()) {
+        if (!hash_equals(self::anchor($envKey), $file['anchor'])) {
+            // derived from some other key: not ours (unless it is corrupt, which we report)
+            return (new LicenseManager($file['key']))->isVerified() ? $none : ['key' => $raw, 'source' => 'unreadable', 'fetched_at' => null];
+        }
+        if (!(new LicenseManager($file['key']))->isVerified()) {
             return ['key' => $raw, 'source' => 'unreadable', 'fetched_at' => null];
         }
-        if (!hash_equals(self::anchor($envKey), $file['anchor'])) {
-            return $none; // derived from some other key: not ours
-        }
-        $fileIssued = $fileLm->issuedAt();
-        if ($fileIssued === null || $fileIssued <= ($envLm->issuedAt() ?? 0)) {
+        // Same rules as a live refresh: paid edition, issued strictly newer, expiry not earlier.
+        if (!LicenseRefresh::accept($envKey, $file['key'])) {
             return $none;
         }
         return ['key' => $file['key'], 'source' => 'refreshed', 'fetched_at' => $file['fetched_at']];
@@ -161,39 +161,49 @@ final class LicenseKeyFile
     }
 
     /**
-     * Store a verified key atomically: flock, re-read (two crons can race and the higher
-     * `issued` must survive), write a temp file in the same directory, rename over the target.
-     * A new file is 0600; an existing one keeps its mode and group, capped at 0640.
+     * Store a verified key atomically: flock, re-read (two crons can race and the newer key
+     * must survive), write a temp file in the same directory, rename over the target.
      *
-     * @return string 'written' | 'kept' (the file already held a key at least as new)
+     * Permissions: an existing file keeps its mode and group, capped at 0640. A NEW file is
+     * 0600, except when the directory belongs to another group than this process (the CLI
+     * runs as root or a deploy user, PHP-FPM as www-data): it then gets the directory's group
+     * (when we may) and 0640, so the web user can read it. The lock file follows the same
+     * rule with 0660, since a locker has to open it for writing.
+     *
+     * @return string 'written' | 'kept' (the file already held a key at least as good)
      * @throws \RuntimeException with a message that never contains the key
      */
     public static function store(string $path, #[\SensitiveParameter] string $key, string $anchor): string
     {
         $key = self::clean($key);
         $lm = new LicenseManager($key);
-        if (!$lm->isVerified()) {
+        if (!$lm->isVerified() || $lm->edition() === 'free') {
             throw new \RuntimeException('refusing to store a key that does not verify');
         }
         $dir = dirname($path);
         if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
             throw new \RuntimeException('licence file directory is not writable');
         }
+        $dirGid = self::sharedGid($dir);
 
         $old = umask(0077);
         try {
-            $lock = @fopen($path . '.lock', 'c');
+            $lockPath = $path . '.lock';
+            $fresh = !file_exists($lockPath);
+            $lock = @fopen($lockPath, 'c') ?: @fopen($lockPath, 'r');   // flock needs no write access
             if ($lock === false || !flock($lock, LOCK_EX)) {
-                throw new \RuntimeException('could not lock the licence file');
+                throw new \RuntimeException('could not lock the licence file (is the lock file owned by another user?)');
+            }
+            if ($fresh && $dirGid !== null && @chgrp($lockPath, $dirGid)) {
+                @chmod($lockPath, 0660);
             }
             $tmp = null;
             try {
+                self::sweepTemp($dir);
                 $existing = self::read($path);
-                if ($existing !== null && hash_equals($anchor, $existing['anchor'])) {
-                    $ex = new LicenseManager($existing['key']);
-                    if ($ex->isVerified() && ($ex->issuedAt() ?? 0) >= ($lm->issuedAt() ?? 0)) {
-                        return 'kept';
-                    }
+                if ($existing !== null && hash_equals($anchor, $existing['anchor']) && LicenseRefresh::accept($existing['key'], $key) === false
+                    && (new LicenseManager($existing['key']))->isVerified()) {
+                    return 'kept';
                 }
 
                 $mode = 0600;
@@ -202,6 +212,9 @@ final class LicenseKeyFile
                 if ($st !== false) {
                     $mode = ($st['mode'] & 0640) ?: 0600;
                     $gid = $st['gid'];
+                } elseif ($dirGid !== null) {
+                    $gid = $dirGid;
+                    $mode = 0640;
                 }
 
                 $json = json_encode([
@@ -217,14 +230,15 @@ final class LicenseKeyFile
                 if ($json === false || $tmp === false || @file_put_contents($tmp, $json . "\n") === false) {
                     throw new \RuntimeException('could not write the licence file');
                 }
-                @chmod($tmp, $mode);
-                if ($gid !== null) {
-                    @chgrp($tmp, $gid);
+                if ($gid !== null && !@chgrp($tmp, $gid)) {
+                    $mode = 0600;   // cannot keep or share the group: stay private to the owner
                 }
+                @chmod($tmp, $mode);
                 if (!@rename($tmp, $path)) {
                     throw new \RuntimeException('could not replace the licence file');
                 }
                 $tmp = null;
+                self::guardDir($dir);
                 return 'written';
             } finally {
                 if (is_string($tmp)) {
@@ -236,6 +250,75 @@ final class LicenseKeyFile
         } finally {
             umask($old);
         }
+    }
+
+    /** The directory's group when it differs from this process's primary group, else null. */
+    private static function sharedGid(string $dir): ?int
+    {
+        $st = @stat($dir);
+        if ($st === false || !function_exists('posix_getegid') || $st['gid'] === posix_getegid()) {
+            return null;
+        }
+        return $st['gid'];
+    }
+
+    /** Remove crashed temp files (older than 1 h); called while holding the lock. */
+    private static function sweepTemp(string $dir): void
+    {
+        foreach (glob($dir . '/.license-refresh-*') ?: [] as $f) {
+            if (is_file($f) && time() - (int) @filemtime($f) > 3600) {
+                @unlink($f);
+            }
+        }
+    }
+
+    /**
+     * Keep the directory closed to the web like FluxDirGuard does for `_fluxfiles/`: a deny-all
+     * .htaccess and an empty index.html, only when missing. Skipped for a directory that also
+     * holds public uploads (the default storage dir): a deny-all there would break them, and
+     * /storage/ is denied by router.php and nginx instead.
+     */
+    private static function guardDir(string $dir): void
+    {
+        if (is_dir($dir . '/uploads')) {
+            return;
+        }
+        if (!file_exists($dir . '/.htaccess')) {
+            @file_put_contents($dir . '/.htaccess', FluxDirGuard::HTACCESS);
+        }
+        if (!file_exists($dir . '/index.html')) {
+            @file_put_contents($dir . '/index.html', '');
+        }
+    }
+
+    /**
+     * Why PHP-FPM may not be able to read the file, or null. The CLI often runs as root or a
+     * deploy user while FPM runs as www-data: a file that belongs to neither the directory's
+     * owner nor (readable by) the directory's group is silently ignored at runtime.
+     */
+    public static function permissionWarning(string $path, bool $withPath = false): ?string
+    {
+        $f = @stat($path);
+        $d = @stat(dirname($path));
+        if ($f === false || $d === false || $f['uid'] === $d['uid']) {
+            return null;
+        }
+        if ($f['gid'] === $d['gid'] && ($f['mode'] & 0040) !== 0) {
+            return null;
+        }
+        $target = $withPath ? $path : '<licence file>';
+        return 'The licence file is not owned by the storage directory\'s owner and is not group-readable by its group, '
+            . 'so PHP-FPM (another user) may be unable to read it and would ignore the refreshed key. '
+            . 'Run the command as the web user (sudo -u www-data php vendor/bin/fluxfiles ...) or fix it: '
+            . 'chgrp ' . $d['gid'] . ' ' . $target . ' && chmod 0640 ' . $target;
+    }
+
+    /** Warning when the resolved default path sits inside vendor/ (a composer install wipes it). */
+    public static function vendorWarning(array $env): ?string
+    {
+        return strpos(self::path($env), '/vendor/') !== false
+            ? 'The licence file would live inside vendor/, which "composer install" wipes. Set FLUXFILES_LICENSE_FILE to an absolute path outside vendor/.'
+            : null;
     }
 
     /**
@@ -304,9 +387,12 @@ final class LicenseKeyFile
         ];
         if ($write) {
             try {
-                self::store(self::path($env), $new, self::anchor($envKey));
-                $out['stored'] = true;
+                $stored = self::store(self::path($env), $new, self::anchor($envKey));
                 unset($out['key']);
+                if ($stored === 'kept') {
+                    return ['outcome' => 'current', 'message' => 'A key at least as new was already stored; nothing changed.', 'stored' => false];
+                }
+                $out['stored'] = true;
             } catch (\RuntimeException $e) {
                 return ['outcome' => 'error', 'message' => 'Licence refresh failed: ' . $e->getMessage()];
             }

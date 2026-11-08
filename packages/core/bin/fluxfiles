@@ -75,8 +75,18 @@ function fluxfiles_refresh_disabled(): bool
 /** Refresh the licence key through the vendor licence server (never prints the key). */
 function fluxfiles_license_refresh(bool $write): array
 {
-    $curl = new \FluxFiles\CurlTransport(10, \FluxFiles\LicenseRefresh::MAX_RESPONSE);
+    $curl = new \FluxFiles\CurlTransport(5, \FluxFiles\LicenseRefresh::MAX_RESPONSE);
     return \FluxFiles\LicenseKeyFile::refresh($_ENV, [$curl, 'request'], $write);
+}
+
+/** Config warnings that affect where the refreshed key lives (stderr, never the key). */
+function fluxfiles_license_path_warnings(): void
+{
+    foreach ([\FluxFiles\LicenseKeyFile::pathWarning($_ENV), \FluxFiles\LicenseKeyFile::vendorWarning($_ENV)] as $w) {
+        if ($w !== null) {
+            fwrite(STDERR, $w . "\n");
+        }
+    }
 }
 
 // `license refresh` — fetch the newest key of this subscription and keep it in a
@@ -100,11 +110,14 @@ if ($command === 'license') {
         exit(1);
     }
     \FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
-    $warn = \FluxFiles\LicenseKeyFile::pathWarning($_ENV);
-    if ($warn !== null) {
-        fwrite(STDERR, $warn . "\n");
-    }
+    fluxfiles_license_path_warnings();
     $res = fluxfiles_license_refresh(!$check && !$print);
+    if (($res['stored'] ?? false) === true) {
+        $pw = \FluxFiles\LicenseKeyFile::permissionWarning(\FluxFiles\LicenseKeyFile::path($_ENV), true);
+        if ($pw !== null) {
+            fwrite(STDERR, 'WARNING: ' . $pw . "\n");
+        }
+    }
     $exit = match ($res['outcome']) {
         'refreshed', 'current', 'nothing' => 0,
         'config' => 1,
@@ -170,8 +183,15 @@ if ($command === 'update') {
     // A renewed perpetual licence only opens the update window with its NEWEST key, so
     // refresh first and send the effective key. Best-effort: one stderr line, then carry on.
     if (!$noRefresh && !fluxfiles_refresh_disabled()) {
+        fluxfiles_license_path_warnings();
         try {
             $refreshed = fluxfiles_license_refresh(true);
+            if (($refreshed['stored'] ?? false) === true) {
+                $pw = \FluxFiles\LicenseKeyFile::permissionWarning(\FluxFiles\LicenseKeyFile::path($_ENV), true);
+                if ($pw !== null) {
+                    fwrite(STDERR, 'WARNING: ' . $pw . "\n");
+                }
+            }
             if (in_array($refreshed['outcome'], ['unavailable', 'invalid', 'rejected', 'throttled', 'error', 'config'], true)) {
                 fwrite(STDERR, 'Licence refresh skipped: ' . $refreshed['message'] . "\n");
             }

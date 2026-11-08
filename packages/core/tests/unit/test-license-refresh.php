@@ -10,6 +10,8 @@
 
 declare(strict_types=1);
 
+define('FLUXFILES_TESTING', true);   // enables LicenseManager::overridePublicKeys()
+
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use FluxFiles\LicenseKeyFile;
@@ -83,7 +85,7 @@ test('request shape: POST /refresh, Bearer header, JSON body, key not in URL/bod
     assertEqual('Bearer ' . $CUR, $calls[0]['h']['Authorization']);
     assertEqual(['v' => 1, 'client' => 'core/1.2.0'], json_decode($calls[0]['b'], true));
     assertTrue(!str_contains($calls[0]['url'], $CUR) && !str_contains((string) $calls[0]['b'], $CUR));
-    assertEqual(10, $calls[0]['t']);
+    assertEqual(5, $calls[0]['t']);
 });
 test('refreshed: returns the key', function () use ($CUR, $NEW, $stub, $ok) {
     $r = LicenseRefresh::request($CUR, 'https://l.example', $stub($ok(['status' => 'refreshed', 'license_key' => $NEW, 'jti' => 'x', 'issued' => 2000, 'expires' => 7000])));

@@ -11,6 +11,31 @@
  */
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$uri = is_string($uri) ? $uri : '/';
+
+// Normalise BEFORE any prefix test: the built-in server decodes and resolves the path itself
+// when a request falls through to the static handler, so a deny rule has to see the same
+// path (`/%73torage/`, `/./storage/`, `/storage//x`; and `/Storage/` on a case-insensitive
+// filesystem, handled by the strncasecmp below). `..` and NUL are refused outright.
+$decoded = str_replace('\\', '/', rawurldecode($uri));
+if (strpos($decoded, "\0") !== false) {
+    http_response_code(400);
+    echo 'Bad request';
+    return true;
+}
+$segments = [];
+foreach (explode('/', $decoded) as $seg) {
+    if ($seg === '..') {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Forbidden';
+        return true;
+    }
+    if ($seg !== '' && $seg !== '.') {
+        $segments[] = $seg;
+    }
+}
+$uri = '/' . implode('/', $segments) . (count($segments) > 0 && substr($decoded, -1) === '/' ? '/' : '');
 
 // Serve favicon as inline SVG
 if ($uri === '/favicon.ico') {
@@ -92,7 +117,7 @@ if (strncmp($uri, '/api/', 5) === 0) {
 // very same directory — same reasoning as FileManager::isReservedKey().
 //
 // `_variants/` is deliberately NOT blocked: variant URLs are public by design.
-if (strncmp($uri, '/storage/uploads/', 17) === 0) {
+if (strncasecmp($uri, '/storage/uploads/', 17) === 0) {
     foreach (explode('/', trim($uri, '/')) as $segment) {
         if (strcasecmp($segment, '_fluxfiles') === 0) {
             http_response_code(403);
@@ -104,7 +129,7 @@ if (strncmp($uri, '/storage/uploads/', 17) === 0) {
 }
 
 // Serve uploaded files from /storage/uploads/
-if (strncmp($uri, '/storage/uploads/', 17) === 0) {
+if (strncasecmp($uri, '/storage/uploads/', 17) === 0) {
     $uploadsBase = realpath(__DIR__ . '/storage/uploads');
     $file = realpath(__DIR__ . $uri);
 
@@ -145,7 +170,7 @@ if (strncmp($uri, '/storage/uploads/', 17) === 0) {
 // (ephemeral BYOB private keys, rate-limit state, locks).
 // Without this the built-in server would happily serve it verbatim.
 // Mirrors docker/nginx.conf's `location ^~ /storage/ { deny all; }`.
-if (strncmp($uri, '/storage/', 9) === 0) {
+if (strncasecmp($uri, '/storage/', 9) === 0) {
     http_response_code(403);
     header('Content-Type: text/plain; charset=utf-8');
     echo 'Forbidden';

@@ -10,6 +10,8 @@
 
 declare(strict_types=1);
 
+define('FLUXFILES_TESTING', true);   // enables LicenseManager::overridePublicKeys()
+
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use FluxFiles\LicenseKeyFile;
@@ -64,7 +66,7 @@ test('creates the file at 0600 with the documented shape; no temp file left', fu
     assertEqual(1000, $j['issued']);
     assertEqual(5000, $j['expires']);
     assertTrue(is_int($j['fetched_at']));
-    $left = array_values(array_diff(scandir($d), ['.', '..', 'lic.json', 'lic.json.lock']));
+    $left = array_values(array_diff(scandir($d), ['.', '..', 'lic.json', 'lic.json.lock', '.htaccess', 'index.html']));
     assertEqual([], $left, 'no tmp files');
     $rm($d);
 });
@@ -99,7 +101,7 @@ test('concurrent writers: the highest issued wins and the file is never torn', f
     $keys = [];
     for ($i = 1; $i <= 8; $i++) { $keys[$i] = $mint(['issued' => 1000 + $i * 10]); }
     $script = $d . '/w.php';
-    file_put_contents($script, '<?php require ' . var_export(realpath(__DIR__ . '/../../vendor/autoload.php'), true) . ';'
+    file_put_contents($script, '<?php define(\'FLUXFILES_TESTING\', true); require ' . var_export(realpath(__DIR__ . '/../../vendor/autoload.php'), true) . ';'
         . '\FluxFiles\LicenseManager::overridePublicKeys([\'k1\' => $argv[4]]);'
         . '\FluxFiles\LicenseKeyFile::store($argv[1], $argv[2], $argv[3]);');
     $procs = [];
@@ -130,7 +132,7 @@ test('failure cleans up the temp file and leaks no key into the message', functi
     try { LicenseKeyFile::store("$d/lic.json", $K1, $anchor); } catch (\RuntimeException $e) { $msg = $e->getMessage(); }
     assertTrue($msg !== '', 'threw');
     assertTrue(!str_contains($msg, $K1));
-    $left = array_values(array_diff(scandir($d), ['.', '..', 'lic.json', 'lic.json.lock']));
+    $left = array_values(array_diff(scandir($d), ['.', '..', 'lic.json', 'lic.json.lock', '.htaccess', 'index.html']));
     assertEqual([], $left, 'tmp removed');
     rmdir("$d/lic.json");
     $rm($d);
@@ -140,6 +142,67 @@ test('a missing directory is created 0700', function () use ($fresh, $rm, $ancho
     LicenseKeyFile::store("$d/sub/lic.json", $K1, $anchor);
     assertTrue(is_file("$d/sub/lic.json"));
     @unlink("$d/sub/lic.json"); @unlink("$d/sub/lic.json.lock"); @rmdir("$d/sub");
+    $rm($d);
+});
+test('a new file in a directory of another group inherits that group and is 0640 (skipped when not possible here)', function () use ($fresh, $rm, $mode, $anchor, $K1) {
+    if (!function_exists('posix_getgroups') || !function_exists('posix_getegid')) { return; }
+    $other = null;
+    foreach (posix_getgroups() as $g) { if ($g !== posix_getegid()) { $other = $g; break; } }
+    if ($other === null) { echo "    (skipped: no supplementary group on this runner)\n"; return; }
+    $d = $fresh();
+    chgrp($d, $other);
+    LicenseKeyFile::store("$d/lic.json", $K1, $anchor);
+    assertEqual($other, filegroup("$d/lic.json"), 'file group');
+    assertEqual('0640', $mode("$d/lic.json"));
+    assertEqual($other, filegroup("$d/lic.json.lock"), 'lock group');
+    assertEqual('0660', $mode("$d/lic.json.lock"));
+    $rm($d);
+});
+test('a new file in a directory of our own group stays 0600', function () use ($fresh, $rm, $mode, $anchor, $K1) {
+    $d = $fresh();
+    LicenseKeyFile::store("$d/lic.json", $K1, $anchor);
+    assertEqual('0600', $mode("$d/lic.json"));
+    $rm($d);
+});
+test('the directory gets a deny-all .htaccess and index.html (never overwritten); a dir with uploads/ does not', function () use ($fresh, $rm, $anchor, $K1) {
+    $d = $fresh();
+    file_put_contents("$d/index.html", 'custom');
+    LicenseKeyFile::store("$d/lic.json", $K1, $anchor);
+    assertTrue(str_contains((string) file_get_contents("$d/.htaccess"), 'denied'));
+    assertEqual('custom', file_get_contents("$d/index.html"));
+    $rm($d);
+    $d = $fresh(); mkdir("$d/uploads");
+    LicenseKeyFile::store("$d/lic.json", $K1, $anchor);
+    assertTrue(!file_exists("$d/.htaccess"), 'public storage dir is left alone');
+    rmdir("$d/uploads"); $rm($d);
+});
+test('stale temp files (older than 1 h) are swept under the lock; fresh ones stay', function () use ($fresh, $rm, $anchor, $K1) {
+    $d = $fresh();
+    touch("$d/.license-refresh-old", time() - 7200);
+    touch("$d/.license-refresh-new");
+    LicenseKeyFile::store("$d/lic.json", $K1, $anchor);
+    assertTrue(!file_exists("$d/.license-refresh-old") && file_exists("$d/.license-refresh-new"));
+    $rm($d);
+});
+test('permissionWarning: silent for our own dir, warns for a foreign owner/group without the fix leaking the key', function () use ($fresh, $rm, $anchor, $K1) {
+    $d = $fresh();
+    LicenseKeyFile::store("$d/lic.json", $K1, $anchor);
+    assertEqual(null, LicenseKeyFile::permissionWarning("$d/lic.json"));
+    assertEqual(null, LicenseKeyFile::permissionWarning("$d/missing.json"));
+    if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+        chown("$d/lic.json", 12345); chgrp("$d/lic.json", 12345); chmod("$d/lic.json", 0600);
+        $w = LicenseKeyFile::permissionWarning("$d/lic.json");
+        assertTrue($w !== null && str_contains($w, 'sudo -u www-data') && str_contains($w, 'chmod 0640') && str_contains($w, '<licence file>'));
+        assertTrue(!str_contains($w, $K1));
+        assertTrue(str_contains((string) LicenseKeyFile::permissionWarning("$d/lic.json", true), "$d/lic.json"));
+    } elseif (is_dir('/tmp') && fileowner('/tmp') !== posix_geteuid()) {
+        // /tmp is owned by root: a file we own in it is "foreign" to the directory.
+        $f = '/tmp/ff-warn-' . bin2hex(random_bytes(4)) . '.json';
+        file_put_contents($f, '{}'); chmod($f, 0600);
+        $w = LicenseKeyFile::permissionWarning($f);
+        @unlink($f);
+        assertTrue($w !== null && str_contains($w, 'sudo -u www-data') && str_contains($w, 'chmod 0640') && str_contains($w, '<licence file>'), (string) $w);
+    }
     $rm($d);
 });
 test('router.php denies the whole /storage/ prefix (the default home of license-refresh.json; the live 403 is covered by test-router-storage-http.php)', function () {

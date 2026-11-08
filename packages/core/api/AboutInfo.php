@@ -79,7 +79,10 @@ final class AboutInfo
         $keySource = null;
         if (trim((string) ($env['FLUXFILES_LICENSE_KEY'] ?? '')) !== '') {
             $r = LicenseKeyFile::resolve($env);
-            $keySource = ['source' => $r['source'], 'fetched_at' => $r['fetched_at']];
+            $keySource = ['source' => $r['source'], 'fetched_at' => $r['fetched_at'], 'warning' => null];
+            if ($r['source'] !== 'env' || is_file(LicenseKeyFile::path($env))) {
+                $keySource['warning'] = LicenseKeyFile::permissionWarning(LicenseKeyFile::path($env));
+            }
         }
 
         return [
@@ -126,6 +129,9 @@ final class AboutInfo
             $add('Licence source', $src['source'] === 'refreshed'
                 ? 'refreshed' . ($src['fetched_at'] !== null ? ' (fetched ' . gmdate('Y-m-d', (int) $src['fetched_at']) . ')' : '')
                 : ($src['source'] === 'unreadable' ? 'refreshed file unreadable (using the env key)' : 'env'));
+            if (!empty($src['warning'])) {
+                $add('Licence file warning', (string) $src['warning']);
+            }
         }
         foreach ($info['modules'] as $id => $m) {
             if (!$m['installed']) {

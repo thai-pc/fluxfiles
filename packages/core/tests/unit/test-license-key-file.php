@@ -10,6 +10,8 @@
 
 declare(strict_types=1);
 
+define('FLUXFILES_TESTING', true);   // enables LicenseManager::overridePublicKeys()
+
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use FluxFiles\LicenseKeyFile;
@@ -135,6 +137,20 @@ test('the memo invalidates when the file changes', function () use ($env, $A, $A
     assertEqual($A, LicenseKeyFile::effectiveKey($env($A)));
     @unlink($file);
     assertEqual($A, LicenseKeyFile::effectiveKey($env($A)), 'file gone');
+});
+test('the file key must pass the full accept rules: earlier expiry or free edition is not used', function () use ($env, $mint, $A, $writeFile) {
+    $writeFile($A, $mint(['issued' => 2000, 'expires' => 4000]));
+    assertEqual($A, LicenseKeyFile::effectiveKey($env($A)), 'earlier expiry');
+    $writeFile($A, $mint(['issued' => 2000, 'expires' => 9000, 'edition' => 'free']));
+    assertEqual($A, LicenseKeyFile::effectiveKey($env($A)), 'free edition');
+});
+test('vendorWarning flags a default path inside vendor/', function () use ($A) {
+    assertTrue(LicenseKeyFile::vendorWarning(['FLUXFILES_STORAGE_PATH' => '/srv/app/vendor/fluxfiles/fluxfiles/storage']) !== null);
+    assertEqual(null, LicenseKeyFile::vendorWarning(['FLUXFILES_LICENSE_FILE' => '/srv/app/storage/app/license.json']));
+});
+test('overridePublicKeys is a no-op outside the testing CLI', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../../api/LicenseManager.php');
+    assertTrue(str_contains($src, "PHP_SAPI !== 'cli' || !defined('FLUXFILES_TESTING')"));
 });
 test('issuedAt() reads the signed value', function () use ($A, $A2) {
     assertEqual(1000, (new LicenseManager($A))->issuedAt());

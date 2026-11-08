@@ -20,7 +20,7 @@ namespace FluxFiles;
 final class LicenseRefresh
 {
     public const DEFAULT_URL = 'https://fluxfiles-license.thai-pc.com';
-    public const TIMEOUT = 10;
+    public const TIMEOUT = 5;
     /** Largest answer we read; a licence key is ~600 bytes. */
     public const MAX_RESPONSE = 16384;
     public const MAX_KEY_LEN = 4096;

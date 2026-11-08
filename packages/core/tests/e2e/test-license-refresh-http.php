@@ -19,6 +19,8 @@
 
 declare(strict_types=1);
 
+define('FLUXFILES_TESTING', true);   // enables LicenseManager::overridePublicKeys()
+
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use FluxFiles\LicenseKeyFile;
@@ -89,6 +91,7 @@ http_response_code(403); echo '{"error":"stub update server"}';
 PHP);
 file_put_contents("$tmp/seam.php", <<<'PHP'
 <?php
+define('FLUXFILES_TESTING', true);
 require getenv('FFTEST_AUTOLOAD');
 \FluxFiles\LicenseManager::overridePublicKeys(['k1' => getenv('FFTEST_PUB')]);
 PHP);
