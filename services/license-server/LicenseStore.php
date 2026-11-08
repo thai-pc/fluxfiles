@@ -18,6 +18,13 @@ require_once __DIR__ . '/OperationsStore.php';
  */
 final class LicenseStore
 {
+    public const EVENT_DAYS = 180;
+    public const BODY_DAYS = 7;
+    public const MAIL_DAYS = 365;
+    public const AUDIT_DAYS = 730;
+    public const PING_DAYS = 90;
+    public const OPS_DAYS = 30;
+
     use AdminStore;
     use OperationsStore;
 

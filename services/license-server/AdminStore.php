@@ -16,13 +16,6 @@ require_once __DIR__ . '/client/OpsText.php';
 /** Administrative persistence shares the issuing connection and its transaction. */
 trait AdminStore
 {
-    public const EVENT_DAYS = 180;
-    public const BODY_DAYS = 7;
-    public const MAIL_DAYS = 365;
-    public const AUDIT_DAYS = 730;
-    public const PING_DAYS = 90;
-    public const OPS_DAYS = 30;
-
     public function pdo(): PDO
     {
         return $this->db;

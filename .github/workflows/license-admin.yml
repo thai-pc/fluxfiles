@@ -10,6 +10,9 @@ on:
       - 'services/license-server/**'
       - 'docs/update-server.example.php'
       - '.github/workflows/license-admin.yml'
+concurrency:
+  group: licence-admin-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:

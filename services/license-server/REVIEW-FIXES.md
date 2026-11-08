@@ -52,3 +52,9 @@ a possibly new OTP after hashing. CI adds PHP 8.1 and the privileged collector s
 
 Commits: `622b81a` contains behavior fixes; `ca04a66` is formatting only. The final
 validation/empty-guidance follow-up and CI results are listed in the PR reply.
+
+The first Linux CI run exposed two additional portability issues: trait constants
+(required PHP 8.2) were moved into the consuming class, and the telemetry test now
+inspects a consistent SQLite snapshot. Opening/closing the live DB file outside
+SQLite can release POSIX locks; the test also checks database integrity. These
+were fixed before the final CI rerun.

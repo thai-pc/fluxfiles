@@ -325,14 +325,12 @@ $h->test(
                 'status',
             )['raw'],
         );
-        foreach (
-            [$h->env['FLUXFILES_LICENSE_DB'], $h->env['FLUXFILES_LICENSE_DB'] . '-wal']
-            as $f
-        ) {
-            if (is_file($f)) {
-                Harness::ok(!str_contains(file_get_contents($f), '203.0.113.0/24'));
-            }
-        }
+        // Reading/closing the live file directly can release SQLite's POSIX locks
+        // on Linux. Inspect a consistent snapshot that has no open DB connection.
+        $snapshot = $h->dir . '/telemetry-snapshot.sqlite';
+        $db->prepare('VACUUM INTO ?')->execute([$snapshot]);
+        Harness::ok(!str_contains(file_get_contents($snapshot), '203.0.113.0/24'));
+        Harness::eq('ok', $db->query('PRAGMA integrity_check')->fetchColumn());
         $db->exec('BEGIN IMMEDIATE');
         $start = microtime(true);
         try {
