@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.23] — 2026-11-08
+
+> Released: `core-v1.1.10` (CLI reads the host project's `.env` in a Composer install).
+
 ### Fixed
 - CLI (`bin/fluxfiles`): in a Composer install it never read the host project's `.env`. It looked in the package root and in `<project>/vendor`, not `<project>`, so `php vendor/bin/fluxfiles update <module>` answered "No FLUXFILES_LICENSE_KEY set" for a key kept in `.env`. The search order is now (first `.env` wins, real env vars still win over it): the current directory when it holds `composer.json` or `.env`, the host project root, the package root, then the old three-levels-up directory. `api/index.php` has the same blind spot, but a web request has no meaningful cwd, so set real env vars (or put `.env` in the package root) there.
 
