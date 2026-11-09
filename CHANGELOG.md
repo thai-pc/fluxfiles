@@ -5,6 +5,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.28] — 2026-11-09
+
+> Released: `core-v1.2.2`, `laravel-v1.0.7`. The licence-server admin UI below is deployed separately (no package tag).
+
+### Added
+- Licence server: **admin UI and ops worker** (PRs #245, #246). It runs per instance (production and sandbox), is reachable only through an SSH tunnel on loopback, and uses password plus TOTP, step-up for sensitive actions, and strict CSP/CSRF. It covers licences, revenue, installs and versions, webhooks, mail log, audit, Telegram alerts (one bot per product), a weekly report and health checks. UI and ops processes never read the signing key or open the licence DB. Design: `docs/design/LICENSE-ADMIN-UI-DESIGN.md`.
+
 ### Fixed
 - About dialog: Documentation now opens the product docs in the UI's language; Third-party notices opens the notices shipped with the installed version (`assets/THIRD-PARTY-NOTICES.txt`, served by the core, Laravel and WordPress asset routes).
 
