@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- About dialog: Documentation now opens the product docs in the UI's language; Third-party notices opens the notices shipped with the installed version (`assets/THIRD-PARTY-NOTICES.txt`, served by the core, Laravel and WordPress asset routes).
+
 ## [1.0.27] — 2026-11-08
 
 > Released: `core-v1.2.1`, `wordpress-v1.1.3` (first WordPress.org submission build, bundles core 1.2.1).

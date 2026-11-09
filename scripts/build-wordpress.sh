@@ -153,7 +153,7 @@ mkdir -p "$PLUGIN_DIR/docs"
 cp "$WP_DIR/HOOKS.md" "$PLUGIN_DIR/docs/HOOKS.md"
 # Licences of the shipped front-end libraries (assets/vendor/*/LICENSE ship with them).
 # This build uses WordPress's CodeMirror, so that row is dropped from the notice.
-python3 - "$CORE_DIR/THIRD-PARTY-NOTICES.md" "$PLUGIN_DIR/docs/THIRD-PARTY-NOTICES.md" <<'PY'
+python3 - "$CORE_DIR/THIRD-PARTY-NOTICES.md" "$PLUGIN_DIR/docs/THIRD-PARTY-NOTICES.md" "$PLUGIN_DIR/assets/THIRD-PARTY-NOTICES.txt" <<'PY'
 import sys
 lines = open(sys.argv[1]).read().split('\n')
 out = [l for l in lines if not l.startswith('| [CodeMirror 5]')]
@@ -171,6 +171,8 @@ Material Theme by Mattia Astorino). It styles the code editor that runs on
 WordPress's own CodeMirror in dark mode.
 """
 open(sys.argv[2], 'w').write(txt)
+# The same text is the UI's About > Third-party notices asset (served by the assets route).
+open(sys.argv[3], 'w').write(txt)
 PY
 
 # The plugin's own composer.json declares its WP-side deps. We install with the
