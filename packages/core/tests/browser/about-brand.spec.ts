@@ -19,8 +19,8 @@ test('default: About opens, shows MIT + links, no version, Esc closes, focus ret
   const dlg = page.getByRole('dialog', { name: 'FluxFiles' });
   await expect(dlg).toBeVisible();
   await expect(dlg).toContainText('MIT');
-  await expect(dlg.getByRole('link', { name: 'Third-party notices' })).toHaveAttribute('href', /THIRD-PARTY-NOTICES/);
-  await expect(dlg.getByRole('link', { name: 'Documentation' })).toHaveAttribute('href', /^https:\/\//);
+  await expect(dlg.getByRole('link', { name: 'Third-party notices' })).toHaveAttribute('href', /\/assets\/THIRD-PARTY-NOTICES\.txt$/);
+  await expect(dlg.getByRole('link', { name: 'Documentation' })).toHaveAttribute('href', /^https:\/\/fluxfiles\.thai-pc\.com\/(?:[a-z]{2}\/)?docs\/$/);
   // never reveal a version number to end users
   expect(await dlg.innerText()).not.toMatch(/\d+\.\d+\.\d+/);
   // no "built on" line unless a brand name is set

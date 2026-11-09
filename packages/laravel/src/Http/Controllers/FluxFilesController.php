@@ -2846,6 +2846,9 @@ class FluxFilesController
             case 'css':
                 $mime = 'text/css';
                 break;
+            case 'txt':
+                $mime = 'text/plain';
+                break;
             default:
                 $mime = 'application/octet-stream';
                 break;

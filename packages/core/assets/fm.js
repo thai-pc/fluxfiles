@@ -4620,9 +4620,20 @@ function fluxFilesApp() {
         // applied as a CSS custom property value, never concatenated into CSS text.
         showAbout: false,
         _aboutOpener: null,
-        // Third-party notices: no route serves the file next to /public, so link the repo copy.
-        aboutNoticesUrl: 'https://github.com/thai-pc/fluxfiles/blob/master/packages/core/THIRD-PARTY-NOTICES.md',
-        aboutDocsUrl: 'https://github.com/thai-pc/fluxfiles/tree/master/docs',
+        // Third-party notices: a copy of THIRD-PARTY-NOTICES.md ships as a plain-text asset
+        // next to fm.js (tests/unit/test-notices-asset.php keeps it identical), so the link
+        // matches the installed version without the UI ever knowing that version.
+        get aboutNoticesUrl() {
+            return FM_ASSETS_BASE + '/THIRD-PARTY-NOTICES.txt';
+        },
+        // Product docs on the landing site, in the UI language (the landing's 16 languages
+        // equal lang/*.json; English lives at the root). Unknown language -> English.
+        get aboutDocsUrl() {
+            const base = 'https://fluxfiles.thai-pc.com/';
+            const l = String(this.locale || '').toLowerCase().split(/[-_]/)[0];
+            const langs = ['ar', 'de', 'es', 'fr', 'hi', 'it', 'ja', 'ko', 'nl', 'pt', 'ru', 'th', 'tr', 'vi', 'zh'];
+            return base + (langs.includes(l) ? l + '/' : '') + 'docs/';
+        },
 
         get aboutEnabled() {
             const v = (this._tokenPayload() || {}).about;

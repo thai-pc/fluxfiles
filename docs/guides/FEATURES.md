@@ -237,6 +237,7 @@ Invalid values are dropped on decode and the default look stays. The UI document
 sends no `img-src` restriction, so an external logo loads as-is; if you add your own
 CSP at the proxy, allow the logo's origin in `img-src`. The logo is fetched by the
 visitor's browser with `referrerpolicy="no-referrer"`. Pick an accent with enough
-contrast against white button text. The third-party notices link points at the
-repository copy of `THIRD-PARTY-NOTICES.md`, because no route serves that file next
-to `/public`.
+contrast against white button text. The third-party notices link opens
+`assets/THIRD-PARTY-NOTICES.txt`, a plain-text copy shipped next to `fm.js` that
+matches the installed version (the dialog shows no version number). Documentation
+opens the product docs on the landing site in the UI's language.

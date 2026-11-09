@@ -80,7 +80,7 @@ foreach ([
     'fluxfiles.php', 'readme.txt', 'LICENSE', 'docs/THIRD-PARTY-NOTICES.md',
     'api/FileManager.php', 'templates/ui-index.php', 'assets/fm.js', 'assets/fm.min.js',
     'assets/fluxfiles.js', 'assets/vendor/alpine/alpine.min.js',
-    'assets/fonts/DejaVuSans.ttf', 'assets/codemirror-theme-material-darker.css',
+    'assets/fonts/DejaVuSans.ttf', 'assets/THIRD-PARTY-NOTICES.txt', 'assets/codemirror-theme-material-darker.css',
     'vendor/autoload.php', 'composer.json', 'composer.lock', 'docs/HOOKS.md',
 ] as $req) {
     if (!isset($files[$req])) {

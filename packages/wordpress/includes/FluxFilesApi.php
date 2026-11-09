@@ -530,7 +530,7 @@ class FluxFilesApi
         // assets/vendor/ (Alpine) — fm.js derives its base from its
         // own <script src>, which is this route. No '..' can match, and
         // serveUiAsset() re-checks containment with realpath().
-        register_rest_route($ns, '/assets/(?P<file>fm\.(?:min\.)?(?:js|css)|codemirror-theme-material-darker\.css|vendor/[A-Za-z0-9._/-]+\.(?:js|css))', array_merge($publicArgs, [
+        register_rest_route($ns, '/assets/(?P<file>fm\.(?:min\.)?(?:js|css)|codemirror-theme-material-darker\.css|THIRD-PARTY-NOTICES\.txt|vendor/[A-Za-z0-9._/-]+\.(?:js|css))', array_merge($publicArgs, [
             'callback' => [$api, 'serveUiAsset'],
         ]));
         register_rest_route($ns, $p . '/lang', array_merge($publicArgs, [
@@ -3432,7 +3432,8 @@ class FluxFilesApi
             || !is_file($real)) {
             return $this->error('Asset not found', 404);
         }
-        $mime = substr($file, -3) === '.js' ? 'application/javascript' : 'text/css';
+        $ext = substr($file, -4);
+        $mime = substr($file, -3) === '.js' ? 'application/javascript' : ($ext === '.txt' ? 'text/plain' : 'text/css');
         // The UI page links `?v=<content hash>`: immutable only when it matches the file
         // served here; otherwise a short cache + a cheap mtime+size ETag and 304.
         [$headers, $notModified] = self::assetCaching(
