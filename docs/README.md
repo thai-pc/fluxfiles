@@ -36,6 +36,7 @@ top says whether it shipped and in which core release. They are not setup guides
 - [Feature ideas 2026-10](design/FEATURE-IDEAS-2026-10.md) — idea list with per-item status (Vietnamese).
 - [Intake branding + analytics](design/INTAKE-BRANDING-ANALYTICS-DESIGN.md) — implemented in core-v0.2.76.
 - [Intake notify-on-receipt](design/INTAKE-NOTIFY-ON-RECEIPT-DESIGN.md) — implemented in core-v0.2.77.
+- [Intake + Share e-mail notifications](design/INTAKE-SHARE-NOTIFICATIONS-DESIGN.md) — **design, not implemented** (step 1 of Intake document requests).
 - [License-expiry notifications](design/LICENSE-EXPIRY-NOTIFICATIONS-DESIGN.md) — implemented in core-v0.2.84.
 - [Licence key refresh](design/LICENSE-KEY-REFRESH-DESIGN.md) — implemented (server + core client in core-v1.2.0).
 - [Licence server admin UI](design/LICENSE-ADMIN-UI-DESIGN.md) — implemented and deployed 2026-11-09.
