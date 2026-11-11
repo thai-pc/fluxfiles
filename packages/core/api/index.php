@@ -922,7 +922,14 @@ function routeRequest(
         return \FluxFiles\NotifyEndpoint::test($claims, $mailer, $notifyBody(), null, $why);
     }
     if ($method === 'POST' && $uri === '/api/fm/notify/run') {
-        return \FluxFiles\NotifyEndpoint::run($diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $notifyBody(), null, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''));
+        // One notify_sent line per e-mail the sweep sends (the run itself is audited as notify_run).
+        $notifyAudit = static function (string $disk, string $key, string $detail) use ($auditLog, $claims): void {
+            try {
+                $auditLog->log($claims->userId, 'notify_sent', $disk, $key, null, null, $detail);
+            } catch (\Throwable $ignored) {
+            }
+        };
+        return \FluxFiles\NotifyEndpoint::run($diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $notifyBody(), null, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''), $notifyAudit);
     }
     if ($method === 'POST' && $uri === '/api/fm/notify/mute') {
         return \FluxFiles\NotifyEndpoint::mute($diskManager, $claims, $notifyBody());

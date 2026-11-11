@@ -2420,7 +2420,10 @@ class FluxFilesApi
                 $mailer = \FluxFiles\Mail\MailTransportFactory::fromEnv(null, null, $why);
                 $result = \FluxFiles\NotifyEndpoint::test($claims, $mailer, $body, $license, $why);
             } elseif ($op === 'run') {
-                $result = \FluxFiles\NotifyEndpoint::run($this->diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $body, $license, (string) get_option('fluxfiles_secret', ''));
+                $audit = function (string $disk, string $key, string $detail) use ($claims): void {
+                    $this->logAuditQuiet($claims, 'notify_sent', $disk, $key, $detail);
+                };
+                $result = \FluxFiles\NotifyEndpoint::run($this->diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $body, $license, (string) get_option('fluxfiles_secret', ''), $audit);
             } else {
                 $result = \FluxFiles\NotifyEndpoint::mute($this->diskManager, $claims, $body, $license);
             }

@@ -69,7 +69,7 @@ final class FakeIntake implements ModuleInterface, NotifyProviderInterface
     public static array $runs = [];
     public static function id(): string { return 'intake'; }
     public static function claim(): string { return 'allow_intake'; }
-    public function runNotify(DiskManager $dm, \FluxFiles\Claims $c, string $disk, ?MailTransportInterface $m, bool $dry, int $max, string $secret): array
+    public function runNotify(DiskManager $dm, \FluxFiles\Claims $c, string $disk, ?MailTransportInterface $m, bool $dry, int $max, string $secret, ?callable $audit = null): array
     {
         self::$runs[] = compact('disk', 'dry', 'max', 'secret') + ['mailer' => $m !== null];
         return ['sent' => $dry ? 0 : 2, 'coalesced' => 1, 'rate_limited' => 0, 'truncated' => false,
