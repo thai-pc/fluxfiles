@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.1.4
+Stable tag: 1.1.5
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -168,6 +168,11 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.1.5 =
+* Bundles FluxFiles core 1.2.4.
+* Fix: deleting, trashing, renaming or moving an image now also removes the resized copies FluxFiles had cached for it.
+* Settings screen code cleanup (escaping, and the theme code sample now uses wp_enqueue_script).
+
 = 1.1.4 =
 * Bundles FluxFiles core 1.2.3.
 * Fix: "From FluxFiles" in the WordPress media picker. The Image block no longer stays under a blank window, the classic editor's "Add Media" inserts the picked images (it inserted nothing), Gallery and "Add Media" take several files, and the button works in the Customizer.
@@ -251,6 +256,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.1.5 =
+Removes resized copies of images you delete or trash, and tidies the settings screen code. Recommended for everyone on 1.1.4.
 
 = 1.1.4 =
 Fixes inserting files through the WordPress media picker, lets S3 and R2 be chosen in the file manager, and brings a clearer settings screen. Recommended for everyone.
