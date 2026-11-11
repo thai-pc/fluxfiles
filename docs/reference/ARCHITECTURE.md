@@ -55,7 +55,7 @@ FluxFiles/
 ├── .github/workflows/  test.yml · split.yml · npm-publish.yml · pypi-publish.yml · docker-publish.yml · wordpress-release.yml
 ├── scripts/            build-wordpress.sh · check-adapter-core-floor.sh · pack-smoke.sh · pack-modules.php · ci-retry.sh · landing-screenshots/ · …
 ├── docker/             Dockerfile · Dockerfile.prod · nginx.conf · entrypoint.sh
-├── docs/               guides/ · reference/ · design/ · security/ — indexed in docs/README.md (a few owner-only notes are gitignored: ROADMAP, COMMERCIAL-STRATEGY, LICENSING-PLAN, LICENSE-SERVER-DEPLOYMENT, UPDATE-CHANNEL-DEPLOYMENT)
+├── docs/               guides/ · reference/ · design/ · security/ — indexed in docs/README.md (a few owner-only notes are gitignored: ROADMAP, COMMERCIAL-STRATEGY, LICENSING-PLAN, COMPETITOR-RESEARCH, WP-PRO-ADDON-DESIGN, LICENSE-SERVER-DEPLOYMENT)
 ├── .claude/            CLAUDE.md · architecture.md · api-map.md · development.md   (AI-agent context)
 └── README · CHANGELOG · AGENTS.md · Makefile · docker-compose.yml
 ```

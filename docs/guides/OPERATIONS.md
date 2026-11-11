@@ -3,11 +3,11 @@
 For the person **selling** FluxFiles. Customers do not need any of this; they need
 [`ACTIVATE.md`](ACTIVATE.md).
 
-Everything below is infrastructure. The code is written and tested — an end-to-end
-sandbox purchase has been through the whole chain — but nothing is deployed, so today
-a real customer cannot buy.
-
-Order matters: each step depends on the one before.
+Everything below is infrastructure. It is written as the order the pieces were brought up
+in, and each step depends on the one before. As of 2026-11 the chain is deployed: the update
+server (`fluxfiles-updates.thai-pc.com`), the licence server with its admin UI (production and
+sandbox), the landing with Polar checkout, and the public demo. Use this runbook to re-deploy,
+rotate keys, or add a product; the first-time bring-up has already happened.
 
 ---
 

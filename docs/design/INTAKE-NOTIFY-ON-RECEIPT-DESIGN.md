@@ -3,7 +3,9 @@
 Status: **Implemented in core-v0.2.77** (CHANGELOG `[0.2.94b]`; `b37e1fa feat(intake): fire webhooks
 intake_received event on portal upload`). Webhook config is baked into the
 intake record at create time and read via `IntakeModule::webhookConfigFor()`;
-dispatch is post-response in `packages/core/api/PublicLinks.php`, firing
+dispatch is post-response in the public upload handler (originally
+`packages/core/api/PublicLinks.php`; since core-v1.1.0 that code lives in the `intake` module
+behind `PublicRoutes::dispatch()`, so every `PublicLinks.php` reference below is historical), firing
 `WebhooksModule::dispatch(..., 'intake_received', ...)` when both `intake`
 and `webhooks` are installed+licensed. Failures are `error_log`-only,
 matching Webhooks' at-most-once design elsewhere in the codebase.

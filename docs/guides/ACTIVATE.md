@@ -42,9 +42,11 @@ is not in `composer.json`.
 ### WordPress
 
 The free WordPress plugin ships no paid modules and has no module installer. Paid modules
-come with the separate **FluxFiles Pro** add-on plugin (not yet released). Until it is
-installed, paid routes answer `501 module_not_installed` (or `402 license_required` if a
-module is present but unlicensed).
+come with the separate **FluxFiles Pro** add-on plugin, downloaded from the FluxFiles site
+after purchase (never from WordPress.org). Install it next to the free plugin, paste the key
+under Settings → FluxFiles → Licence (Network Admin on multisite), and the Share and Intake
+modules switch on. Until it is installed, paid routes answer `501 module_not_installed` (or
+`402 license_required` if a module is present but unlicensed).
 
 ---
 
@@ -57,7 +59,7 @@ server works exactly like a connected one.
 |---|---|
 | **Standalone / Docker** | `FLUXFILES_LICENSE_KEY=…` in `.env`, or a real environment variable |
 | **Laravel** | the same, in your app's `.env` |
-| **WordPress** | The free plugin has no licence setting. The licence is handled by the FluxFiles Pro add-on (not yet released) |
+| **WordPress** | The free plugin has no licence setting. Paste the key into the FluxFiles Pro add-on (Settings → FluxFiles → Licence; one network key on multisite), or define `FLUXFILES_LICENSE_KEY` in `wp-config.php` |
 
 Paste the key whole. It is long and contains dots — a line break in the middle is the
 usual cause of "not accepted".
@@ -105,13 +107,15 @@ $token = fluxfiles_token(['user' => 'user-42', 'edition' => 'pro']);
 > installed, licence missing, or the engine (ClamAV/VirusTotal, Presidio) unreachable.
 > Only grant them where the engine is configured.
 
-WordPress mints tokens for you. The free plugin has no licence or module-engine settings
-(the FluxFiles Pro add-on, not yet released, provides them); turn modules on per token with
-the `fluxfiles_token_overrides` filter (individual `allow_*` claims; `edition` once an add-on
-registers editions). Engine settings (`FLUXFILES_AIVISION_*`, `FLUXFILES_DLP_*`, `FLUXFILES_C2PA_MANIFEST`,
-`FLUXFILES_VIRUSTOTAL_*`, `FLUXFILES_CLAMSCAN_TIMEOUT`, `FLUXFILES_OCR_MAX_MEGAPIXELS`,
-`FLUXFILES_WEBHOOK_ALLOW_INTERNAL`, `FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`) are set as
-real environment variables on WordPress; the Pro add-on will add a settings screen for them.
+WordPress mints tokens for you. The free plugin has no licence or module-engine settings;
+the FluxFiles Pro add-on provides the licence field and per-role toggles for Share and Intake
+(Settings → FluxFiles → Paid features). Without Pro, or for any other claim, turn modules on
+per token with the `fluxfiles_token_overrides` filter (individual `allow_*` claims, or
+`edition` once an add-on registers editions). Engine settings (`FLUXFILES_AIVISION_*`,
+`FLUXFILES_DLP_*`, `FLUXFILES_C2PA_MANIFEST`, `FLUXFILES_VIRUSTOTAL_*`,
+`FLUXFILES_CLAMSCAN_TIMEOUT`, `FLUXFILES_OCR_MAX_MEGAPIXELS`, `FLUXFILES_WEBHOOK_ALLOW_INTERNAL`,
+`FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`) are set as real environment variables or `wp-config.php`
+constants on WordPress; Pro v1 has no settings screen for them.
 
 The claim names are in [`CONFIG.md`](../reference/CONFIG.md) — one row per claim, with defaults.
 
