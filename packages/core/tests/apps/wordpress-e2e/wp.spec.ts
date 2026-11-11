@@ -249,8 +249,10 @@ test('wordpress free build: the UI page points the editor at wp-includes CodeMir
   expect(vendored.status()).toBe(404);
 });
 
-// The editor really mounts WordPress's CodeMirror (loaded from wp-includes via the meta tag).
-test('wordpress free build: opening a .js file mounts a CodeMirror editor', async ({ page }) => {
+// The WordPress build has no content editor (1.1.3, WordPress.org guideline): every token it
+// mints carries allow_code_edit=false, so a .js file never opens one even though WordPress's
+// CodeMirror is still wired for the UI (the test above).
+test('wordpress free build: a .js file does not open a content editor', async ({ page }) => {
   await loginAdmin(page);
   await page.goto(`${BASE}/files/`);
   const fm = page.frameLocator('iframe');
@@ -262,12 +264,13 @@ test('wordpress free build: opening a .js file mounts a CodeMirror editor', asyn
   await expect(card).toBeVisible({ timeout: 15_000 });
 
   await card.click();
-  await fm.locator('.ff-app').evaluate(async (el, n) => {
+  const canEdit = await fm.locator('.ff-app').evaluate((el, n) => {
     const c = (window as any).Alpine.$data(el);
     const f = (c.files || c.items || []).find((x: any) => x.name === n);
-    await c.openEditor(f);
+    return c.canEditFile(f);
   }, name);
-  await expect(fm.locator('.ff-editor-modal .CodeMirror')).toBeVisible({ timeout: 15_000 });
+  expect(canEdit).toBe(false);
+  await expect(fm.locator('.ff-editor-modal .CodeMirror')).toHaveCount(0);
 });
 
 // Settings page: the stored secret is never written into the page source, and the
