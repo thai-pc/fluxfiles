@@ -324,8 +324,10 @@ class ImageOptimizer
 
     /**
      * Cache key for an on-demand WebP transform. Lives inside the file's
-     * `_variants/` directory so the existing delete/trash cleanup (which removes
-     * the whole `_variants` subtree) invalidates it for free. `$ver` (the source
+     * `_variants/` directory: a folder delete/trash removes the whole subtree, and a
+     * single-file delete, trash, rename or move drops this file's entries through
+     * FileManager::deleteTransformCache() (which matches exactly this shape, so keep
+     * the two in step). `$ver` (the source
      * file's mtime or hash) is embedded so a re-upload produces a new key and the
      * stale cache is never matched again.
      */

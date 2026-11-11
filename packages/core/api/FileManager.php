@@ -1408,6 +1408,9 @@ class FileManager
         $this->setTrashVisibility($disk, $fs, $trashDir . '/' . $basename, false, 'private');
 
         $movedVariants = [];
+        // Resized copies served by /img would stay at the old path while the file sits in
+        // the trash; drop them (rebuilt on demand after a restore).
+        $this->deleteTransformCache($disk, $scoped);
         foreach (['thumb', 'medium', 'large'] as $vsize) {
             $vk = $this->variantKey($scoped, $vsize);
             try {
@@ -2510,6 +2513,41 @@ class FileManager
     private function moveVariants(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
     {
         $this->transferVariants($srcDisk, $srcKey, $dstDisk, $dstKey, true);
+        // Not moved: they are a cache keyed by name + mtime, rebuilt on demand at the new path.
+        $this->deleteTransformCache($srcDisk, $srcKey);
+    }
+
+    /**
+     * Drop the on-demand /img transforms cached for ONE file: the `<name>_w…` entries of
+     * its folder's `_variants/` (ImageOptimizer::transformCacheKey()). They are keyed by
+     * the file name, so without this a delete, trash, rename or move left resized copies
+     * of the file behind at its old location (a trashed image stayed viewable that way).
+     * The pattern is anchored on the exact key shape, so another file whose name merely
+     * starts with this one's (`a.png_w4`) keeps its cache. Best effort.
+     */
+    private function deleteTransformCache(string $disk, string $key): void
+    {
+        $dir = dirname($key);
+        $variantsDir = ($dir !== '.' && $dir !== '') ? $dir . '/_variants' : '_variants';
+        $pattern = '/^' . preg_quote(pathinfo($key, PATHINFO_BASENAME), '/')
+            . '_w\d+(?:_h\d+)?_q\d+(?:_cover)?_[A-Za-z0-9]{0,12}(?:_[A-Za-z0-9]{1,12})?\.(?:webp|avif)$/';
+        try {
+            $fs = $this->disks->disk($disk);
+            if (!$fs->directoryExists($variantsDir)) {
+                return;
+            }
+            foreach ($fs->listContents($variantsDir, false) as $item) {
+                if ($item->isFile() && preg_match($pattern, basename($item->path())) === 1) {
+                    try {
+                        $fs->delete($item->path());
+                    } catch (\Throwable $e) {
+                        // Best effort cleanup
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Best effort cleanup
+        }
     }
 
     private function transferVariants(
@@ -2559,6 +2597,7 @@ class FileManager
 
     private function deleteVariants(string $disk, string $key): void
     {
+        $this->deleteTransformCache($disk, $key);
         $fs = $this->disks->disk($disk);
         $sizes = ['thumb', 'medium', 'large'];
         foreach ($sizes as $size) {
