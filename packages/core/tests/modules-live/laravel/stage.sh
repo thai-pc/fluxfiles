@@ -15,7 +15,9 @@ mkdir -p "$ST/src/core/storage"
 rsync -a --delete "${EXCL[@]}" "$REPO/packages/laravel/" "$ST/src/laravel/"
 for m in share intake versioning webhooks ai ocr virus backup c2pa audit-export sso dlp legal-hold; do
   [ -d "$REPO/packages/$m/src" ] || { echo "module $m not checked out" >&2; exit 2; }
+  # public/ holds the recipient pages (share.html, intake.html) since core-v1.1.0; pack-modules.php ships it too.
   mkdir -p "$ST/src/modules/$m" && rsync -a "$REPO/packages/$m/src" "$REPO/packages/$m/composer.json" "$ST/src/modules/$m/"
+  if [ -d "$REPO/packages/$m/public" ]; then rsync -a "$REPO/packages/$m/public" "$ST/src/modules/$m/"; fi
 done
 # Versions the path repos advertise: the newest real tags, so a module or adapter
 # floor above what core has actually released fails `composer require` here.
