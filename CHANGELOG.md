@@ -5,6 +5,23 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.29] — 2026-11-11
+
+> Released: `core-v1.2.3`, `wordpress-v1.1.4` (bundles core 1.2.3).
+
+### Fixed
+- Core 1.2.3: `/img` and `/stream` URLs are joined with `&` when the API base already carries a query string. On WordPress with plain permalinks (`index.php?rest_route=…`) every responsive preview and every private-storage link answered 404.
+- Core UI: Upload, New folder, Rename and every Delete entry are shown only when the token's perms allow them (a read/write-only user was offered Delete and got a 403). The server-side checks are unchanged.
+- WordPress: "From FluxFiles" in the native media picker. The Image block was left under a blank modal; the classic "Add Media" inserted nothing; Gallery took only one file; the picker opened behind the Customizer's modal; cropping frames are left to close themselves.
+- WordPress: offloaded attachments had no `_wp_attached_file`, so WordPress did not treat them as images (`<img src="">` from classic inserts, no `the_post_thumbnail()`). A `get_attached_file` filter answers a per-attachment placeholder path (`uploads/fluxfiles-offload/ff-<id>/<name>`) that never holds the original, so deleting an attachment can never remove another one's crop.
+- WordPress: every picker host passes the enabled disks, so S3/R2 enabled in Settings can be chosen (only `local` was offered).
+
+### Changed
+- WordPress settings screen redesigned: tabs in one form, a status header, a sticky save bar with an unsaved-changes guard, "Test S3/R2 connection", show/hide and Generate for secrets, add-on sections in their own tab. The nginx warning probes the server in the background and goes away once the deny rules are in place. TTL, upload size and quota can no longer be saved as 0 or negative; visibility is a select; endpoint and public URLs are scheme-checked; every field is labelled. New "Pick several files" setting (`fluxfiles_picker_multiple`).
+
+### Tests
+- WordPress e2e: real users per role (`wp-roles.spec.ts`), a public S3 bucket on LocalStack (`wp-cloud-public.spec.ts`, skips without LocalStack), per-site isolation on multisite. The CodeMirror test now asserts the editor is off (it has been since 1.1.3).
+
 ## [1.0.28] — 2026-11-09
 
 > Released: `core-v1.2.2`, `laravel-v1.0.7`. The licence-server admin UI below is deployed separately (no package tag).
