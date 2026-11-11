@@ -4001,12 +4001,24 @@ class FileManager
             && $this->streamSecret !== '';
     }
 
+    /**
+     * `{apiBasePath}{route}?token=…`. A base that already carries a query string (WordPress
+     * on plain permalinks: `…/index.php?rest_route=/fluxfiles/v1/api/fm`) must be joined with
+     * `&`, not a second `?` — otherwise the token is swallowed into the `rest_route` value and
+     * every /img and /stream link 404s (broken previews, dead private-storage links).
+     */
+    private function mediaRouteUrl(string $route, string $token): string
+    {
+        $sep = strpos($this->apiBasePath, '?') !== false ? '&' : '?';
+        return $this->apiBasePath . $route . $sep . 'token=' . rawurlencode($token);
+    }
+
     /** Mint the /api/fm/stream?token=… URL for one file on a gated local disk. */
     private function gatedLocalUrl(string $disk, string $path): string
     {
         $byob = $this->mediaTokenByob($disk);
         $token = StreamToken::mint($disk, $path, $this->claims->userId, $this->mediaTokenTtl($disk), $this->streamSecret, $this->claims->auditReads, $byob);
-        return $this->apiBasePath . '/stream?token=' . rawurlencode($token);
+        return $this->mediaRouteUrl('/stream', $token);
     }
 
     /**
@@ -4061,7 +4073,7 @@ class FileManager
             $this->claims->allowDownload,
             $this->mediaTokenByob($disk)
         );
-        return $this->apiBasePath . '/img?token=' . rawurlencode($token);
+        return $this->mediaRouteUrl('/img', $token);
     }
 
     /**
