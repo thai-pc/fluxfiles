@@ -11,7 +11,7 @@ use FluxFiles\HttpTransportInterface;
  *
  * Not used for URL import, which needs core's DNS-pinned cURL handle.
  */
-class WpHttpTransport implements HttpTransportInterface
+class FluxFilesHttpTransport implements HttpTransportInterface
 {
     public function request(string $method, string $url, array $headers = [], ?string $body = null, int $timeout = 30): array
     {

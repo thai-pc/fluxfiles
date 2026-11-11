@@ -85,7 +85,7 @@ cp -r "$CORE_DIR/lang"   "$PLUGIN_DIR/lang"
 
 # Core files the plugin never runs. The standalone entry point and the code behind
 # it (helpers.php is only required by index.php; licence/update client + key refresh (the free plugin makes no licence calls), SSO, demo mode, tus) are left out rather than guarded
-# with ABSPATH checks. api/Db/ stays: WpDbMetadataHandler and FluxFilesCli use it.
+# with ABSPATH checks. api/Db/ stays: FluxFilesDbMetadataHandler and FluxFilesCli use it.
 # The share/intake pages are redirect stubs in core and are served by the paid modules.
 for f in index helpers LicenseManager LicenseKeyFile LicenseRefresh UpdateClient OidcDiscovery SsoStateToken SsoBootToken DemoMode TusServer; do
     rm -f "$PLUGIN_DIR/api/$f.php"

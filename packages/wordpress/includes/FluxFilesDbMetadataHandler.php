@@ -21,7 +21,7 @@ use FluxFiles\MetadataRepositoryInterface;
  * literal NULL token for null columns instead of relying on prepare(), so
  * the behaviour does not depend on the WordPress version.
  */
-class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImportInterface
+class FluxFilesDbMetadataHandler implements MetadataRepositoryInterface, MigrationImportInterface
 {
     // The storage-agnostic half (path predicates, row mapping, hold matching,
     // get(), trackParents(), audit-window shaping) is shared with core/Laravel.

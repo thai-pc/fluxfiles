@@ -1020,8 +1020,8 @@ test('public routes delegate to the module dispatcher rather than reimplementing
         'the option-aware licence is passed and the context is host-injected');
 });
 
-test('WpHttpTransport maps core requests onto wp_remote_request and never throws', function () {
-    require_once __DIR__ . '/../includes/WpHttpTransport.php';
+test('FluxFilesHttpTransport maps core requests onto wp_remote_request and never throws', function () {
+    require_once __DIR__ . '/../includes/FluxFilesHttpTransport.php';
     $GLOBALS['WP_REMOTE'] = null;
     $GLOBALS['WP_REMOTE_CALL'] = null;
     if (!function_exists('wp_remote_request')) {
@@ -1037,7 +1037,7 @@ test('WpHttpTransport maps core requests onto wp_remote_request and never throws
     if (!function_exists('wp_remote_retrieve_response_code')) { function wp_remote_retrieve_response_code($r) { return $r['response']['code'] ?? ''; } }
     if (!function_exists('wp_remote_retrieve_body')) { function wp_remote_retrieve_body($r) { return $r['body'] ?? ''; } }
 
-    $t = new WpHttpTransport();
+    $t = new FluxFilesHttpTransport();
     assertTrue($t instanceof \FluxFiles\HttpTransportInterface, 'implements core\'s interface');
 
     $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 201], 'body' => 'ok', 'headers' => ['Content-Type' => 'text/x', 'X-Multi' => ['a', 'b']]];
@@ -1095,7 +1095,7 @@ test('debugLog is silent without WP_DEBUG and writes with it', function () {
     assertTrue(strpos($run('define("WP_DEBUG", false);'), 'fx-debug-marker') === false, 'silent with WP_DEBUG false');
     assertTrue(strpos($run('define("WP_DEBUG", true);'), 'fx-debug-marker') !== false, 'logs with WP_DEBUG');
     $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php')
-        . (string) file_get_contents(__DIR__ . '/../includes/WpRateLimiterStorage.php');
+        . (string) file_get_contents(__DIR__ . '/../includes/FluxFilesRateLimiterStorage.php');
     assertTrue(strpos($api, 'error_log(') === false, 'no raw error_log in the API / limiter');
 });
 
@@ -1167,8 +1167,8 @@ if (!class_exists('WP_REST_Response')) {
 }
 
 require_once __DIR__ . '/../includes/FluxFilesDbSchema.php';
-require_once __DIR__ . '/../includes/WpRateLimiterStorage.php';
-require_once __DIR__ . '/../includes/WpHttpTransport.php';
+require_once __DIR__ . '/../includes/FluxFilesRateLimiterStorage.php';
+require_once __DIR__ . '/../includes/FluxFilesHttpTransport.php';
 require_once __DIR__ . '/../includes/FluxFilesMediaEndpoint.php';
 require_once __DIR__ . '/../includes/FluxFilesApi.php';
 
@@ -1302,13 +1302,13 @@ test('audit_reads forwards through the token builder', function () use ($secret)
     assertEqual(true, $p->audit_reads ?? null, 'audit_reads forwarded');
 });
 
-// ── DB storage backend (WpDbMetadataHandler) ─────────────────────────────────
-// Fast/no-DB coverage of the SQL WpDbMetadataHandler builds, using a spy
+// ── DB storage backend (FluxFilesDbMetadataHandler) ─────────────────────────────────
+// Fast/no-DB coverage of the SQL FluxFilesDbMetadataHandler builds, using a spy
 // `wpdb` that records every query() string and lets a test seed canned
 // get_row()/get_results()/get_var() responses. Mirrors the shape of
 // test-laravel-smoke.php's config-branch wiring check below, plus the SQL
 // generation itself since WordPress has no equivalent ORM-query-log fixture.
-require_once __DIR__ . '/../includes/WpDbMetadataHandler.php';
+require_once __DIR__ . '/../includes/FluxFilesDbMetadataHandler.php';
 
 class WpdbSpy
 {
@@ -1364,14 +1364,14 @@ class WpdbSpy
     }
 }
 
-function makeWpDbHandler(WpdbSpy $spy): WpDbMetadataHandler
+function makeWpDbHandler(WpdbSpy $spy): FluxFilesDbMetadataHandler
 {
     global $wpdb;
     $wpdb = $spy;
-    return new WpDbMetadataHandler(new \FluxFiles\DiskManager([]));
+    return new FluxFilesDbMetadataHandler(new \FluxFiles\DiskManager([]));
 }
 
-test('WpDbMetadataHandler::audit() chains under a locked head row and advances it', function () {
+test('FluxFilesDbMetadataHandler::audit() chains under a locked head row and advances it', function () {
     \FluxFiles\AuditChain::configure(str_repeat('k', 40));
     try {
         $spy = new WpdbSpy();
@@ -1393,7 +1393,7 @@ test('WpDbMetadataHandler::audit() chains under a locked head row and advances i
     }
 });
 
-test('WpDbMetadataHandler::audit() without a secret stays a plain insert', function () {
+test('FluxFilesDbMetadataHandler::audit() without a secret stays a plain insert', function () {
     \FluxFiles\AuditChain::configure('');
     $keep = $_ENV['FLUXFILES_SECRET'] ?? null;
     unset($_ENV['FLUXFILES_SECRET']);
@@ -1407,7 +1407,7 @@ test('WpDbMetadataHandler::audit() without a secret stays a plain insert', funct
     }
 });
 
-test('WpDbMetadataHandler::save() upserts with ON DUPLICATE KEY UPDATE against the file_metadata table', function () {
+test('FluxFilesDbMetadataHandler::save() upserts with ON DUPLICATE KEY UPDATE against the file_metadata table', function () {
     $spy = new WpdbSpy();
     $handler = makeWpDbHandler($spy);
     $handler->save('local', 'a.txt', ['title' => 'A', 'uploaded_by' => 'u']);
@@ -1417,7 +1417,7 @@ test('WpDbMetadataHandler::save() upserts with ON DUPLICATE KEY UPDATE against t
     assertTrue(str_contains($sql, $spy->prefix . 'fluxfiles_file_metadata'), 'save() targets the prefixed file_metadata table');
 });
 
-test('WpDbMetadataHandler::save() keeps created_at sticky from the existing row, not the new call', function () {
+test('FluxFilesDbMetadataHandler::save() keeps created_at sticky from the existing row, not the new call', function () {
     $spy = new WpdbSpy();
     $spy->rowQueue[] = ['id' => 1, 'title' => 'A', 'alt_text' => null, 'caption' => null, 'tags' => null,
         'owner' => 'u', 'mime' => null, 'size' => null, 'width' => null, 'height' => null,
@@ -1431,7 +1431,7 @@ test('WpDbMetadataHandler::save() keeps created_at sticky from the existing row,
     assertTrue(!str_contains($sql, '2000'), 'the new call\'s created (2000) must NOT override an existing created_at');
 });
 
-test('WpDbMetadataHandler::renameChildren() deletes the destination slot, then updates the source row', function () {
+test('FluxFilesDbMetadataHandler::renameChildren() deletes the destination slot, then updates the source row', function () {
     $spy = new WpdbSpy();
     $spy->resultsQueue[] = [['id' => 5, 'path' => 'old/a.txt']];
     $handler = makeWpDbHandler($spy);
@@ -1453,7 +1453,7 @@ test('WpDbMetadataHandler::renameChildren() deletes the destination slot, then u
     assertTrue(in_array('START TRANSACTION', $spy->queries, true) && in_array('COMMIT', $spy->queries, true), 'wraps the move in a transaction');
 });
 
-test('WpDbMetadataHandler::renameDirPrefix() deletes the source unconditionally, then checks before inserting at the destination', function () {
+test('FluxFilesDbMetadataHandler::renameDirPrefix() deletes the source unconditionally, then checks before inserting at the destination', function () {
     $spy = new WpdbSpy();
     $spy->resultsQueue[] = [['path' => 'old', 'path_hash' => hash('sha256', 'old')]];
     $spy->varQueue[] = null; // destination does not already exist -> INSERT should run
@@ -1478,7 +1478,7 @@ test('WpDbMetadataHandler::renameDirPrefix() deletes the source unconditionally,
     assertTrue($deleteIdx < $selectIdx && $selectIdx < $insertIdx, 'sequence is DELETE source -> SELECT destination -> INSERT (destination wins on collision)');
 });
 
-test('WpDbMetadataHandler trash round-trip decodes JSON columns and casts is_dir/size/deleted_at', function () {
+test('FluxFilesDbMetadataHandler trash round-trip decodes JSON columns and casts is_dir/size/deleted_at', function () {
     $spy = new WpdbSpy();
     $spy->rowQueue[] = [
         'original_key' => 'a/b', 'disk' => 'local', 'basename' => 'b', 'is_dir' => '1',
@@ -1497,18 +1497,18 @@ test('WpDbMetadataHandler trash round-trip decodes JSON columns and casts is_dir
     assertEqual(['title' => 't'], $entry['meta'], 'meta JSON decoded');
 });
 
-test('storage backend option branches metadata repo between StorageMetadataHandler and WpDbMetadataHandler', function () {
+test('storage backend option branches metadata repo between StorageMetadataHandler and FluxFilesDbMetadataHandler', function () {
     $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     assertTrue(
         strpos($apiSrc, "get_option('fluxfiles_storage_backend', 'json') === 'db'") !== false,
         'constructor checks the fluxfiles_storage_backend option'
     );
-    assertTrue(strpos($apiSrc, 'new WpDbMetadataHandler(') !== false, 'constructor can build WpDbMetadataHandler');
+    assertTrue(strpos($apiSrc, 'new FluxFilesDbMetadataHandler(') !== false, 'constructor can build FluxFilesDbMetadataHandler');
 
     $bootSrc = (string) file_get_contents(__DIR__ . '/../fluxfiles.php');
     assertTrue(
-        strpos($bootSrc, "includes/WpDbMetadataHandler.php") !== false,
-        'fluxfiles.php requires WpDbMetadataHandler.php'
+        strpos($bootSrc, "includes/FluxFilesDbMetadataHandler.php") !== false,
+        'fluxfiles.php requires FluxFilesDbMetadataHandler.php'
     );
 });
 
@@ -1516,7 +1516,7 @@ test('WP-CLI: migrate_json_to_db is wired as `wp fluxfiles migrate-json-to-db`',
     $cliSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesCli.php');
     assertTrue(strpos($cliSrc, 'function migrate_json_to_db') !== false, 'FluxFilesCli defines migrate_json_to_db()');
     assertTrue(strpos($cliSrc, 'wp fluxfiles migrate-json-to-db') !== false, 'docblock documents the migrate-json-to-db example');
-    assertTrue(strpos($cliSrc, 'WpDbMetadataHandler(') !== false, 'command targets WpDbMetadataHandler');
+    assertTrue(strpos($cliSrc, 'FluxFilesDbMetadataHandler(') !== false, 'command targets FluxFilesDbMetadataHandler');
     assertTrue(strpos($cliSrc, 'JsonToDbMigrator(') !== false, 'command builds a JsonToDbMigrator');
 });
 
@@ -1574,7 +1574,7 @@ test('proxy route surface covers every core /api/fm route', function () {
     // - metadata/export, metadata/import (docs/design/DB-STORAGE-MIGRATION-DESIGN.md §7):
     //   MetadataExporter/MetadataImporter work directly against core's own
     //   \FluxFiles\Db\Connection SQL layer. WordPress's `db` backend option (§6)
-    //   uses WpDbMetadataHandler on WordPress's own $wpdb connection instead, so
+    //   uses FluxFilesDbMetadataHandler on WordPress's own $wpdb connection instead, so
     //   these two classes have nothing to bind to in proxy mode. No such port
     //   exists yet.
     $intentionallyUnproxied = [
@@ -2869,6 +2869,33 @@ test('Plugin Check: the settings template enqueues, never prints a <script> tag 
     assertTrue(strpos($tpl, 'wp_add_inline_script') !== false, 'the theme sample shows the enqueue way');
 });
 
+test('Plugin Check prefixing: every global class the plugin declares starts with FluxFiles', function () {
+    // WordPress.NamingConventions.PrefixAllGlobals (Plugin Check's plugin_repo "Prefixing" check)
+    // flags any non-prefixed class in the global namespace; WordPress.org reviewers act on it.
+    $bad = [];
+    foreach (array_merge(glob(__DIR__ . '/../includes/*.php') ?: [], [__DIR__ . '/../fluxfiles.php', __DIR__ . '/../uninstall.php']) as $f) {
+        $src = (string) file_get_contents($f);
+        if (preg_match('/^\s*namespace\s+/m', $src)) {
+            continue; // namespaced: not global
+        }
+        if (preg_match_all('/^\s*(?:final\s+|abstract\s+)?(?:class|interface|trait)\s+([A-Za-z_][A-Za-z0-9_]*)/m', $src, $m)) {
+            foreach ($m[1] as $cls) {
+                if (stripos($cls, 'FluxFiles') !== 0) {
+                    $bad[] = basename($f) . ': ' . $cls;
+                }
+            }
+        }
+        if (preg_match_all('/^function\s+([A-Za-z_][A-Za-z0-9_]*)/m', $src, $m)) {
+            foreach ($m[1] as $fn) {
+                if (stripos($fn, 'fluxfiles') !== 0) {
+                    $bad[] = basename($f) . ': function ' . $fn;
+                }
+            }
+        }
+    }
+    assertEqual([], $bad, 'non-prefixed globals');
+});
+
 test('WordPress.org polish: translatable strings, block API v3, keyed toolbar buttons, shortcode instance guard', function () {
     $dir = __DIR__ . '/../';
     $sc = (string) file_get_contents($dir . 'includes/FluxFilesShortcode.php');
@@ -3154,7 +3181,7 @@ test('db mode: the rate limiter lives in the database (GET_LOCK, START TRANSACTI
     try {
         $wpdb = new WpdbSpy();
         $lim = $ffPriv($api, 'limiter', [5, 2]);
-        assertTrue($lim instanceof WpRateLimiterStorage, 'db mode: the DB-backed limiter');
+        assertTrue($lim instanceof FluxFilesRateLimiterStorage, 'db mode: the DB-backed limiter');
         $live = time();
         $wpdb->varQueue = [1];   // GET_LOCK granted
         $wpdb->resultsQueue = [[]];
@@ -3200,7 +3227,7 @@ test('db mode: the rate limiter lives in the database (GET_LOCK, START TRANSACTI
 test('db mode: a missing/unusable rate_limits table degrades to the file limiter (throttled log) instead of a 500 on every call', function () use ($ffPriv) {
     global $wpdb;
     $keepDb = $wpdb ?? null;
-    $heal = new \ReflectionProperty(WpRateLimiterStorage::class, 'healTried');
+    $heal = new \ReflectionProperty(FluxFilesRateLimiterStorage::class, 'healTried');
     $heal->setValue(null, true); // skip the dbDelta self-heal (not available in the stub runtime)
     $broken = new class extends WpdbSpy {
         public function query(string $sql)
@@ -3220,14 +3247,14 @@ test('db mode: a missing/unusable rate_limits table degrades to the file limiter
     $errLog = ini_set('error_log', $dir . '/err.log');
     try {
         $wpdb = $broken;
-        $lim = new WpRateLimiterStorage(5, 1, 60, \FluxFiles\RateLimiterFactory::makeFile($dir, 5, 1, 60));
+        $lim = new FluxFilesRateLimiterStorage(5, 1, 60, \FluxFiles\RateLimiterFactory::makeFile($dir, 5, 1, 60));
         $lim->check('u-fb', 'write');                      // served by the file limiter, no exception
         try { $lim->check('u-fb', 'write'); $threw = null; }
         catch (\FluxFiles\ApiException $e) { $threw = $e->getHttpCode(); }
         assertEqual(429, $threw, 'still rate limited through the fallback');
         $log = (string) @file_get_contents($dir . '/err.log');
         assertEqual(1, substr_count($log, 'DB rate limiter unavailable'), 'logged once, not per request');
-        $strict = new WpRateLimiterStorage(5, 1, 60);       // no fallback: fail closed as before
+        $strict = new FluxFilesRateLimiterStorage(5, 1, 60);       // no fallback: fail closed as before
         try { $strict->check('u-fb', 'write'); $code = null; }
         catch (\FluxFiles\ApiException $e) { $code = $e->getHttpCode(); }
         assertEqual(500, $code, 'without a fallback it still fails closed');
@@ -3244,11 +3271,11 @@ test('the schema creates the rate_limits table', function () {
     assertEqual('1.5.0', FluxFilesDbSchema::VERSION, 'schema version bumped so existing installs dbDelta it');
 });
 
-test('WpDbMetadataHandler uses core\'s MetadataRowLogic trait and keeps none of its duplicated methods', function () {
-    assertTrue(in_array(\FluxFiles\Db\MetadataRowLogic::class, class_uses(WpDbMetadataHandler::class), true), 'trait used');
+test('FluxFilesDbMetadataHandler uses core\'s MetadataRowLogic trait and keeps none of its duplicated methods', function () {
+    assertTrue(in_array(\FluxFiles\Db\MetadataRowLogic::class, class_uses(FluxFilesDbMetadataHandler::class), true), 'trait used');
     $own = [];
-    foreach ((new ReflectionClass(WpDbMetadataHandler::class))->getMethods() as $m) {
-        if ($m->getFileName() === (new ReflectionClass(WpDbMetadataHandler::class))->getFileName()) { $own[] = $m->getName(); }
+    foreach ((new ReflectionClass(FluxFilesDbMetadataHandler::class))->getMethods() as $m) {
+        if ($m->getFileName() === (new ReflectionClass(FluxFilesDbMetadataHandler::class))->getFileName()) { $own[] = $m->getName(); }
     }
     foreach (['pathHash', 'isReservedPath', 'isHiddenPath', 'highlight', 'rowToTrashEntry', 'rowToHoldEntry', 'matchOverlappingHold',
               'findOverlappingHold', 'holdCovering', 'holdBlocking', 'holdsCoveringMany', 'releaseHold', 'get', 'trackParents',
