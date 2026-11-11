@@ -51,6 +51,11 @@ final class AllLicensed implements LicenseCheckInterface
     public function status(): string { return 'active'; }
     public function info(): array { return []; }
 }
+final class BrokenMailer implements MailTransportInterface
+{
+    public function send(MailMessage $m): void { throw new \RuntimeException('raw secret-ish detail pw=hunter2'); }
+    public function name(): string { return 'broken'; }
+}
 final class CaptureMailer implements MailTransportInterface
 {
     /** @var list<MailMessage> */
@@ -163,6 +168,10 @@ test('a provider failure is reported, not thrown', function () use ($claims) {
     $r = NotifyEndpoint::test($claims(['allow_share' => true, 'notify_to' => 'a@x.io']), new CaptureMailer(true), [], new AllLicensed());
     eq(false, $r['sent']);
     ok(str_contains((string) $r['error'], '550'), (string) $r['error']);
+    // A transport that throws something other than MailException: a report, not a 500, and its raw text never surfaces.
+    $r2 = NotifyEndpoint::test($claims(['allow_share' => true, 'notify_to' => 'a@x.io']), new BrokenMailer(), [], new AllLicensed());
+    eq(false, $r2['sent']);
+    ok(!str_contains((string) $r2['error'], 'hunter2'), (string) $r2['error']);
 });
 
 echo "\n\033[36m══ /notify/run + /notify/mute ══\033[0m\n";

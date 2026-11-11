@@ -68,6 +68,11 @@ final class NotifyEndpoint
             return ['sent' => false, 'transport' => $mailer->name(), 'error' => $e->getMessage()];
         } catch (\InvalidArgumentException $e) {
             return ['sent' => false, 'transport' => $mailer->name(), 'error' => 'invalid message'];
+        } catch (\Throwable $e) {
+            // A host transport that breaks the MailException contract: still a report, never
+            // a 500, and never its raw message (it was not scrubbed).
+            Log::warn('[fluxfiles] notify test: ' . get_class($e) . ' from the ' . $mailer->name() . ' transport');
+            return ['sent' => false, 'transport' => $mailer->name(), 'error' => 'send failed (' . get_class($e) . ')'];
         }
     }
 
