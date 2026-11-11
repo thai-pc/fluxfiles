@@ -409,7 +409,10 @@
     "invalid_sort": "未知的排序方式。",
     "invalid_order": "排序方向必须是升序或降序。",
     "invalid_type": "未知的文件类型筛选。",
-    "cursor_stale": "加载期间文件夹已更改，正在重新加载…"
+    "cursor_stale": "加载期间文件夹已更改，正在重新加载…",
+    "notify_not_configured": "电子邮件通知尚未设置。请添加收件人（notify_to），并在服务器上配置邮件传输方式。",
+    "notify_recipient_denied": "该电子邮件地址不在允许的收件人名单中。",
+    "notify_invalid_address": "这不是有效的电子邮件地址。"
   },
   "presign": {
     "title": "预签名链接",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "完整性基线已重置",
       "retention_run": "执行保留策略",
       "retention_trash": "因保留策略移至回收站",
-      "retention_delete": "因保留策略删除"
+      "retention_delete": "因保留策略删除",
+      "notify_test": "已发送测试邮件",
+      "notify_run": "通知扫描",
+      "notify_mute": "通知已静音或取消静音",
+      "notify_sent": "通知邮件已发送"
     },
     "fixity_run": "完整性检查",
     "fixity_busy": "正在检查文件…",
@@ -852,5 +859,33 @@
     "license_label": "许可证",
     "notices": "第三方声明",
     "docs": "文档"
+  },
+  "notify": {
+    "test_subject": "来自 FluxFiles 的测试邮件",
+    "test_body": "这是来自 {from} 的测试邮件。如果您能看到这封邮件，说明电子邮件通知运行正常。",
+    "intake_received_subject": "「{label}」中有新文件（{count}）",
+    "intake_received_intro": "在 {start} 至 {end} 期间，上传门户「{label}」共收到 {count} 个文件，总大小 {size}。",
+    "intake_full_subject": "上传门户「{label}」已满",
+    "intake_full_intro": "上传门户「{label}」已达到 {max} 个文件的上限，不再接受上传。",
+    "intake_expiring_subject": "上传门户「{label}」即将到期",
+    "intake_expiring_intro": "上传门户「{label}」将于 {expires} 到期。目前已收到 {count} 个文件。",
+    "intake_receipt_subject": "已收到您的文件",
+    "intake_receipt_intro": "{from} 已收到您于 {time} 通过「{label}」发送的 {count} 个文件，总大小 {size}。",
+    "share_first_download_subject": "您的分享链接「{label}」已被下载",
+    "share_first_download_intro": "有人于 {time} 从您的分享链接「{label}」下载了「{file}」。剩余下载次数：{remaining}。",
+    "share_first_download_intro_noname": "有人于 {time} 从您的分享链接「{label}」下载了一个文件。剩余下载次数：{remaining}。",
+    "share_exhausted_subject": "分享链接「{label}」已达到下载上限",
+    "share_exhausted_intro": "您的分享链接「{label}」已被下载 {max} 次，不再允许下载。",
+    "share_expiring_subject": "分享链接「{label}」即将到期",
+    "share_expiring_intro": "您的分享链接「{label}」将于 {expires} 到期。截至目前：浏览 {views} 次，下载 {downloads} 次。",
+    "share_expired_subject": "分享链接「{label}」已过期",
+    "share_expired_intro": "您的分享链接「{label}」已于 {expires} 过期。最终统计：浏览 {views} 次，下载 {downloads} 次。",
+    "files_heading": "文件：",
+    "and_more": "……另有 {count} 个",
+    "submitter": "发送者的电子邮件（未验证）：{email}",
+    "open_app": "在您的文件管理器中打开：{url}",
+    "unlimited": "不限",
+    "footer": "您收到这封邮件，是因为此项目已开启通知。如需停止，请在文件管理器中将其静音。",
+    "receipt_footer": "这是一封自动回执。"
   }
 }

@@ -409,7 +409,10 @@
     "invalid_sort": "Unbekannte Sortierung.",
     "invalid_order": "Die Reihenfolge muss auf- oder absteigend sein.",
     "invalid_type": "Unbekannter Dateityp-Filter.",
-    "cursor_stale": "Der Ordner hat sich beim Laden geändert. Wird neu geladen…"
+    "cursor_stale": "Der Ordner hat sich beim Laden geändert. Wird neu geladen…",
+    "notify_not_configured": "E-Mail-Benachrichtigungen sind nicht eingerichtet. Fügen Sie Empfänger (notify_to) hinzu und konfigurieren Sie auf dem Server einen Mailtransport.",
+    "notify_recipient_denied": "Diese E-Mail-Adresse steht nicht auf der Liste der erlaubten Empfänger.",
+    "notify_invalid_address": "Das ist keine gültige E-Mail-Adresse."
   },
   "presign": {
     "title": "Vorsignierte URL",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "Integritäts-Baseline zurückgesetzt",
       "retention_run": "Aufbewahrungslauf",
       "retention_trash": "Durch Aufbewahrung im Papierkorb",
-      "retention_delete": "Durch Aufbewahrung gelöscht"
+      "retention_delete": "Durch Aufbewahrung gelöscht",
+      "notify_test": "Test-E-Mail gesendet",
+      "notify_run": "Benachrichtigungslauf",
+      "notify_mute": "Benachrichtigungen stummgeschaltet oder wieder aktiviert",
+      "notify_sent": "Benachrichtigung per E-Mail gesendet"
     },
     "fixity_run": "Integritätsprüfung",
     "fixity_busy": "Dateien werden geprüft…",
@@ -852,5 +859,33 @@
     "license_label": "Lizenz",
     "notices": "Hinweise zu Drittanbietern",
     "docs": "Dokumentation"
+  },
+  "notify": {
+    "test_subject": "Test-E-Mail von FluxFiles",
+    "test_body": "Dies ist eine Testnachricht von {from}. Wenn Sie sie lesen können, funktionieren die E-Mail-Benachrichtigungen.",
+    "intake_received_subject": "Neue Dateien in „{label}“ ({count})",
+    "intake_received_intro": "Im Upload-Portal „{label}“ sind zwischen {start} und {end} Dateien eingegangen (Anzahl: {count}, Gesamtgröße: {size}).",
+    "intake_full_subject": "Upload-Portal „{label}“ ist voll",
+    "intake_full_intro": "Das Upload-Portal „{label}“ hat sein Limit von {max} Dateien erreicht und nimmt keine Uploads mehr an.",
+    "intake_expiring_subject": "Upload-Portal „{label}“ läuft bald ab",
+    "intake_expiring_intro": "Das Upload-Portal „{label}“ läuft am {expires} ab. Bisher empfangene Dateien: {count}.",
+    "intake_receipt_subject": "Ihre Dateien sind angekommen",
+    "intake_receipt_intro": "{from} hat die Dateien erhalten, die Sie am {time} über „{label}“ gesendet haben (Anzahl: {count}, Gesamtgröße: {size}).",
+    "share_first_download_subject": "Ihr Freigabelink „{label}“ wurde heruntergeladen",
+    "share_first_download_intro": "Jemand hat am {time} „{file}“ über Ihren Freigabelink „{label}“ heruntergeladen. Verbleibende Downloads: {remaining}.",
+    "share_first_download_intro_noname": "Jemand hat am {time} eine Datei über Ihren Freigabelink „{label}“ heruntergeladen. Verbleibende Downloads: {remaining}.",
+    "share_exhausted_subject": "Freigabelink „{label}“ hat sein Download-Limit erreicht",
+    "share_exhausted_intro": "Ihr Freigabelink „{label}“ wurde {max}-mal heruntergeladen und erlaubt keine weiteren Downloads.",
+    "share_expiring_subject": "Freigabelink „{label}“ läuft bald ab",
+    "share_expiring_intro": "Ihr Freigabelink „{label}“ läuft am {expires} ab. Bisher – Aufrufe: {views}, Downloads: {downloads}.",
+    "share_expired_subject": "Freigabelink „{label}“ ist abgelaufen",
+    "share_expired_intro": "Ihr Freigabelink „{label}“ ist am {expires} abgelaufen. Endstand – Aufrufe: {views}, Downloads: {downloads}.",
+    "files_heading": "Dateien:",
+    "and_more": "…und {count} weitere",
+    "submitter": "E-Mail des Absenders (nicht verifiziert): {email}",
+    "open_app": "In Ihrem Dateimanager öffnen: {url}",
+    "unlimited": "unbegrenzt",
+    "footer": "Sie erhalten diese E-Mail, weil Benachrichtigungen für dieses Element aktiviert sind. Um sie zu beenden, schalten Sie es in Ihrem Dateimanager stumm.",
+    "receipt_footer": "Dies ist eine automatische Empfangsbestätigung."
   }
 }

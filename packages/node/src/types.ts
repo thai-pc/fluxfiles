@@ -194,6 +194,27 @@ export interface BaseTokenOptions {
   /** Opt-in per-event analytics on an intake portal, mirroring `shareAnalytics`
    *  (same privacy footprint, same separate opt-in). Default false. */
   intakeAnalytics?: boolean;
+  /** E-mail notices (Intake/Share modules): recipients the operator vouches for (≤ 5).
+   *  Empty = off. Read at portal/share create and sealed into the record. */
+  notifyTo?: string[] | string;
+  /** Domains whose addresses a create body may add as extra recipients (≤ 10). */
+  notifyRecipientDomains?: string[] | string;
+  /** Filter over the notice events (`intake_received`, `share_first_download`, …). Empty = all. */
+  notifyEvents?: string[] | string;
+  /** Notice language, one of the 16 shipped locales. */
+  notifyLocale?: string;
+  /** Display name on notices (≤ 80 chars); the address is the server's FLUXFILES_MAIL_FROM. */
+  notifyFromName?: string;
+  /** Reply-To on submitter receipts. */
+  notifyReplyTo?: string;
+  /** "Open in your file manager" link in owner notices; `{path}` is replaced. http(s) only. */
+  notifyAppUrl?: string;
+  /** Quiet period (s) before an intake digest is sent, 60–3600. Default 600. */
+  notifyBatchWindow?: number;
+  /** Filenames in owner notices. Default true. */
+  notifyIncludeNames?: boolean;
+  /** Offer "e-mail me a receipt" on the portal page. Default false. */
+  intakeNotifyReceipt?: boolean;
   /** Intake portal branding — same four fields and same decode-time sanitizing as
    *  the `shareBrand*` options above, applied to the upload portal instead. */
   intakeBrandName?: string;

@@ -525,6 +525,9 @@ test('generateToken forwards the share/intake gates and their config', function 
         'share_analytics' => true,
         'intake_base_url' => 'https://files.acme.com/public/intake.html',
         'intake_analytics' => true,
+        'notify_to'        => ['ops@acme.com'],
+        'notify_batch_window' => 300,
+        'intake_notify_receipt' => true,
     ]);
     $p = \FluxFiles\JwtCompat::decode($token, $secret);
     assertEqual(true, $p->allow_share ?? null, 'share gate forwarded');
@@ -535,6 +538,9 @@ test('generateToken forwards the share/intake gates and their config', function 
     assertEqual(true, $p->share_analytics ?? null, 'share_analytics forwarded');
     assertEqual('https://files.acme.com/public/intake.html', $p->intake_base_url ?? null);
     assertEqual(true, $p->intake_analytics ?? null, 'intake_analytics forwarded');
+    assertEqual(['ops@acme.com'], $p->notify_to ?? null, 'notify_to forwarded');
+    assertEqual(300, $p->notify_batch_window ?? null, 'notify_batch_window forwarded');
+    assertEqual(true, $p->intake_notify_receipt ?? null, 'intake_notify_receipt forwarded');
 
     // The edition preset (registered by an add-on via fluxfiles_edition_presets) enables both gates.
     $GLOBALS['WP_FILTERS']['fluxfiles_edition_presets'] = [fn () => require __DIR__ . '/fixtures/edition-presets.php'];
@@ -1290,7 +1296,7 @@ test('audit: a typed token refused at auth is never logged under a previous call
 test('audit: presign/zip/share/c2pa/webhook/stream/content are covered in the proxy', function () {
     $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     foreach (["'POST' => 'presign_post'", "'zip_download'", "\$module . '_create'", "\$module . '_revoke'",
-              "'c2pa_verify'", "'webhook_test'", "'content_read'"] as $needle) {
+              "'c2pa_verify'", "'webhook_test'", "'content_read'", "'notify/' . $op"] as $needle) {
         assertTrue(strpos($src, $needle) !== false, "proxy logs {$needle}");
     }
     // stream_read (audit_reads) is MediaEndpoint's job now; the proxy must hand it the metadata repo.

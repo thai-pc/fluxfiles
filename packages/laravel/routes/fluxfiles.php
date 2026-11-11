@@ -110,6 +110,11 @@ Route::get('hold/list', [FluxFilesController::class, 'holdList']);
 // Webhooks (paid module) — send a test ping to the configured endpoint
 Route::post('webhooks/test', [FluxFilesController::class, 'webhooksTest']);
 
+// E-mail notices (Intake/Share modules) — test the transport, run the sweep, mute one record
+Route::post('notify/test', [FluxFilesController::class, 'notifyTest']);
+Route::post('notify/run', [FluxFilesController::class, 'notifyRun']);
+Route::post('notify/mute', [FluxFilesController::class, 'notifyMute']);
+
 // File versioning (paid module) — list prior versions of a file / restore one
 Route::get('versions', [FluxFilesController::class, 'versions']);
 Route::post('versions/restore', [FluxFilesController::class, 'versionsRestore']);

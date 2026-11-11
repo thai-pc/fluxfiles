@@ -409,7 +409,10 @@
     "invalid_sort": "ตัวเลือกการเรียงไม่ถูกต้อง",
     "invalid_order": "ลำดับต้องเป็นจากน้อยไปมากหรือมากไปน้อย",
     "invalid_type": "ตัวกรองประเภทไฟล์ไม่ถูกต้อง",
-    "cursor_stale": "โฟลเดอร์เปลี่ยนระหว่างโหลด กำลังโหลดใหม่…"
+    "cursor_stale": "โฟลเดอร์เปลี่ยนระหว่างโหลด กำลังโหลดใหม่…",
+    "notify_not_configured": "ยังไม่ได้ตั้งค่าการแจ้งเตือนทางอีเมล โปรดเพิ่มผู้รับ (notify_to) และกำหนดค่าตัวส่งอีเมลบนเซิร์ฟเวอร์",
+    "notify_recipient_denied": "ที่อยู่อีเมลนี้ไม่อยู่ในรายชื่อผู้รับที่อนุญาต",
+    "notify_invalid_address": "นี่ไม่ใช่ที่อยู่อีเมลที่ถูกต้อง"
   },
   "presign": {
     "title": "URL ลงนามล่วงหน้า",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "รีเซ็ตเส้นฐานความสมบูรณ์",
       "retention_run": "เรียกใช้การเก็บรักษา",
       "retention_trash": "ย้ายไปถังขยะตามการเก็บรักษา",
-      "retention_delete": "ลบตามการเก็บรักษา"
+      "retention_delete": "ลบตามการเก็บรักษา",
+      "notify_test": "ส่งอีเมลทดสอบแล้ว",
+      "notify_run": "การตรวจสอบและส่งการแจ้งเตือน",
+      "notify_mute": "ปิดหรือเปิดเสียงการแจ้งเตือนแล้ว",
+      "notify_sent": "ส่งการแจ้งเตือนทางอีเมลแล้ว"
     },
     "fixity_run": "ตรวจสอบความสมบูรณ์",
     "fixity_busy": "กำลังตรวจสอบไฟล์…",
@@ -852,5 +859,33 @@
     "license_label": "สัญญาอนุญาต",
     "notices": "ประกาศของบุคคลที่สาม",
     "docs": "เอกสาร"
+  },
+  "notify": {
+    "test_subject": "อีเมลทดสอบจาก FluxFiles",
+    "test_body": "นี่คือข้อความทดสอบจาก {from} หากคุณอ่านข้อความนี้ได้ แสดงว่าการแจ้งเตือนทางอีเมลทำงานปกติ",
+    "intake_received_subject": "มีไฟล์ใหม่ใน “{label}” ({count})",
+    "intake_received_intro": "พอร์ทัลอัปโหลด “{label}” ได้รับไฟล์ {count} ไฟล์ ขนาดรวม {size} ระหว่าง {start} ถึง {end}",
+    "intake_full_subject": "พอร์ทัลอัปโหลด “{label}” เต็มแล้ว",
+    "intake_full_intro": "พอร์ทัลอัปโหลด “{label}” ถึงขีดจำกัด {max} ไฟล์แล้ว และไม่รับการอัปโหลดอีก",
+    "intake_expiring_subject": "พอร์ทัลอัปโหลด “{label}” ใกล้หมดอายุ",
+    "intake_expiring_intro": "พอร์ทัลอัปโหลด “{label}” จะหมดอายุในวันที่ {expires} ขณะนี้ได้รับไฟล์แล้ว {count} ไฟล์",
+    "intake_receipt_subject": "เราได้รับไฟล์ของคุณแล้ว",
+    "intake_receipt_intro": "{from} ได้รับไฟล์ {count} ไฟล์ ขนาดรวม {size} ที่คุณส่งผ่าน “{label}” เมื่อ {time}",
+    "share_first_download_subject": "ลิงก์แชร์ “{label}” ของคุณถูกดาวน์โหลดแล้ว",
+    "share_first_download_intro": "มีผู้ดาวน์โหลด “{file}” จากลิงก์แชร์ “{label}” ของคุณเมื่อ {time} เหลือสิทธิ์ดาวน์โหลด: {remaining}",
+    "share_first_download_intro_noname": "มีผู้ดาวน์โหลดไฟล์จากลิงก์แชร์ “{label}” ของคุณเมื่อ {time} เหลือสิทธิ์ดาวน์โหลด: {remaining}",
+    "share_exhausted_subject": "ลิงก์แชร์ “{label}” ถึงขีดจำกัดการดาวน์โหลดแล้ว",
+    "share_exhausted_intro": "ลิงก์แชร์ “{label}” ของคุณถูกดาวน์โหลดครบ {max} ครั้งแล้ว และไม่อนุญาตให้ดาวน์โหลดอีก",
+    "share_expiring_subject": "ลิงก์แชร์ “{label}” ใกล้หมดอายุ",
+    "share_expiring_intro": "ลิงก์แชร์ “{label}” ของคุณจะหมดอายุในวันที่ {expires} ขณะนี้: เข้าชม {views} ครั้ง ดาวน์โหลด {downloads} ครั้ง",
+    "share_expired_subject": "ลิงก์แชร์ “{label}” หมดอายุแล้ว",
+    "share_expired_intro": "ลิงก์แชร์ “{label}” ของคุณหมดอายุเมื่อ {expires} ยอดรวมสุดท้าย: เข้าชม {views} ครั้ง ดาวน์โหลด {downloads} ครั้ง",
+    "files_heading": "ไฟล์:",
+    "and_more": "…และอีก {count} รายการ",
+    "submitter": "อีเมลของผู้ส่ง (ยังไม่ยืนยัน): {email}",
+    "open_app": "เปิดในตัวจัดการไฟล์ของคุณ: {url}",
+    "unlimited": "ไม่จำกัด",
+    "footer": "คุณได้รับอีเมลนี้เพราะเปิดการแจ้งเตือนสำหรับรายการนี้ไว้ หากต้องการหยุดรับ ให้ปิดเสียงการแจ้งเตือนในตัวจัดการไฟล์ของคุณ",
+    "receipt_footer": "นี่คือใบรับอัตโนมัติ"
   }
 }

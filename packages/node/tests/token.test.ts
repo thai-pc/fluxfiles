@@ -278,6 +278,32 @@ describe('createToken', () => {
     expect(raw.intake_base_url).toBe('https://x/i');
   });
 
+  it('forwards the e-mail notice claims, omits them otherwise', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        notifyTo: ['ops@acme.com'],
+        notifyEvents: 'intake_received,share_expired',
+        notifyLocale: 'de',
+        notifyAppUrl: 'https://app.acme.com/?p={path}',
+        notifyBatchWindow: 300,
+        notifyIncludeNames: false,
+        intakeNotifyReceipt: true,
+      }),
+    ) as Record<string, unknown>;
+    expect(c.notify_to).toEqual(['ops@acme.com']);
+    expect(c.notify_events).toBe('intake_received,share_expired');
+    expect(c.notify_locale).toBe('de');
+    expect(c.notify_app_url).toBe('https://app.acme.com/?p={path}');
+    expect(c.notify_batch_window).toBe(300);
+    expect(c.notify_include_names).toBe(false);
+    expect(c.intake_notify_receipt).toBe(true);
+    const off = decodeToken(createToken({ secret: SECRET, userId: 'u' })) as Record<string, unknown>;
+    expect(off.notify_to).toBeUndefined();
+    expect(off.intake_notify_receipt).toBeUndefined();
+  });
+
   it('forwards the share/intake branding claims and intakeAnalytics, omits them otherwise', () => {
     const c = decodeToken(
       createToken({

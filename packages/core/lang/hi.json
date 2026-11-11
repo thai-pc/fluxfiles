@@ -409,7 +409,10 @@
     "invalid_sort": "अज्ञात क्रम विकल्प।",
     "invalid_order": "क्रम आरोही या अवरोही होना चाहिए।",
     "invalid_type": "अज्ञात फ़ाइल प्रकार फ़िल्टर।",
-    "cursor_stale": "लोड होते समय फ़ोल्डर बदल गया। फिर से लोड हो रहा है…"
+    "cursor_stale": "लोड होते समय फ़ोल्डर बदल गया। फिर से लोड हो रहा है…",
+    "notify_not_configured": "ईमेल सूचनाएँ सेट नहीं हैं। प्राप्तकर्ता (notify_to) जोड़ें और सर्वर पर मेल ट्रांसपोर्ट कॉन्फ़िगर करें।",
+    "notify_recipient_denied": "यह ईमेल पता अनुमत प्राप्तकर्ताओं की सूची में नहीं है।",
+    "notify_invalid_address": "यह मान्य ईमेल पता नहीं है।"
   },
   "presign": {
     "title": "प्री-साइन URL",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "अखंडता बेसलाइन रीसेट",
       "retention_run": "प्रतिधारण रन",
       "retention_trash": "प्रतिधारण से ट्रैश",
-      "retention_delete": "प्रतिधारण से हटाई गई"
+      "retention_delete": "प्रतिधारण से हटाई गई",
+      "notify_test": "टेस्ट ईमेल भेजा गया",
+      "notify_run": "सूचना स्वीप",
+      "notify_mute": "सूचनाएँ म्यूट या अनम्यूट की गईं",
+      "notify_sent": "सूचना ईमेल से भेजी गई"
     },
     "fixity_run": "अखंडता जाँच",
     "fixity_busy": "फ़ाइलें जाँची जा रही हैं…",
@@ -852,5 +859,33 @@
     "license_label": "लाइसेंस",
     "notices": "तृतीय-पक्ष सूचनाएँ",
     "docs": "दस्तावेज़"
+  },
+  "notify": {
+    "test_subject": "FluxFiles की ओर से टेस्ट ईमेल",
+    "test_body": "यह {from} की ओर से एक टेस्ट संदेश है। अगर आप इसे पढ़ पा रहे हैं, तो ईमेल सूचनाएँ काम कर रही हैं।",
+    "intake_received_subject": "“{label}” में नई फ़ाइलें ({count})",
+    "intake_received_intro": "{start} और {end} के बीच अपलोड पोर्टल “{label}” में {count} फ़ाइलें, कुल {size}, आईं।",
+    "intake_full_subject": "अपलोड पोर्टल “{label}” भर गया है",
+    "intake_full_intro": "अपलोड पोर्टल “{label}” अपनी {max} फ़ाइलों की सीमा तक पहुँच गया है और अब अपलोड स्वीकार नहीं करता।",
+    "intake_expiring_subject": "अपलोड पोर्टल “{label}” जल्द समाप्त होगा",
+    "intake_expiring_intro": "अपलोड पोर्टल “{label}” {expires} को समाप्त होगा। अब तक इसमें {count} फ़ाइलें आई हैं।",
+    "intake_receipt_subject": "आपकी फ़ाइलें मिल गईं",
+    "intake_receipt_intro": "आपने {time} को “{label}” के ज़रिए जो {count} फ़ाइलें (कुल {size}) भेजीं, वे {from} को मिल गईं।",
+    "share_first_download_subject": "आपका शेयर लिंक “{label}” डाउनलोड किया गया",
+    "share_first_download_intro": "किसी ने {time} को आपके शेयर लिंक “{label}” से “{file}” डाउनलोड की। बचे डाउनलोड: {remaining}।",
+    "share_first_download_intro_noname": "किसी ने {time} को आपके शेयर लिंक “{label}” से एक फ़ाइल डाउनलोड की। बचे डाउनलोड: {remaining}।",
+    "share_exhausted_subject": "शेयर लिंक “{label}” अपनी डाउनलोड सीमा तक पहुँच गया",
+    "share_exhausted_intro": "आपका शेयर लिंक “{label}” {max} बार डाउनलोड हो चुका है और अब डाउनलोड की अनुमति नहीं देता।",
+    "share_expiring_subject": "शेयर लिंक “{label}” जल्द समाप्त होगा",
+    "share_expiring_intro": "आपका शेयर लिंक “{label}” {expires} को समाप्त होगा। अब तक: {views} बार देखा गया, {downloads} डाउनलोड।",
+    "share_expired_subject": "शेयर लिंक “{label}” समाप्त हो गया",
+    "share_expired_intro": "आपका शेयर लिंक “{label}” {expires} को समाप्त हो गया। अंतिम गिनती: {views} बार देखा गया, {downloads} डाउनलोड।",
+    "files_heading": "फ़ाइलें:",
+    "and_more": "…और {count} और",
+    "submitter": "भेजने वाले का ईमेल (असत्यापित): {email}",
+    "open_app": "अपने फ़ाइल मैनेजर में खोलें: {url}",
+    "unlimited": "असीमित",
+    "footer": "आपको यह ईमेल इसलिए मिला क्योंकि इस आइटम के लिए सूचनाएँ चालू हैं। इन्हें रोकने के लिए अपने फ़ाइल मैनेजर में इसे म्यूट करें।",
+    "receipt_footer": "यह एक स्वचालित रसीद है।"
   }
 }

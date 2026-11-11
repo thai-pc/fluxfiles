@@ -409,7 +409,10 @@
     "invalid_sort": "Bilinmeyen sıralama seçeneği.",
     "invalid_order": "Sıralama artan veya azalan olmalıdır.",
     "invalid_type": "Bilinmeyen dosya türü filtresi.",
-    "cursor_stale": "Klasör yüklenirken değişti. Yeniden yükleniyor…"
+    "cursor_stale": "Klasör yüklenirken değişti. Yeniden yükleniyor…",
+    "notify_not_configured": "E-posta bildirimleri ayarlanmadı. Alıcıları (notify_to) ekleyin ve sunucuda bir posta aktarımı yapılandırın.",
+    "notify_recipient_denied": "Bu e-posta adresi izin verilen alıcılar listesinde değil.",
+    "notify_invalid_address": "Bu geçerli bir e-posta adresi değil."
   },
   "presign": {
     "title": "Ön imzalı URL",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "Bütünlük temeli sıfırlandı",
       "retention_run": "Saklama çalıştırması",
       "retention_trash": "Saklama ile çöp kutusuna",
-      "retention_delete": "Saklama ile silindi"
+      "retention_delete": "Saklama ile silindi",
+      "notify_test": "Test e-postası gönderildi",
+      "notify_run": "Bildirim taraması",
+      "notify_mute": "Bildirimler sessize alındı veya sessizden çıkarıldı",
+      "notify_sent": "Bildirim e-postayla gönderildi"
     },
     "fixity_run": "Bütünlük denetimi",
     "fixity_busy": "Dosyalar denetleniyor…",
@@ -852,5 +859,33 @@
     "license_label": "Lisans",
     "notices": "Üçüncü taraf bildirimleri",
     "docs": "Belgeler"
+  },
+  "notify": {
+    "test_subject": "FluxFiles test e-postası",
+    "test_body": "Bu, {from} tarafından gönderilen bir test iletisidir. Bunu okuyabiliyorsanız e-posta bildirimleri çalışıyor demektir.",
+    "intake_received_subject": "“{label}” içinde yeni dosyalar ({count})",
+    "intake_received_intro": "{start} ile {end} arasında “{label}” yükleme portalına {count} dosya, toplam {size}, ulaştı.",
+    "intake_full_subject": "“{label}” yükleme portalı doldu",
+    "intake_full_intro": "“{label}” yükleme portalı {max} dosyalık sınırına ulaştı ve artık yükleme kabul etmiyor.",
+    "intake_expiring_subject": "“{label}” yükleme portalının süresi yakında doluyor",
+    "intake_expiring_intro": "“{label}” yükleme portalının süresi {expires} tarihinde doluyor. Şimdiye kadar {count} dosya aldı.",
+    "intake_receipt_subject": "Dosyalarınız alındı",
+    "intake_receipt_intro": "{from}, {time} tarihinde “{label}” üzerinden gönderdiğiniz {count} dosyayı (toplam {size}) aldı.",
+    "share_first_download_subject": "“{label}” paylaşım bağlantınız indirildi",
+    "share_first_download_intro": "Biri {time} tarihinde “{label}” paylaşım bağlantınızdan “{file}” dosyasını indirdi. Kalan indirme: {remaining}.",
+    "share_first_download_intro_noname": "Biri {time} tarihinde “{label}” paylaşım bağlantınızdan bir dosya indirdi. Kalan indirme: {remaining}.",
+    "share_exhausted_subject": "“{label}” paylaşım bağlantısı indirme sınırına ulaştı",
+    "share_exhausted_intro": "“{label}” paylaşım bağlantınız {max} kez indirildi ve artık indirmeye izin vermiyor.",
+    "share_expiring_subject": "“{label}” paylaşım bağlantısının süresi yakında doluyor",
+    "share_expiring_intro": "“{label}” paylaşım bağlantınızın süresi {expires} tarihinde doluyor. Şimdiye kadar: {views} görüntülenme, {downloads} indirme.",
+    "share_expired_subject": "“{label}” paylaşım bağlantısının süresi doldu",
+    "share_expired_intro": "“{label}” paylaşım bağlantınızın süresi {expires} tarihinde doldu. Son sayım: {views} görüntülenme, {downloads} indirme.",
+    "files_heading": "Dosyalar:",
+    "and_more": "…ve {count} tane daha",
+    "submitter": "Gönderenin e-postası (doğrulanmadı): {email}",
+    "open_app": "Dosya yöneticinizde açın: {url}",
+    "unlimited": "sınırsız",
+    "footer": "Bu öğe için bildirimler açık olduğundan bu e-postayı alıyorsunuz. Durdurmak için dosya yöneticinizde sessize alın.",
+    "receipt_footer": "Bu otomatik bir makbuzdur."
   }
 }

@@ -1172,6 +1172,26 @@ HTACCESS;
         if (array_key_exists('intake_analytics', $overrides)) {
             $payload['intake_analytics'] = (bool) $overrides['intake_analytics'];
         }
+        // E-mail notices (Intake/Share modules): read on the operator token at portal/share
+        // create and sealed into the record; the core validates and clamps them on decode.
+        foreach (['notify_to', 'notify_recipient_domains', 'notify_events'] as $nk) {
+            if (array_key_exists($nk, $overrides)) {
+                $payload[$nk] = is_array($overrides[$nk]) ? array_values($overrides[$nk]) : (string) $overrides[$nk];
+            }
+        }
+        foreach (['notify_locale', 'notify_from_name', 'notify_reply_to', 'notify_app_url'] as $nk) {
+            if (!empty($overrides[$nk])) {
+                $payload[$nk] = (string) $overrides[$nk];
+            }
+        }
+        if (array_key_exists('notify_batch_window', $overrides)) {
+            $payload['notify_batch_window'] = (int) $overrides['notify_batch_window'];
+        }
+        foreach (['notify_include_names', 'intake_notify_receipt'] as $nk) {
+            if (array_key_exists($nk, $overrides)) {
+                $payload[$nk] = (bool) $overrides[$nk];
+            }
+        }
         // Share/intake landing branding — like the config above, read at create time
         // and baked into the record, so a later token change never rewrites an
         // already-published link. The core drops a non-http(s) logo/link URL and

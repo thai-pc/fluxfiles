@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Core: groundwork for **e-mail notices** in the Intake and Share modules (`docs/design/INTAKE-SHARE-NOTIFICATIONS-DESIGN.md`, step 1 of Intake document requests). A plain-text mail layer (`FluxFiles\Mail\*`: SMTP, Resend, Postmark, Mailgun, SES v2, and a `log` transport for development) configured only from server env (`FLUXFILES_MAIL_*`), `PublicContext::mailer()` so a host can inject its own mail stack, `NotifyProviderInterface` for the modules, and three operator routes, `POST /api/fm/notify/test|run|mute`, proxied by Laravel and WordPress through the shared `NotifyEndpoint`. Ten new claims (`notify_to`, `notify_recipient_domains`, `notify_events`, `notify_locale`, `notify_from_name`, `notify_reply_to`, `notify_app_url`, `notify_batch_window`, `notify_include_names`, `intake_notify_receipt`), named options in all five token builders, notice templates in all 16 languages. Inert until an Intake/Share release implements the notices.
+
 ## [1.0.31] — 2026-11-11
 
 > Released: `wordpress-v1.1.6` (bundles core 1.2.4).

@@ -409,7 +409,10 @@
     "invalid_sort": "خيار الترتيب غير معروف.",
     "invalid_order": "يجب أن يكون الترتيب تصاعديًا أو تنازليًا.",
     "invalid_type": "مرشح نوع الملف غير معروف.",
-    "cursor_stale": "تغيّر المجلد أثناء التحميل. جارٍ إعادة التحميل…"
+    "cursor_stale": "تغيّر المجلد أثناء التحميل. جارٍ إعادة التحميل…",
+    "notify_not_configured": "إشعارات البريد الإلكتروني غير مُعدّة. أضف المستلمين (notify_to) وهيّئ وسيلة إرسال البريد على الخادم.",
+    "notify_recipient_denied": "عنوان البريد الإلكتروني هذا ليس ضمن قائمة المستلمين المسموح بهم.",
+    "notify_invalid_address": "هذا ليس عنوان بريد إلكتروني صالحًا."
   },
   "presign": {
     "title": "رابط موقّع مسبقاً",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "تمت إعادة تعيين خط أساس السلامة",
       "retention_run": "تشغيل الاحتفاظ",
       "retention_trash": "نُقل للمهملات بالاحتفاظ",
-      "retention_delete": "حُذف بالاحتفاظ"
+      "retention_delete": "حُذف بالاحتفاظ",
+      "notify_test": "تم إرسال بريد تجريبي",
+      "notify_run": "فحص الإشعارات",
+      "notify_mute": "تم كتم الإشعارات أو إلغاء كتمها",
+      "notify_sent": "تم إرسال الإشعار بالبريد الإلكتروني"
     },
     "fixity_run": "فحص السلامة",
     "fixity_busy": "جارٍ فحص الملفات…",
@@ -852,5 +859,33 @@
     "license_label": "الترخيص",
     "notices": "إشعارات الجهات الخارجية",
     "docs": "التوثيق"
+  },
+  "notify": {
+    "test_subject": "بريد تجريبي من FluxFiles",
+    "test_body": "هذه رسالة تجريبية من {from}. إذا كنت تقرأها، فإشعارات البريد الإلكتروني تعمل.",
+    "intake_received_subject": "ملفات جديدة في “{label}” ({count})",
+    "intake_received_intro": "وصل {count} ملفًا بحجم إجمالي {size} إلى بوابة الرفع “{label}” بين {start} و{end}.",
+    "intake_full_subject": "بوابة الرفع “{label}” ممتلئة",
+    "intake_full_intro": "بلغت بوابة الرفع “{label}” حدّها البالغ {max} ملفًا ولم تعد تقبل عمليات رفع.",
+    "intake_expiring_subject": "بوابة الرفع “{label}” ستنتهي صلاحيتها قريبًا",
+    "intake_expiring_intro": "ستنتهي صلاحية بوابة الرفع “{label}” في {expires}. استلمت حتى الآن {count} ملفًا.",
+    "intake_receipt_subject": "تم استلام ملفاتك",
+    "intake_receipt_intro": "استلم {from} عدد {count} ملفًا بحجم إجمالي {size} أرسلتها عبر “{label}” في {time}.",
+    "share_first_download_subject": "تم تنزيل رابط المشاركة “{label}”",
+    "share_first_download_intro": "نزّل شخص ما “{file}” من رابط المشاركة “{label}” في {time}. التنزيلات المتبقية: {remaining}.",
+    "share_first_download_intro_noname": "نزّل شخص ما ملفًا من رابط المشاركة “{label}” في {time}. التنزيلات المتبقية: {remaining}.",
+    "share_exhausted_subject": "بلغ رابط المشاركة “{label}” حد التنزيلات",
+    "share_exhausted_intro": "تم تنزيل رابط المشاركة “{label}” {max} مرة ولم يعد يسمح بالتنزيل.",
+    "share_expiring_subject": "رابط المشاركة “{label}” ستنتهي صلاحيته قريبًا",
+    "share_expiring_intro": "ستنتهي صلاحية رابط المشاركة “{label}” في {expires}. حتى الآن: {views} مشاهدة و{downloads} تنزيل.",
+    "share_expired_subject": "انتهت صلاحية رابط المشاركة “{label}”",
+    "share_expired_intro": "انتهت صلاحية رابط المشاركة “{label}” في {expires}. الإحصاء النهائي: {views} مشاهدة و{downloads} تنزيل.",
+    "files_heading": "الملفات:",
+    "and_more": "…و{count} أخرى",
+    "submitter": "البريد الإلكتروني للمرسل (غير مُتحقَّق منه): {email}",
+    "open_app": "افتح في مدير الملفات: {url}",
+    "unlimited": "غير محدود",
+    "footer": "تصلك هذه الرسالة لأن الإشعارات مفعّلة لهذا العنصر. لإيقافها، اكتمه في مدير الملفات.",
+    "receipt_footer": "هذا إيصال تلقائي."
   }
 }

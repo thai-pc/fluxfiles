@@ -409,7 +409,10 @@
     "invalid_sort": "Option de tri inconnue.",
     "invalid_order": "L'ordre doit être croissant ou décroissant.",
     "invalid_type": "Filtre de type de fichier inconnu.",
-    "cursor_stale": "Le dossier a changé pendant le chargement. Rechargement…"
+    "cursor_stale": "Le dossier a changé pendant le chargement. Rechargement…",
+    "notify_not_configured": "Les notifications par e-mail ne sont pas configurées. Ajoutez des destinataires (notify_to) et configurez un transport de messagerie sur le serveur.",
+    "notify_recipient_denied": "Cette adresse e-mail ne figure pas dans la liste des destinataires autorisés.",
+    "notify_invalid_address": "Ce n'est pas une adresse e-mail valide."
   },
   "presign": {
     "title": "URL présignée",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "Référence d'intégrité réinitialisée",
       "retention_run": "Exécution de conservation",
       "retention_trash": "Mis à la corbeille par conservation",
-      "retention_delete": "Supprimé par conservation"
+      "retention_delete": "Supprimé par conservation",
+      "notify_test": "E-mail de test envoyé",
+      "notify_run": "Balayage des notifications",
+      "notify_mute": "Notifications mises en sourdine ou réactivées",
+      "notify_sent": "Notification envoyée par e-mail"
     },
     "fixity_run": "Contrôle d'intégrité",
     "fixity_busy": "Vérification des fichiers…",
@@ -852,5 +859,33 @@
     "license_label": "Licence",
     "notices": "Mentions tierces",
     "docs": "Documentation"
+  },
+  "notify": {
+    "test_subject": "E-mail de test de FluxFiles",
+    "test_body": "Ceci est un message de test de la part de {from}. Si vous pouvez le lire, les notifications par e-mail fonctionnent.",
+    "intake_received_subject": "Nouveaux fichiers dans « {label} » ({count})",
+    "intake_received_intro": "Fichiers arrivés dans le portail de dépôt « {label} » entre le {start} et le {end} : {count} au total, {size}.",
+    "intake_full_subject": "Le portail de dépôt « {label} » est plein",
+    "intake_full_intro": "Le portail de dépôt « {label} » a atteint sa limite de {max} fichiers et n'accepte plus de dépôts.",
+    "intake_expiring_subject": "Le portail de dépôt « {label} » expire bientôt",
+    "intake_expiring_intro": "Le portail de dépôt « {label} » expire le {expires}. Fichiers reçus jusqu'ici : {count}.",
+    "intake_receipt_subject": "Vos fichiers ont bien été reçus",
+    "intake_receipt_intro": "{from} a bien reçu les fichiers que vous avez envoyés via « {label} » le {time} (nombre : {count}, taille totale : {size}).",
+    "share_first_download_subject": "Votre lien de partage « {label} » a été téléchargé",
+    "share_first_download_intro": "Quelqu'un a téléchargé « {file} » depuis votre lien de partage « {label} » le {time}. Téléchargements restants : {remaining}.",
+    "share_first_download_intro_noname": "Quelqu'un a téléchargé un fichier depuis votre lien de partage « {label} » le {time}. Téléchargements restants : {remaining}.",
+    "share_exhausted_subject": "Le lien de partage « {label} » a atteint sa limite de téléchargements",
+    "share_exhausted_intro": "Votre lien de partage « {label} » a été téléchargé {max} fois et n'autorise plus de téléchargements.",
+    "share_expiring_subject": "Le lien de partage « {label} » expire bientôt",
+    "share_expiring_intro": "Votre lien de partage « {label} » expire le {expires}. Jusqu'ici : vues : {views}, téléchargements : {downloads}.",
+    "share_expired_subject": "Le lien de partage « {label} » a expiré",
+    "share_expired_intro": "Votre lien de partage « {label} » a expiré le {expires}. Bilan final : vues : {views}, téléchargements : {downloads}.",
+    "files_heading": "Fichiers :",
+    "and_more": "…et {count} de plus",
+    "submitter": "E-mail de l'expéditeur (non vérifié) : {email}",
+    "open_app": "Ouvrir dans votre gestionnaire de fichiers : {url}",
+    "unlimited": "illimité",
+    "footer": "Vous recevez cet e-mail car les notifications sont activées pour cet élément. Pour les arrêter, mettez-le en sourdine dans votre gestionnaire de fichiers.",
+    "receipt_footer": "Ceci est un accusé de réception automatique."
   }
 }

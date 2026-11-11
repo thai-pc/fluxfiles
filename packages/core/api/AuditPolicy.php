@@ -35,6 +35,9 @@ final class AuditPolicy
         '/intake'        => 'intake_create',
         '/versions/restore' => 'version_restore',
         '/webhooks/test' => 'webhook_test',
+        '/notify/test'   => 'notify_test',
+        '/notify/run'    => 'notify_run',
+        '/notify/mute'   => 'notify_mute',
         '/virus/scan'    => 'virus_scan',
         '/fixity/check'  => 'fixity_check',
         '/retention/run' => 'retention_run',
@@ -179,6 +182,18 @@ final class AuditPolicy
             case 'legal_hold_place':
             case 'legal_hold_release':
                 return (string) ($body['reason'] ?? '');
+            case 'notify_run':
+                return is_array($data)
+                    ? sprintf('%s sent=%d coalesced=%d', !empty($data['dry_run']) ? 'dry-run' : 'applied',
+                        (int) ($data['sent'] ?? 0), (int) ($data['coalesced'] ?? 0))
+                    : null;
+            case 'notify_test':
+                // Never the address: only whether the transport accepted it.
+                return is_array($data) ? (!empty($data['sent']) ? 'sent' : 'failed') . ' via ' . (string) ($data['transport'] ?? '') : null;
+            case 'notify_mute':
+                return (is_scalar($body['module'] ?? null) ? (string) $body['module'] : '') . ':'
+                    . (is_scalar($body['jti'] ?? null) ? (string) $body['jti'] : '')
+                    . (filter_var($body['muted'] ?? true, FILTER_VALIDATE_BOOLEAN) ? ' muted' : ' unmuted');
             case 'share_revoke':
             case 'intake_revoke':
                 // The body carries only the link id — without it the entry is blank.
