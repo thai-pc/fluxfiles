@@ -1,5 +1,11 @@
 # Paid modules, live, through the WordPress plugin
 
+> **Out of date since wordpress-v1.1.0.** The free plugin no longer runs paid modules (the
+> WordPress.org split ships `api/NoLicense.php`, not `LicenseManager`), so this rig cannot
+> license them. On WordPress, paid modules ship only in FluxFiles Pro (Share + Intake), whose
+> real-WordPress e2e is `packages/wordpress-pro/e2e/run.sh`. Keep this rig for reference
+> until it is ported to Pro or removed.
+
 The same idea as the standalone rig one level up (real modules, a real licence,
 real engines, nothing mocked), but every request goes through the **WordPress
 plugin**: the `[fluxfiles]` shortcode embeds the UI, the SDK hands it a

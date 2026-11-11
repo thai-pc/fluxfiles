@@ -9,7 +9,9 @@ rsync -a --delete --exclude .env --exclude 'storage/*' --exclude node_modules --
 mkdir -p "$ST/app/core/storage"
 for m in share intake versioning webhooks ai ocr virus backup c2pa audit-export sso dlp legal-hold; do
   [ -d "$REPO/packages/$m/src" ] || { echo "module $m not checked out" >&2; exit 2; }
+  # public/ holds the recipient pages (share.html, intake.html) since core-v1.1.0; pack-modules.php ships it too.
   mkdir -p "$ST/app/modules/$m" && rsync -a "$REPO/packages/$m/src" "$REPO/packages/$m/composer.json" "$ST/app/modules/$m/"
+  if [ -d "$REPO/packages/$m/public" ]; then rsync -a "$REPO/packages/$m/public" "$ST/app/modules/$m/"; fi
 done
 php "$HERE/mint-license.php" "$REPO" "$ST/license.txt"   # never echoes the key or the license
 SECRET="$(cat "$ST/secret.txt" 2>/dev/null || true)"

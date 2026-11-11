@@ -14,11 +14,15 @@ composer require "fluxfiles/fluxfiles:$CORE_V" "fluxfiles/laravel:$LARAVEL_V" --
 for m in /src/modules/*; do
   id="$(basename "$m")"
   mkdir -p "vendor/fluxfiles/$id" && cp -R "$m/src" "$m/composer.json" "vendor/fluxfiles/$id/"
+  if [ -d "$m/public" ]; then cp -R "$m/public" "vendor/fluxfiles/$id/"; fi   # recipient pages (share/intake)
 done
 php artisan vendor:publish --tag=fluxfiles-config --force >/dev/null
 # ['web','auth'] → the stateless test guard (see LiveJwtUser).
 perl -0pi -e "s/'middleware' => \[[^\]]*\],/'middleware' => [\\\\App\\\\Http\\\\Middleware\\\\LiveJwtUser::class],/" config/fluxfiles.php
 grep -q "LiveJwtUser" config/fluxfiles.php
+# Since laravel-v1.0.6 the component refuses to mint without a claims_resolver (see LiveClaims).
+perl -0pi -e "s/'claims_resolver' => null,/'claims_resolver' => \\\\App\\\\FluxFiles\\\\LiveClaims::class,/" config/fluxfiles.php
+grep -q "LiveClaims" config/fluxfiles.php
 cat /fixtures-laravel/routes-web.append.php >> routes/web.php
 cp -R /fixtures-laravel/app/. app/ && cp -R /fixtures-laravel/resources/. resources/
 # The image must not carry the create-project .env's APP_KEY as the only one: a
