@@ -5,8 +5,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.30] — 2026-11-11
+
+> Released: `core-v1.2.4`, `wordpress-v1.1.5` (bundles core 1.2.4).
+
 ### Fixed
-- Core: deleting, trashing, renaming or moving a single image left its on-demand `/img` transforms (`_variants/<name>_w…`) behind at the old path, so resized copies of a deleted or trashed image stayed on the disk/bucket. `FileManager::deleteTransformCache()` drops exactly that file's entries (local and S3/R2); folder operations already removed the whole `_variants/` subtree.
+- WordPress 1.1.5: passes Plugin Check again. 1.1.4's new settings screen had 3 Plugin Check ERRORs (two attribute strings printed without escaping at the print site; a literal `<script src>` in the theme code sample). Each attribute is now escaped where it is printed, and the sample shows `wp_enqueue_script()` + `wp_add_inline_script()`. Plugin Check 2.2.0: no errors, with and without `--include-experimental`.
+- Core 1.2.4: deleting, trashing, renaming or moving a single image left its on-demand `/img` transforms (`_variants/<name>_w…`) behind at the old path, so resized copies of a deleted or trashed image stayed on the disk/bucket. `FileManager::deleteTransformCache()` drops exactly that file's entries (local and S3/R2); folder operations already removed the whole `_variants/` subtree.
 
 ## [1.0.29] — 2026-11-11
 
