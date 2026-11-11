@@ -70,7 +70,8 @@ class FluxFilesBlock
         wp_localize_script('fluxfiles-block', 'FluxFilesBlockCfg', [
             'endpoint'  => FluxFilesPlugin::apiEndpoint(),
             'token'     => $token,
-            'disk'      => get_option('fluxfiles_disks', ['local'])[0] ?? 'local',
+            'disk'      => FluxFilesPlugin::enabledDisks()[0],
+            'disks'     => FluxFilesPlugin::enabledDisks(),
             'locale'    => substr(get_locale(), 0, 2),
             'attachUrl' => esc_url_raw(rest_url('fluxfiles/v1/api/fm/attach')),
             'tokenUrl'  => esc_url_raw(rest_url('fluxfiles/v1/api/fm/token')),

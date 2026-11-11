@@ -73,6 +73,7 @@
                 endpoint: cfg.endpoint,
                 token: cfg.token,
                 disk: cfg.disk,
+                disks: cfg.disks,
                 mode: 'picker',
                 locale: cfg.locale,
                 container: '#fluxfiles-block-body',

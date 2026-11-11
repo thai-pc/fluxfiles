@@ -103,7 +103,8 @@ class FluxFilesMediaButton
         $config = [
             'endpoint' => $endpoint,
             'token'    => $token,
-            'disk'     => get_option('fluxfiles_disks', ['local'])[0] ?? 'local',
+            'disk'     => FluxFilesPlugin::enabledDisks()[0],
+            'disks'    => FluxFilesPlugin::enabledDisks(),
             'mode'     => 'picker',
             // onSelect already inserts each file in an array, so multi-select just
             // works when enabled. Off by default to keep single-insert behaviour.

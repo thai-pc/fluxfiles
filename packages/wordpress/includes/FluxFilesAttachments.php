@@ -25,6 +25,12 @@ class FluxFilesAttachments
     /** Register the URL-rewrite filters. Called once on plugins_loaded. */
     public static function register(): void
     {
+        // Our attachments have no file in the uploads dir, so `_wp_attached_file` is empty and
+        // WP's wp_attachment_is_image() says "not an image" -> image_downsize() /
+        // wp_get_attachment_image_src() return false (Classic "Add Media" inserts <img src="">,
+        // the_post_thumbnail() prints nothing). Give them a path that can never exist.
+        add_filter('get_attached_file', [self::class, 'filterAttachedFile'], 10, 2);
+        // (Registered even with offload off: it only touches attachments carrying our marker.)
         if (!apply_filters('fluxfiles_enable_offload', get_option('fluxfiles_offload', '1') === '1')) {
             return;
         }
@@ -166,6 +172,35 @@ class FluxFilesAttachments
     }
 
     /** wp_get_attachment_image_src filter → point the <img> src at FluxFiles. */
+    /**
+     * `get_attached_file` filter: for a FluxFiles attachment with no real file, answer a
+     * placeholder path inside a `fluxfiles-offload` folder that holds no originals. Only the truthiness and the
+     * mime prefix matter to wp_attachment_is*(); and because the path never exists, deleting the
+     * attachment (wp_delete_attachment_files -> unlink) can never remove a real file.
+     *
+     * @param string|false $file
+     * @return string|false
+     */
+    public static function filterAttachedFile($file, $attachmentId)
+    {
+        if (is_string($file) && $file !== '') {
+            return $file;
+        }
+        $marker = get_post_meta((int) $attachmentId, self::META_URL, true);
+        if (!is_string($marker) || $marker === '') {
+            return $file;
+        }
+        // A normal (not dot-) folder: WP writes derived files next to this path (Customizer
+        // crops), and a server that denies `/\.` (nginx) would 403 them if it were hidden.
+        $up = wp_get_upload_dir();
+        $base = sanitize_file_name(basename((string) wp_parse_url($marker, PHP_URL_PATH)));
+        // One folder per attachment: WP's crop writes `cropped-<name>` NEXT TO this path and its
+        // delete unlinks this path, so a shared folder would let deleting one attachment remove
+        // another one's real crop (a FluxFiles file named `cropped-x.png`), and two files with
+        // the same name in different FluxFiles folders would share a path.
+        return rtrim((string) ($up['basedir'] ?? ''), '/') . '/fluxfiles-offload/ff-' . (int) $attachmentId . '/' . ($base !== '' ? $base : 'file');
+    }
+
     public static function filterImageSrc($image, $attachmentId, $size, $icon)
     {
         $ff = get_post_meta($attachmentId, self::META_URL, true);

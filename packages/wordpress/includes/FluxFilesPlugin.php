@@ -1506,6 +1506,21 @@ HTACCESS;
     /**
      * Get the FluxFiles REST API endpoint base URL.
      */
+    /**
+     * The disks enabled under Settings › Access, in order, for the picker's disk switcher.
+     * The token carries the same list; without it the embedded UI only offers `local`.
+     *
+     * @return string[]
+     */
+    public static function enabledDisks(): array
+    {
+        $disks = array_values(array_filter(
+            array_map('strval', (array) get_option('fluxfiles_disks', ['local'])),
+            static function ($d) { return in_array($d, ['local', 's3', 'r2'], true); }
+        ));
+        return $disks ?: ['local'];
+    }
+
     public static function apiEndpoint(): string
     {
         return rest_url('fluxfiles/v1');
