@@ -1972,7 +1972,7 @@ class FluxFilesController
                 return $this->ok(\FluxFiles\NotifyEndpoint::test($claims, $mailer, $body, null, $why));
             }
             if ($op === 'run') {
-                return $this->ok(\FluxFiles\NotifyEndpoint::run($this->diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $body));
+                return $this->ok(\FluxFiles\NotifyEndpoint::run($this->diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $body, null, (string) config('fluxfiles.secret')));
             }
             return $this->ok(\FluxFiles\NotifyEndpoint::mute($this->diskManager, $claims, $body));
         } catch (ApiException $e) {

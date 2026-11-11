@@ -69,9 +69,9 @@ final class FakeIntake implements ModuleInterface, NotifyProviderInterface
     public static array $runs = [];
     public static function id(): string { return 'intake'; }
     public static function claim(): string { return 'allow_intake'; }
-    public function runNotify(DiskManager $dm, \FluxFiles\Claims $c, string $disk, ?MailTransportInterface $m, bool $dry, int $max): array
+    public function runNotify(DiskManager $dm, \FluxFiles\Claims $c, string $disk, ?MailTransportInterface $m, bool $dry, int $max, string $secret): array
     {
-        self::$runs[] = compact('disk', 'dry', 'max') + ['mailer' => $m !== null];
+        self::$runs[] = compact('disk', 'dry', 'max', 'secret') + ['mailer' => $m !== null];
         return ['sent' => $dry ? 0 : 2, 'coalesced' => 1, 'rate_limited' => 0, 'truncated' => false,
             'items' => [['jti' => 'abcdefgh1', 'event' => 'intake_expiring', 'result' => $dry ? 'would_send' : 'sent']]];
     }
@@ -185,11 +185,12 @@ test('run: merges modules, reports an old module as skipped, caps max_emails at 
     ModuleRegistry::register('intake', FakeIntake::class);
     ModuleRegistry::register('share', OldShare::class);
     FakeIntake::$runs = [];
-    $r = NotifyEndpoint::run($dm, $claims(['allow_intake' => true, 'allow_share' => true]), new CaptureMailer(), ['max_emails' => 5000], new AllLicensed());
+    $r = NotifyEndpoint::run($dm, $claims(['allow_intake' => true, 'allow_share' => true]), new CaptureMailer(), ['max_emails' => 5000], new AllLicensed(), 'the-host-secret');
     eq(false, $r['dry_run']); eq(2, $r['sent']); eq(1, $r['coalesced']);
     eq([['module' => 'share', 'reason' => 'module_update_required']], $r['skipped']);
     eq('intake', $r['items'][0]['module']);
     eq(200, FakeIntake::$runs[0]['max']);
+    eq('the-host-secret', FakeIntake::$runs[0]['secret'], 'the host secret reaches the module');
 });
 test('run: dry run works without a transport; a live run without one is 400', function () use ($claims, $dm) {
     ModuleRegistry::register('intake', FakeIntake::class);

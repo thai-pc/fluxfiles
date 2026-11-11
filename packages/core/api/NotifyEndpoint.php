@@ -85,7 +85,7 @@ final class NotifyEndpoint
      * @param array<string,mixed> $body
      * @return array<string,mixed>
      */
-    public static function run(DiskManager $dm, Claims $claims, ?MailTransportInterface $mailer, array $body, ?LicenseCheckInterface $license = null): array
+    public static function run(DiskManager $dm, Claims $claims, ?MailTransportInterface $mailer, array $body, ?LicenseCheckInterface $license = null, #[\SensitiveParameter] string $secret = ''): array
     {
         if (!$claims->hasPerm('read')) {
             throw new ApiException('Permission denied', 403, 'forbidden');
@@ -133,7 +133,7 @@ final class NotifyEndpoint
                 $report['truncated'] = true;
                 break;
             }
-            $r = $module->runNotify($dm, $claims, $disk, $dryRun ? null : $mailer, $dryRun, $budget);
+            $r = $module->runNotify($dm, $claims, $disk, $dryRun ? null : $mailer, $dryRun, $budget, $secret);
             foreach (['sent', 'coalesced', 'rate_limited'] as $k) {
                 $report[$k] += (int) ($r[$k] ?? 0);
             }

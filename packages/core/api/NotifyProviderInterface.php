@@ -22,7 +22,9 @@ interface NotifyProviderInterface
     /**
      * One sweep over this tenant's records on `$disk`. `$mailer` is always null on a dry
      * run: the module must then report, never send. `$maxEmails` ≥ 1 is this module's
-     * remaining share of the call's budget (core never calls with 0).
+     * remaining share of the call's budget (core never calls with 0). `$secret` is the
+     * host's signing secret (FLUXFILES_SECRET / the WordPress option / Laravel config): the
+     * module needs it to open each record's sealed `notify` block.
      *
      * Report shape (core merges the two modules' reports):
      * `{sent:int, coalesced:int, rate_limited:int, truncated:bool,
@@ -31,7 +33,7 @@ interface NotifyProviderInterface
      *
      * @return array<string,mixed>
      */
-    public function runNotify(DiskManager $dm, Claims $claims, string $disk, ?MailTransportInterface $mailer, bool $dryRun, int $maxEmails): array;
+    public function runNotify(DiskManager $dm, Claims $claims, string $disk, ?MailTransportInterface $mailer, bool $dryRun, int $maxEmails, #[\SensitiveParameter] string $secret): array;
 
     /**
      * Mute or unmute one record's notices (owner-checked under `owner_only`, like revoke).

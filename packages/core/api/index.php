@@ -922,7 +922,7 @@ function routeRequest(
         return \FluxFiles\NotifyEndpoint::test($claims, $mailer, $notifyBody(), null, $why);
     }
     if ($method === 'POST' && $uri === '/api/fm/notify/run') {
-        return \FluxFiles\NotifyEndpoint::run($diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $notifyBody());
+        return \FluxFiles\NotifyEndpoint::run($diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $notifyBody(), null, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''));
     }
     if ($method === 'POST' && $uri === '/api/fm/notify/mute') {
         return \FluxFiles\NotifyEndpoint::mute($diskManager, $claims, $notifyBody());
