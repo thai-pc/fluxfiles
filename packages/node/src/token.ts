@@ -264,6 +264,19 @@ function applyTenantOverrides(
   // non-http(s) value on decode).
   if (opts.intakeBaseUrl) payload.intake_base_url = String(opts.intakeBaseUrl);
   if (opts.intakeAnalytics !== undefined) payload.intake_analytics = !!opts.intakeAnalytics;
+  // E-mail notices (Intake/Share modules): read on the operator token at portal/share
+  // create and sealed into the record; the core validates and clamps them on decode.
+  const notifyList = (v: string[] | string): string[] | string => (Array.isArray(v) ? v.map(String) : String(v));
+  if (opts.notifyTo !== undefined) payload.notify_to = notifyList(opts.notifyTo);
+  if (opts.notifyRecipientDomains !== undefined) payload.notify_recipient_domains = notifyList(opts.notifyRecipientDomains);
+  if (opts.notifyEvents !== undefined) payload.notify_events = notifyList(opts.notifyEvents);
+  if (opts.notifyLocale) payload.notify_locale = String(opts.notifyLocale);
+  if (opts.notifyFromName) payload.notify_from_name = String(opts.notifyFromName);
+  if (opts.notifyReplyTo) payload.notify_reply_to = String(opts.notifyReplyTo);
+  if (opts.notifyAppUrl) payload.notify_app_url = String(opts.notifyAppUrl);
+  if (opts.notifyBatchWindow !== undefined) payload.notify_batch_window = Math.trunc(Number(opts.notifyBatchWindow));
+  if (opts.notifyIncludeNames !== undefined) payload.notify_include_names = !!opts.notifyIncludeNames;
+  if (opts.intakeNotifyReceipt !== undefined) payload.intake_notify_receipt = !!opts.intakeNotifyReceipt;
   // Intake portal branding — mirrors shareBrand* above, same sanitizing on decode.
   if (opts.intakeBrandName) payload.intake_brand_name = String(opts.intakeBrandName);
   if (opts.intakeBrandLogoUrl) payload.intake_brand_logo_url = String(opts.intakeBrandLogoUrl);

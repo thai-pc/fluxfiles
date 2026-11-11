@@ -463,7 +463,8 @@ function fluxfiles_apply_media_claims(array &$payload, array $media): void
  *        srcset_widths, srcset_sizes, allow_download, watermark_enabled,
  *        watermark_type, watermark_text, watermark_logo_path, watermark_position,
  *        watermark_opacity, watermark_font_size, share_brand_* / intake_brand_*
- *        (name/logo_url/color/link_url), intake_analytics, pro_hints
+ *        (name/logo_url/color/link_url), intake_analytics, pro_hints, notify_* /
+ *        intake_notify_receipt (e-mail notices)
  */
 function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
 {
@@ -550,6 +551,26 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     }
     if (array_key_exists('intake_analytics', $webp)) {
         $payload['intake_analytics'] = (bool) $webp['intake_analytics'];
+    }
+    // E-mail notices (Intake/Share modules): read on the operator token at portal/share
+    // create and sealed into the record; the core validates and clamps them on decode.
+    foreach (['notify_to', 'notify_recipient_domains', 'notify_events'] as $nk) {
+        if (array_key_exists($nk, $webp)) {
+            $payload[$nk] = is_array($webp[$nk]) ? array_values($webp[$nk]) : (string) $webp[$nk];
+        }
+    }
+    foreach (['notify_locale', 'notify_from_name', 'notify_reply_to', 'notify_app_url'] as $nk) {
+        if (!empty($webp[$nk])) {
+            $payload[$nk] = (string) $webp[$nk];
+        }
+    }
+    if (array_key_exists('notify_batch_window', $webp)) {
+        $payload['notify_batch_window'] = (int) $webp['notify_batch_window'];
+    }
+    foreach (['notify_include_names', 'intake_notify_receipt'] as $nk) {
+        if (array_key_exists($nk, $webp)) {
+            $payload[$nk] = (bool) $webp[$nk];
+        }
     }
     // Intake portal branding — mirrors share_brand_* above, same sanitizing on decode.
     foreach (['intake_brand_name', 'intake_brand_logo_url', 'intake_brand_color', 'intake_brand_link_url'] as $b) {

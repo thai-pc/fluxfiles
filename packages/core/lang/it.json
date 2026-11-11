@@ -409,7 +409,10 @@
     "invalid_sort": "Ordinamento sconosciuto.",
     "invalid_order": "L'ordine deve essere crescente o decrescente.",
     "invalid_type": "Filtro tipo file sconosciuto.",
-    "cursor_stale": "La cartella è cambiata durante il caricamento. Ricarico…"
+    "cursor_stale": "La cartella è cambiata durante il caricamento. Ricarico…",
+    "notify_not_configured": "Le notifiche via e-mail non sono configurate. Aggiungi i destinatari (notify_to) e configura un sistema di invio posta sul server.",
+    "notify_recipient_denied": "Questo indirizzo e-mail non è nell'elenco dei destinatari consentiti.",
+    "notify_invalid_address": "Questo non è un indirizzo e-mail valido."
   },
   "presign": {
     "title": "URL prefirmato",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "Baseline di integrità reimpostata",
       "retention_run": "Esecuzione conservazione",
       "retention_trash": "Nel cestino per conservazione",
-      "retention_delete": "Eliminato per conservazione"
+      "retention_delete": "Eliminato per conservazione",
+      "notify_test": "E-mail di prova inviata",
+      "notify_run": "Scansione delle notifiche",
+      "notify_mute": "Notifiche silenziate o riattivate",
+      "notify_sent": "Notifica inviata via e-mail"
     },
     "fixity_run": "Verifica integrità",
     "fixity_busy": "Controllo dei file…",
@@ -852,5 +859,33 @@
     "license_label": "Licenza",
     "notices": "Avvisi di terze parti",
     "docs": "Documentazione"
+  },
+  "notify": {
+    "test_subject": "E-mail di prova da FluxFiles",
+    "test_body": "Questo è un messaggio di prova da {from}. Se riesci a leggerlo, le notifiche via e-mail funzionano.",
+    "intake_received_subject": "Nuovi file in “{label}” ({count})",
+    "intake_received_intro": "Sono arrivati {count} file, {size} in totale, nel portale di caricamento “{label}” tra {start} e {end}.",
+    "intake_full_subject": "Il portale di caricamento “{label}” è pieno",
+    "intake_full_intro": "Il portale di caricamento “{label}” ha raggiunto il limite di {max} file e non accetta più caricamenti.",
+    "intake_expiring_subject": "Il portale di caricamento “{label}” sta per scadere",
+    "intake_expiring_intro": "Il portale di caricamento “{label}” scade il {expires}. Finora ha ricevuto {count} file.",
+    "intake_receipt_subject": "I tuoi file sono stati ricevuti",
+    "intake_receipt_intro": "{from} ha ricevuto {count} file, {size} in totale, che hai inviato tramite “{label}” il {time}.",
+    "share_first_download_subject": "Il tuo link condiviso “{label}” è stato scaricato",
+    "share_first_download_intro": "Qualcuno ha scaricato “{file}” dal tuo link condiviso “{label}” il {time}. Download rimasti: {remaining}.",
+    "share_first_download_intro_noname": "Qualcuno ha scaricato un file dal tuo link condiviso “{label}” il {time}. Download rimasti: {remaining}.",
+    "share_exhausted_subject": "Il link condiviso “{label}” ha raggiunto il limite di download",
+    "share_exhausted_intro": "Il tuo link condiviso “{label}” è stato scaricato {max} volte e non consente più download.",
+    "share_expiring_subject": "Il link condiviso “{label}” sta per scadere",
+    "share_expiring_intro": "Il tuo link condiviso “{label}” scade il {expires}. Finora: {views} visualizzazioni, {downloads} download.",
+    "share_expired_subject": "Il link condiviso “{label}” è scaduto",
+    "share_expired_intro": "Il tuo link condiviso “{label}” è scaduto il {expires}. Totale finale: {views} visualizzazioni, {downloads} download.",
+    "files_heading": "File:",
+    "and_more": "…e altri {count}",
+    "submitter": "E-mail del mittente (non verificata): {email}",
+    "open_app": "Apri nel tuo gestore file: {url}",
+    "unlimited": "illimitato",
+    "footer": "Ricevi questa e-mail perché le notifiche sono attive per questo elemento. Per interromperle, silenzialo nel tuo gestore file.",
+    "receipt_footer": "Questa è una ricevuta automatica."
   }
 }

@@ -409,7 +409,10 @@
     "invalid_sort": "Неизвестный способ сортировки.",
     "invalid_order": "Порядок должен быть по возрастанию или по убыванию.",
     "invalid_type": "Неизвестный фильтр типа файлов.",
-    "cursor_stale": "Папка изменилась во время загрузки. Перезагрузка…"
+    "cursor_stale": "Папка изменилась во время загрузки. Перезагрузка…",
+    "notify_not_configured": "Уведомления по e-mail не настроены. Добавьте получателей (notify_to) и настройте почтовый транспорт на сервере.",
+    "notify_recipient_denied": "Этого e-mail нет в списке разрешённых получателей.",
+    "notify_invalid_address": "Это недопустимый адрес e-mail."
   },
   "presign": {
     "title": "Подписанная ссылка",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "Базовая линия целостности сброшена",
       "retention_run": "Запуск хранения",
       "retention_trash": "В корзину по хранению",
-      "retention_delete": "Удалён по хранению"
+      "retention_delete": "Удалён по хранению",
+      "notify_test": "Тестовое письмо отправлено",
+      "notify_run": "Проверка уведомлений",
+      "notify_mute": "Уведомления отключены или включены",
+      "notify_sent": "Уведомление отправлено по e-mail"
     },
     "fixity_run": "Проверка целостности",
     "fixity_busy": "Проверка файлов…",
@@ -852,5 +859,33 @@
     "license_label": "Лицензия",
     "notices": "Уведомления третьих сторон",
     "docs": "Документация"
+  },
+  "notify": {
+    "test_subject": "Тестовое письмо от FluxFiles",
+    "test_body": "Это тестовое сообщение от {from}. Если вы его читаете, уведомления по e-mail работают.",
+    "intake_received_subject": "Новые файлы в «{label}» ({count})",
+    "intake_received_intro": "В портал загрузки «{label}» с {start} по {end} поступили файлы: {count}, общий размер {size}.",
+    "intake_full_subject": "Портал загрузки «{label}» заполнен",
+    "intake_full_intro": "Портал загрузки «{label}» достиг лимита в {max} файлов и больше не принимает загрузки.",
+    "intake_expiring_subject": "Срок действия портала загрузки «{label}» скоро истечёт",
+    "intake_expiring_intro": "Портал загрузки «{label}» действует до {expires}. Пока получено файлов: {count}.",
+    "intake_receipt_subject": "Ваши файлы получены",
+    "intake_receipt_intro": "{from} получил файлы, которые вы отправили через «{label}» ({time}): {count}, общий размер {size}.",
+    "share_first_download_subject": "Ваша ссылка для доступа «{label}» была скачана",
+    "share_first_download_intro": "Кто-то скачал «{file}» по вашей ссылке «{label}» ({time}). Осталось скачиваний: {remaining}.",
+    "share_first_download_intro_noname": "Кто-то скачал файл по вашей ссылке «{label}» ({time}). Осталось скачиваний: {remaining}.",
+    "share_exhausted_subject": "Ссылка «{label}» достигла лимита скачиваний",
+    "share_exhausted_intro": "Ваша ссылка «{label}» достигла лимита скачиваний ({max}) и больше не позволяет скачивать.",
+    "share_expiring_subject": "Срок действия ссылки «{label}» скоро истечёт",
+    "share_expiring_intro": "Ваша ссылка «{label}» действует до {expires}. Пока: просмотров — {views}, скачиваний — {downloads}.",
+    "share_expired_subject": "Срок действия ссылки «{label}» истёк",
+    "share_expired_intro": "Ваша ссылка «{label}» истекла {expires}. Итого: просмотров — {views}, скачиваний — {downloads}.",
+    "files_heading": "Файлы:",
+    "and_more": "…и ещё {count}",
+    "submitter": "E-mail отправителя (не подтверждён): {email}",
+    "open_app": "Открыть в вашем файловом менеджере: {url}",
+    "unlimited": "без ограничений",
+    "footer": "Вы получили это письмо, потому что для этого элемента включены уведомления. Чтобы отключить их, выключите уведомления в файловом менеджере.",
+    "receipt_footer": "Это автоматическая квитанция."
   }
 }

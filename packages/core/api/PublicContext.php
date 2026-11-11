@@ -38,8 +38,16 @@ final class PublicContext
     /** True when the host supplied its own disks (so the standalone env switches don't apply). */
     public readonly bool $hostInjected;
 
+    private ?Mail\MailTransportInterface $injectedMailer;
+
+    private bool $mailerResolved = false;
+
+    private ?Mail\MailTransportInterface $mailer = null;
+
     /**
      * @param array<string,mixed>|null $diskConfigs
+     * @param Mail\MailTransportInterface|null $mailer the host's own mail stack (WordPress:
+     *        wp_mail, Laravel: Mail::raw); null = the operator's env ({@see mailer()})
      */
     public function __construct(
         ?DiskManager $dm,
@@ -47,7 +55,8 @@ final class PublicContext
         ?MetadataRepositoryInterface $injectedMeta,
         string $secret,
         LicenseCheckInterface $license,
-        bool $hostInjected = false
+        bool $hostInjected = false,
+        ?Mail\MailTransportInterface $mailer = null
     ) {
         $this->dm = $dm;
         $this->diskConfigs = $diskConfigs;
@@ -55,6 +64,21 @@ final class PublicContext
         $this->secret = $secret;
         $this->license = $license;
         $this->hostInjected = $hostInjected;
+        $this->injectedMailer = $mailer;
+    }
+
+    /**
+     * The transport for e-mail notices: the host-injected one, else the one the operator
+     * configured in env ({@see Mail\MailTransportFactory::fromEnv()}), else null (off).
+     * Resolved once per request; a misconfiguration logs and returns null, never throws.
+     */
+    public function mailer(): ?Mail\MailTransportInterface
+    {
+        if (!$this->mailerResolved) {
+            $this->mailerResolved = true;
+            $this->mailer = $this->injectedMailer ?? Mail\MailTransportFactory::fromEnv();
+        }
+        return $this->mailer;
     }
 
     /** The standalone app's context: env secret, `DiskConfig::load()`, the registry's licence. */

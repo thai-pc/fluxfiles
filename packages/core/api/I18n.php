@@ -16,16 +16,36 @@ class I18n
     private string $locale;
     private string $langDir;
 
-    private const SUPPORTED = [
+    /** The 16 shipped locales. */
+    public const LOCALES = [
         'en', 'vi', 'zh', 'ja', 'ko', 'fr', 'de', 'es', 'ar', 'pt',
         'it', 'ru', 'th', 'hi', 'tr', 'nl',
     ];
+
+    private const SUPPORTED = self::LOCALES;
+
+    /** @var array<string,self> */
+    private static array $byLocale = [];
 
     public function __construct(string $langDir, ?string $forceLocale = null)
     {
         $this->langDir = rtrim($langDir, '/');
         $this->locale  = $this->resolve($forceLocale);
         $this->load();
+    }
+
+    /**
+     * Core's own strings in one of the 16 shipped locales, for text rendered outside a
+     * UI request (e-mail notices). Never reads `?lang=`: an unknown locale is English.
+     * Memoised per locale, so a sweep that renders many messages loads each file once.
+     */
+    public static function forLocale(string $locale): self
+    {
+        $code = strtolower(substr(trim($locale), 0, 2));
+        if (!in_array($code, self::LOCALES, true)) {
+            $code = 'en';
+        }
+        return self::$byLocale[$code] ??= new self(__DIR__ . '/../lang', $code);
     }
 
     /**
@@ -154,10 +174,13 @@ class I18n
 
     private function interpolate(string $str, array $vars): string
     {
+        // One pass (strtr): a value that itself contains `{other}` (a stranger's filename
+        // in an e-mail notice) is inserted literally, never expanded by a later key.
+        $map = [];
         foreach ($vars as $k => $v) {
-            $str = str_replace('{' . $k . '}', (string) $v, $str);
+            $map['{' . $k . '}'] = (string) $v;
         }
-        return $str;
+        return $map === [] ? $str : strtr($str, $map);
     }
 
     // -------------------------------------------------------------------------

@@ -361,6 +361,20 @@ def _apply_tenant_overrides(
         payload["intake_base_url"] = str(intake_base_url)
     if extras.get("intake_analytics") is not None:
         payload["intake_analytics"] = bool(extras["intake_analytics"])
+    # E-mail notices (Intake/Share modules): read on the operator token at
+    # portal/share create and sealed into the record; the core validates them.
+    for _n in ("notify_to", "notify_recipient_domains", "notify_events"):
+        if extras.get(_n) is not None:
+            _v = extras[_n]
+            payload[_n] = [str(x) for x in _v] if isinstance(_v, (list, tuple)) else str(_v)
+    for _n in ("notify_locale", "notify_from_name", "notify_reply_to", "notify_app_url"):
+        if extras.get(_n):
+            payload[_n] = str(extras[_n])
+    if extras.get("notify_batch_window") is not None:
+        payload["notify_batch_window"] = int(extras["notify_batch_window"])
+    for _n in ("notify_include_names", "intake_notify_receipt"):
+        if extras.get(_n) is not None:
+            payload[_n] = bool(extras[_n])
     # Intake portal branding — mirrors share_brand_* above, same decode-time
     # sanitizing, applied to the upload portal instead.
     for _b in (
@@ -595,6 +609,16 @@ def create_token(
     allow_intake: bool | None = None,
     intake_base_url: str | None = None,
     intake_analytics: bool | None = None,
+    notify_to: list[str] | str | None = None,
+    notify_recipient_domains: list[str] | str | None = None,
+    notify_events: list[str] | str | None = None,
+    notify_locale: str | None = None,
+    notify_from_name: str | None = None,
+    notify_reply_to: str | None = None,
+    notify_app_url: str | None = None,
+    notify_batch_window: int | None = None,
+    notify_include_names: bool | None = None,
+    intake_notify_receipt: bool | None = None,
     intake_brand_name: str | None = None,
     intake_brand_logo_url: str | None = None,
     intake_brand_color: str | None = None,
@@ -738,6 +762,16 @@ def create_token(
         allow_intake=allow_intake,
         intake_base_url=intake_base_url,
         intake_analytics=intake_analytics,
+        notify_to=notify_to,
+        notify_recipient_domains=notify_recipient_domains,
+        notify_events=notify_events,
+        notify_locale=notify_locale,
+        notify_from_name=notify_from_name,
+        notify_reply_to=notify_reply_to,
+        notify_app_url=notify_app_url,
+        notify_batch_window=notify_batch_window,
+        notify_include_names=notify_include_names,
+        intake_notify_receipt=intake_notify_receipt,
         intake_brand_name=intake_brand_name,
         intake_brand_logo_url=intake_brand_logo_url,
         intake_brand_color=intake_brand_color,
@@ -855,6 +889,16 @@ def create_byob_token(
     allow_intake: bool | None = None,
     intake_base_url: str | None = None,
     intake_analytics: bool | None = None,
+    notify_to: list[str] | str | None = None,
+    notify_recipient_domains: list[str] | str | None = None,
+    notify_events: list[str] | str | None = None,
+    notify_locale: str | None = None,
+    notify_from_name: str | None = None,
+    notify_reply_to: str | None = None,
+    notify_app_url: str | None = None,
+    notify_batch_window: int | None = None,
+    notify_include_names: bool | None = None,
+    intake_notify_receipt: bool | None = None,
     intake_brand_name: str | None = None,
     intake_brand_logo_url: str | None = None,
     intake_brand_color: str | None = None,
@@ -1019,6 +1063,16 @@ def create_byob_token(
         allow_intake=allow_intake,
         intake_base_url=intake_base_url,
         intake_analytics=intake_analytics,
+        notify_to=notify_to,
+        notify_recipient_domains=notify_recipient_domains,
+        notify_events=notify_events,
+        notify_locale=notify_locale,
+        notify_from_name=notify_from_name,
+        notify_reply_to=notify_reply_to,
+        notify_app_url=notify_app_url,
+        notify_batch_window=notify_batch_window,
+        notify_include_names=notify_include_names,
+        intake_notify_receipt=intake_notify_receipt,
         intake_brand_name=intake_brand_name,
         intake_brand_logo_url=intake_brand_logo_url,
         intake_brand_color=intake_brand_color,

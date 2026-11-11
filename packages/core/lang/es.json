@@ -409,7 +409,10 @@
     "invalid_sort": "Opción de orden desconocida.",
     "invalid_order": "El orden debe ser ascendente o descendente.",
     "invalid_type": "Filtro de tipo de archivo desconocido.",
-    "cursor_stale": "La carpeta cambió mientras se cargaba. Recargando…"
+    "cursor_stale": "La carpeta cambió mientras se cargaba. Recargando…",
+    "notify_not_configured": "Las notificaciones por correo no están configuradas. Añade destinatarios (notify_to) y configura un transporte de correo en el servidor.",
+    "notify_recipient_denied": "Esa dirección de correo no está en la lista de destinatarios permitidos.",
+    "notify_invalid_address": "Esa no es una dirección de correo válida."
   },
   "presign": {
     "title": "URL prefirmada",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "Línea base de integridad restablecida",
       "retention_run": "Ejecución de retención",
       "retention_trash": "A la papelera por retención",
-      "retention_delete": "Eliminado por retención"
+      "retention_delete": "Eliminado por retención",
+      "notify_test": "Correo de prueba enviado",
+      "notify_run": "Barrido de notificaciones",
+      "notify_mute": "Notificaciones silenciadas o reactivadas",
+      "notify_sent": "Notificación enviada por correo"
     },
     "fixity_run": "Comprobar integridad",
     "fixity_busy": "Comprobando archivos…",
@@ -852,5 +859,33 @@
     "license_label": "Licencia",
     "notices": "Avisos de terceros",
     "docs": "Documentación"
+  },
+  "notify": {
+    "test_subject": "Correo de prueba de FluxFiles",
+    "test_body": "Este es un mensaje de prueba de {from}. Si puedes leerlo, las notificaciones por correo funcionan.",
+    "intake_received_subject": "Archivos nuevos en “{label}” ({count})",
+    "intake_received_intro": "Han llegado archivos al portal de subida “{label}” entre {start} y {end} (cantidad: {count}, tamaño total: {size}).",
+    "intake_full_subject": "El portal de subida “{label}” está lleno",
+    "intake_full_intro": "El portal de subida “{label}” ha alcanzado su límite de {max} archivos y ya no acepta subidas.",
+    "intake_expiring_subject": "El portal de subida “{label}” caduca pronto",
+    "intake_expiring_intro": "El portal de subida “{label}” caduca el {expires}. Archivos recibidos hasta ahora: {count}.",
+    "intake_receipt_subject": "Hemos recibido tus archivos",
+    "intake_receipt_intro": "{from} ha recibido los archivos que enviaste a través de “{label}” el {time} (cantidad: {count}, tamaño total: {size}).",
+    "share_first_download_subject": "Tu enlace compartido “{label}” se ha descargado",
+    "share_first_download_intro": "Alguien descargó “{file}” desde tu enlace compartido “{label}” el {time}. Descargas restantes: {remaining}.",
+    "share_first_download_intro_noname": "Alguien descargó un archivo desde tu enlace compartido “{label}” el {time}. Descargas restantes: {remaining}.",
+    "share_exhausted_subject": "El enlace compartido “{label}” alcanzó su límite de descargas",
+    "share_exhausted_intro": "Tu enlace compartido “{label}” se ha descargado {max} veces y ya no permite más descargas.",
+    "share_expiring_subject": "El enlace compartido “{label}” caduca pronto",
+    "share_expiring_intro": "Tu enlace compartido “{label}” caduca el {expires}. Hasta ahora – vistas: {views}, descargas: {downloads}.",
+    "share_expired_subject": "El enlace compartido “{label}” ha caducado",
+    "share_expired_intro": "Tu enlace compartido “{label}” caducó el {expires}. Recuento final – vistas: {views}, descargas: {downloads}.",
+    "files_heading": "Archivos:",
+    "and_more": "…y {count} más",
+    "submitter": "Correo del remitente (sin verificar): {email}",
+    "open_app": "Abrir en tu gestor de archivos: {url}",
+    "unlimited": "ilimitado",
+    "footer": "Recibes este correo porque las notificaciones están activadas para este elemento. Para detenerlas, silénciala en tu gestor de archivos.",
+    "receipt_footer": "Este es un acuse de recibo automático."
   }
 }

@@ -409,7 +409,10 @@
     "invalid_sort": "Unknown sort option.",
     "invalid_order": "Sort order must be ascending or descending.",
     "invalid_type": "Unknown file type filter.",
-    "cursor_stale": "The folder changed while it was loading. Reloading…"
+    "cursor_stale": "The folder changed while it was loading. Reloading…",
+    "notify_not_configured": "E-mail notifications are not set up. Add recipients (notify_to) and configure a mail transport on the server.",
+    "notify_recipient_denied": "That e-mail address is not on the list of allowed recipients.",
+    "notify_invalid_address": "That is not a valid e-mail address."
   },
   "presign": {
     "title": "Presigned URL",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "Integrity baseline reset",
       "retention_run": "Retention run",
       "retention_trash": "Trashed by retention",
-      "retention_delete": "Deleted by retention"
+      "retention_delete": "Deleted by retention",
+      "notify_test": "Test e-mail sent",
+      "notify_run": "Notification sweep",
+      "notify_mute": "Notifications muted or unmuted",
+      "notify_sent": "Notification e-mailed"
     },
     "fixity_run": "Integrity check",
     "fixity_busy": "Checking files…",
@@ -852,5 +859,33 @@
     "license_label": "Licence",
     "notices": "Third-party notices",
     "docs": "Documentation"
+  },
+  "notify": {
+    "test_subject": "Test e-mail from FluxFiles",
+    "test_body": "This is a test message from {from}. If you can read it, e-mail notifications are working.",
+    "intake_received_subject": "New files in “{label}” ({count})",
+    "intake_received_intro": "{count} file(s), {size} in total, arrived in the upload portal “{label}” between {start} and {end}.",
+    "intake_full_subject": "Upload portal “{label}” is full",
+    "intake_full_intro": "The upload portal “{label}” has reached its limit of {max} files and no longer accepts uploads.",
+    "intake_expiring_subject": "Upload portal “{label}” expires soon",
+    "intake_expiring_intro": "The upload portal “{label}” expires on {expires}. It has received {count} file(s) so far.",
+    "intake_receipt_subject": "Your files were received",
+    "intake_receipt_intro": "{from} received {count} file(s), {size} in total, that you sent through “{label}” on {time}.",
+    "share_first_download_subject": "Your shared link “{label}” was downloaded",
+    "share_first_download_intro": "Someone downloaded “{file}” from your shared link “{label}” on {time}. Downloads left: {remaining}.",
+    "share_first_download_intro_noname": "Someone downloaded a file from your shared link “{label}” on {time}. Downloads left: {remaining}.",
+    "share_exhausted_subject": "Shared link “{label}” reached its download limit",
+    "share_exhausted_intro": "Your shared link “{label}” has been downloaded {max} times and no longer allows downloads.",
+    "share_expiring_subject": "Shared link “{label}” expires soon",
+    "share_expiring_intro": "Your shared link “{label}” expires on {expires}. So far: {views} view(s), {downloads} download(s).",
+    "share_expired_subject": "Shared link “{label}” has expired",
+    "share_expired_intro": "Your shared link “{label}” expired on {expires}. Final count: {views} view(s), {downloads} download(s).",
+    "files_heading": "Files:",
+    "and_more": "…and {count} more",
+    "submitter": "Sender’s e-mail (not verified): {email}",
+    "open_app": "Open in your file manager: {url}",
+    "unlimited": "unlimited",
+    "footer": "You get this e-mail because notifications are turned on for this item. To stop them, mute it in your file manager.",
+    "receipt_footer": "This is an automatic receipt."
   }
 }

@@ -402,6 +402,12 @@ try {
             ->check($claims->userId, 'usage_refresh');
     }
 
+    // A notice test is an outbound e-mail per call: 5/min per user.
+    if ($uri === '/api/fm/notify/test') {
+        \FluxFiles\RateLimiterFactory::make(5, 5, 60, $dbConn)
+            ->check($claims->userId, 'notify_test');
+    }
+
     // Audit log (lưu trong user storage)
     $auditLog = new AuditLogStorage($metaRepo, $claims->allowedDisks);
     $chunker = new \FluxFiles\ChunkUploader($diskManager);
@@ -902,6 +908,24 @@ function routeRequest(
     if ($method === 'POST' && $uri === '/api/fm/webhooks/test') {
         $module = \FluxFiles\ModuleRegistry::require('webhooks', \FluxFiles\ModuleRegistry::license(), $claims);
         return $module->test($claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''));
+    }
+    // E-mail notices (Intake/Share modules): test the transport, run the time-based
+    // sweep, mute one record. Shared with the Laravel/WordPress proxies via NotifyEndpoint.
+    // Every field is optional: an empty body (a cron's bare `curl -X POST`) is `{}`.
+    $notifyBody = static function (): array {
+        $b = json_decode(file_get_contents('php://input') ?: '{}', true);
+        return is_array($b) ? $b : [];
+    };
+    if ($method === 'POST' && $uri === '/api/fm/notify/test') {
+        $why = null;
+        $mailer = \FluxFiles\Mail\MailTransportFactory::fromEnv(null, null, $why);
+        return \FluxFiles\NotifyEndpoint::test($claims, $mailer, $notifyBody(), null, $why);
+    }
+    if ($method === 'POST' && $uri === '/api/fm/notify/run') {
+        return \FluxFiles\NotifyEndpoint::run($diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $notifyBody());
+    }
+    if ($method === 'POST' && $uri === '/api/fm/notify/mute') {
+        return \FluxFiles\NotifyEndpoint::mute($diskManager, $claims, $notifyBody());
     }
     if ($method === 'POST' && $uri === '/api/fm/ai-vision') {
         $module = \FluxFiles\ModuleRegistry::require('ai', \FluxFiles\ModuleRegistry::license(), $claims);

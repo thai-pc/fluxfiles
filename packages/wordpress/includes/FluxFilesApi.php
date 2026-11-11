@@ -378,6 +378,17 @@ class FluxFilesApi
             'callback' => [$api, 'handleWebhooksTest'],
         ]));
 
+        // E-mail notices (Intake/Share modules) — test the transport, run the sweep, mute one record
+        register_rest_route($ns, $p . '/notify/test', array_merge($writeArgs, [
+            'callback' => [$api, 'handleNotifyTest'],
+        ]));
+        register_rest_route($ns, $p . '/notify/run', array_merge($writeArgs, [
+            'callback' => [$api, 'handleNotifyRun'],
+        ]));
+        register_rest_route($ns, $p . '/notify/mute', array_merge($writeArgs, [
+            'callback' => [$api, 'handleNotifyMute'],
+        ]));
+
         // File versioning (paid module) — list prior versions of a file / restore one
         register_rest_route($ns, $p . '/versions', array_merge($readArgs, [
             'callback' => [$api, 'handleVersions'],
@@ -2368,6 +2379,54 @@ class FluxFilesApi
             $this->logAuditQuiet($claims, 'webhook_test', $claims->allowedDisks[0] ?? 'local', '');
             $this->dispatchWebhook($claims, 'webhook_test', ['disk' => $claims->allowedDisks[0] ?? 'local', 'path' => '', 'name' => '']);
 
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * E-mail notices (Intake/Share modules): `POST notify/test|run|mute`, the same
+     * framework-neutral NotifyEndpoint core runs. On a bundled core older than the
+     * notices release the routes answer 501 module_update_required.
+     */
+    public function handleNotifyTest(\WP_REST_Request $request): \WP_REST_Response
+    {
+        return $this->notify($request, 'test');
+    }
+
+    public function handleNotifyRun(\WP_REST_Request $request): \WP_REST_Response
+    {
+        return $this->notify($request, 'run');
+    }
+
+    public function handleNotifyMute(\WP_REST_Request $request): \WP_REST_Response
+    {
+        return $this->notify($request, 'mute');
+    }
+
+    private function notify(\WP_REST_Request $request, string $op): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            if (!class_exists(\FluxFiles\NotifyEndpoint::class)) {
+                throw new ApiException('E-mail notices need a newer FluxFiles core', 501, 'module_update_required', ['module' => 'notify']);
+            }
+            $body = $request->get_json_params() ?: [];
+            $license = FluxFilesPlugin::license();
+            if ($op === 'test') {
+                $why = null;
+                $mailer = \FluxFiles\Mail\MailTransportFactory::fromEnv(null, null, $why);
+                $result = \FluxFiles\NotifyEndpoint::test($claims, $mailer, $body, $license, $why);
+            } elseif ($op === 'run') {
+                $result = \FluxFiles\NotifyEndpoint::run($this->diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $body, $license);
+            } else {
+                $result = \FluxFiles\NotifyEndpoint::mute($this->diskManager, $claims, $body, $license);
+            }
+            // notify_test / notify_run / notify_mute, like core and the Laravel proxy.
+            $this->auditOk($claims, 'notify/' . $op, $body, $result);
+            $this->dispatchWebhook($claims, 'notify_' . $op, ['disk' => is_string($body['disk'] ?? null) ? $body['disk'] : ($claims->allowedDisks[0] ?? 'local'), 'path' => '', 'name' => '']);
             return $this->ok($result);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());

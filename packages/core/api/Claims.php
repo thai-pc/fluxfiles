@@ -290,6 +290,35 @@ class Claims
      *            used to sign) and the Webhooks module refuses to dispatch (fail closed). */
     public bool $webhookSecretPlaintext = false;
 
+    /** E-mail notice events (Intake + Share modules), one vocabulary shared with Webhooks. */
+    public const NOTIFY_EVENTS = [
+        'intake_received', 'intake_full', 'intake_expiring', 'intake_receipt',
+        'share_first_download', 'share_exhausted', 'share_expiring', 'share_expired',
+    ];
+
+    /** @var string[] Recipients the operator vouches for (≤ 5, validated, lower-cased).
+     *            [] = e-mail notices off. Read only at portal/share create and baked
+     *            into the record's sealed `notify` block; never forwarded to a link token. */
+    public array $notifyTo = [];
+    /** @var string[] Domains whose addresses the create body may add as extra recipients (≤ 10). */
+    public array $notifyRecipientDomains = [];
+    /** @var string[] Filter over NOTIFY_EVENTS. [] = all. */
+    public array $notifyEvents = [];
+    /** @var string One of the 16 locales, or '' (the create body's locale, else en). */
+    public string $notifyLocale = '';
+    /** @var string Display name on notices (≤ 80 chars). The address is FLUXFILES_MAIL_FROM. */
+    public string $notifyFromName = '';
+    /** @var string Reply-To on submitter receipts, so a sender can reply to the operator. */
+    public string $notifyReplyTo = '';
+    /** @var string Optional http(s) "open in your file manager" link; `{path}` is replaced. Rendered, never fetched. */
+    public string $notifyAppUrl = '';
+    /** @var int Quiet period (s) before an intake digest is sent, 60–3600. */
+    public int $notifyBatchWindow = 600;
+    /** @var bool Filenames in owner notices (false = counts and sizes only). */
+    public bool $notifyIncludeNames = true;
+    /** @var bool Offer "e-mail me a receipt" on the portal page and send `intake_receipt`. */
+    public bool $intakeNotifyReceipt = false;
+
     /** @var bool Auto-optimize images on upload (recompress to WebP in the pipeline)?
      *            Default FALSE. Like allow_optimize, only effective when the module
      *            is installed + licensed (the core wires the upload hook then). */
@@ -640,6 +669,65 @@ class Claims
         return $out === [] ? self::DLP_DEFAULT_SCAN_EXTENSIONS : array_keys($out);
     }
 
+    /**
+     * A claim that may be a JSON array or a comma-separated string → trimmed, lower-cased,
+     * non-empty strings (non-strings dropped).
+     *
+     * @return list<string>
+     */
+    private static function stringList($raw): array
+    {
+        if (is_string($raw)) {
+            $raw = explode(',', $raw);
+        }
+        if (!is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($raw as $v) {
+            if (is_string($v) && ($v = strtolower(trim($v))) !== '') {
+                $out[$v] = true;
+            }
+        }
+        return array_keys($out);
+    }
+
+    /** `notify_to`: valid addresses only, lower-cased, de-duplicated, at most $max. @return list<string> */
+    public static function sanitizeEmailList($raw, int $max): array
+    {
+        $out = [];
+        foreach (self::stringList($raw) as $v) {
+            $ok = Mail\MailMessage::validAddress($v);
+            if ($ok !== null) {
+                $out[$ok] = true;
+            }
+        }
+        return array_slice(array_keys($out), 0, $max);
+    }
+
+    /** `notify_recipient_domains`: `^[a-z0-9.-]+$` with a dot, at most $max. @return list<string> */
+    public static function sanitizeDomainList($raw, int $max): array
+    {
+        $out = [];
+        foreach (self::stringList($raw) as $v) {
+            $v = ltrim($v, '@');
+            if (strlen($v) <= 253 && preg_match('/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/', $v) === 1) {
+                $out[$v] = true;
+            }
+        }
+        return array_slice(array_keys($out), 0, $max);
+    }
+
+    /** `notify_app_url`: http(s) only, ≤ 2048 chars, no whitespace / control / quote / angle bracket. */
+    public static function sanitizeNotifyAppUrl($v): string
+    {
+        if (!is_string($v)) {
+            return '';
+        }
+        $v = trim($v);
+        return strlen($v) <= 2048 && preg_match('#^https?://[^\s\x00-\x1F\x7F"\'<>\\\\]+$#iD', $v) === 1 ? $v : '';
+    }
+
     /** Plain-text product name: tags and control chars removed, trimmed, ≤ 60 chars. */
     public static function sanitizeBrandName($v): string
     {
@@ -807,6 +895,24 @@ class Claims
             $c->webhookSecret = CredentialEncryptor::decryptSecret($payload->webhook_secret_enc, $secret);
         }
         $c->webhookSecretPlaintext = isset($payload->webhook_secret) && (string) $payload->webhook_secret !== '';
+        // E-mail notices (Intake/Share). Invalid entries are dropped, never fatal.
+        $c->notifyTo = self::sanitizeEmailList($payload->notify_to ?? null, 5);
+        $c->notifyRecipientDomains = self::sanitizeDomainList($payload->notify_recipient_domains ?? null, 10);
+        $c->notifyEvents = array_values(array_intersect(
+            self::stringList($payload->notify_events ?? null),
+            self::NOTIFY_EVENTS
+        ));
+        $nl = strtolower(trim(is_string($payload->notify_locale ?? null) ? $payload->notify_locale : ''));
+        $c->notifyLocale = in_array($nl, I18n::LOCALES, true) ? $nl : '';
+        $c->notifyFromName = is_string($payload->notify_from_name ?? null)
+            ? Mail\MailMessage::cleanLabel($payload->notify_from_name, 80) : '';
+        $c->notifyReplyTo = is_string($payload->notify_reply_to ?? null)
+            ? (string) Mail\MailMessage::validAddress($payload->notify_reply_to) : '';
+        $c->notifyAppUrl = self::sanitizeNotifyAppUrl($payload->notify_app_url ?? null);
+        $c->notifyBatchWindow = isset($payload->notify_batch_window)
+            ? max(60, min(3600, (int) $payload->notify_batch_window)) : 600;
+        $c->notifyIncludeNames = isset($payload->notify_include_names) ? (bool) $payload->notify_include_names : true;
+        $c->intakeNotifyReceipt = (bool) ($payload->intake_notify_receipt ?? false);
         $c->allowAiVision = (bool) ($payload->allow_ai_vision ?? false);
         $c->allowOcr = (bool) ($payload->allow_ocr ?? false);
         $c->allowVirusScan = (bool) ($payload->allow_virus_scan ?? false);

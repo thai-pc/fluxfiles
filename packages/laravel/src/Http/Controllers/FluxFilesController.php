@@ -1937,6 +1937,50 @@ class FluxFilesController
     }
 
     /**
+     * E-mail notices (Intake/Share modules): `POST notify/test|run|mute`, the same
+     * framework-neutral NotifyEndpoint the standalone app runs. Mail goes through the
+     * operator's FLUXFILES_MAIL_* env. On a core older than the notices release the
+     * routes answer 501 module_update_required instead of fataling (adapter floor).
+     */
+    public function notifyTest(Request $request): JsonResponse
+    {
+        return $this->notify($request, 'test');
+    }
+
+    public function notifyRun(Request $request): JsonResponse
+    {
+        return $this->notify($request, 'run');
+    }
+
+    public function notifyMute(Request $request): JsonResponse
+    {
+        return $this->notify($request, 'mute');
+    }
+
+    private function notify(Request $request, string $op): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            if (!class_exists(\FluxFiles\NotifyEndpoint::class)) {
+                throw new ApiException('E-mail notices need a newer FluxFiles core', 501, 'module_update_required', ['module' => 'notify']);
+            }
+            $body = $request->all();
+            if ($op === 'test') {
+                $why = null;
+                $mailer = \FluxFiles\Mail\MailTransportFactory::fromEnv(null, null, $why);
+                return $this->ok(\FluxFiles\NotifyEndpoint::test($claims, $mailer, $body, null, $why));
+            }
+            if ($op === 'run') {
+                return $this->ok(\FluxFiles\NotifyEndpoint::run($this->diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $body));
+            }
+            return $this->ok(\FluxFiles\NotifyEndpoint::mute($this->diskManager, $claims, $body));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
      * File versioning (paid module) — list prior versions of a file / restore one.
      * Same 3-layer gate as ModuleRegistry::require(). The version-keeping/purging
      * hooks that make listVersions()/restore() meaningful are wired in

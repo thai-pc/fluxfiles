@@ -409,7 +409,10 @@
     "invalid_sort": "Kiểu sắp xếp không hợp lệ.",
     "invalid_order": "Chiều sắp xếp phải là tăng dần hoặc giảm dần.",
     "invalid_type": "Bộ lọc loại file không hợp lệ.",
-    "cursor_stale": "Thư mục đã thay đổi trong lúc tải. Đang tải lại…"
+    "cursor_stale": "Thư mục đã thay đổi trong lúc tải. Đang tải lại…",
+    "notify_not_configured": "Thông báo qua e-mail chưa được thiết lập. Hãy thêm người nhận (notify_to) và cấu hình phương thức gửi thư trên máy chủ.",
+    "notify_recipient_denied": "Địa chỉ e-mail này không nằm trong danh sách người nhận được phép.",
+    "notify_invalid_address": "Đây không phải là địa chỉ e-mail hợp lệ."
   },
   "presign": {
     "title": "URL có thời hạn",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "Đặt lại đường cơ sở toàn vẹn",
       "retention_run": "Chạy lưu giữ dữ liệu",
       "retention_trash": "Chuyển vào thùng rác theo lưu giữ",
-      "retention_delete": "Xóa theo lưu giữ"
+      "retention_delete": "Xóa theo lưu giữ",
+      "notify_test": "Đã gửi e-mail thử",
+      "notify_run": "Quét gửi thông báo",
+      "notify_mute": "Đã tắt hoặc bật lại thông báo",
+      "notify_sent": "Đã gửi thông báo qua e-mail"
     },
     "fixity_run": "Kiểm tra toàn vẹn",
     "fixity_busy": "Đang kiểm tra tệp…",
@@ -852,5 +859,33 @@
     "license_label": "Giấy phép",
     "notices": "Thông báo bên thứ ba",
     "docs": "Tài liệu"
+  },
+  "notify": {
+    "test_subject": "E-mail thử từ FluxFiles",
+    "test_body": "Đây là thư thử từ {from}. Nếu bạn đọc được thư này, thông báo qua e-mail đang hoạt động.",
+    "intake_received_subject": "Có tệp mới trong “{label}” ({count})",
+    "intake_received_intro": "Có {count} tệp, tổng dung lượng {size}, đã được gửi vào cổng nhận tệp “{label}” từ {start} đến {end}.",
+    "intake_full_subject": "Cổng nhận tệp “{label}” đã đầy",
+    "intake_full_intro": "Cổng nhận tệp “{label}” đã đạt giới hạn {max} tệp và không nhận thêm tệp nữa.",
+    "intake_expiring_subject": "Cổng nhận tệp “{label}” sắp hết hạn",
+    "intake_expiring_intro": "Cổng nhận tệp “{label}” sẽ hết hạn vào {expires}. Đến nay đã nhận {count} tệp.",
+    "intake_receipt_subject": "Chúng tôi đã nhận được tệp của bạn",
+    "intake_receipt_intro": "{from} đã nhận {count} tệp, tổng dung lượng {size}, mà bạn gửi qua “{label}” lúc {time}.",
+    "share_first_download_subject": "Liên kết chia sẻ “{label}” của bạn đã được tải xuống",
+    "share_first_download_intro": "Có người đã tải “{file}” từ liên kết chia sẻ “{label}” của bạn lúc {time}. Lượt tải còn lại: {remaining}.",
+    "share_first_download_intro_noname": "Có người đã tải một tệp từ liên kết chia sẻ “{label}” của bạn lúc {time}. Lượt tải còn lại: {remaining}.",
+    "share_exhausted_subject": "Liên kết chia sẻ “{label}” đã hết lượt tải",
+    "share_exhausted_intro": "Liên kết chia sẻ “{label}” của bạn đã được tải {max} lần và không cho tải thêm nữa.",
+    "share_expiring_subject": "Liên kết chia sẻ “{label}” sắp hết hạn",
+    "share_expiring_intro": "Liên kết chia sẻ “{label}” của bạn sẽ hết hạn vào {expires}. Đến nay: {views} lượt xem, {downloads} lượt tải.",
+    "share_expired_subject": "Liên kết chia sẻ “{label}” đã hết hạn",
+    "share_expired_intro": "Liên kết chia sẻ “{label}” của bạn đã hết hạn vào {expires}. Tổng cộng: {views} lượt xem, {downloads} lượt tải.",
+    "files_heading": "Tệp:",
+    "and_more": "…và {count} mục nữa",
+    "submitter": "E-mail người gửi (chưa xác minh): {email}",
+    "open_app": "Mở trong trình quản lý tệp của bạn: {url}",
+    "unlimited": "không giới hạn",
+    "footer": "Bạn nhận được e-mail này vì thông báo đang được bật cho mục này. Để dừng nhận, hãy tắt thông báo trong trình quản lý tệp của bạn.",
+    "receipt_footer": "Đây là biên nhận tự động."
   }
 }

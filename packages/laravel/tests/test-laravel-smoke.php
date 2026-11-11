@@ -262,6 +262,9 @@ test('share/intake gates + their config forward in proxy mode', function () use 
         'share_analytics' => true,
         'intake_base_url' => 'https://files.acme.com/public/intake.html',
         'intake_analytics' => true,
+        'notify_to'        => ['ops@acme.com'],
+        'notify_batch_window' => 300,
+        'intake_notify_receipt' => true,
     ];
     // Assert on the RAW JWT payload, not Claims — the adapter only writes payload
     // keys (no new core API), so this stays valid against the declared core floor.
@@ -274,6 +277,9 @@ test('share/intake gates + their config forward in proxy mode', function () use 
     assertEqual(true, $p->share_analytics ?? null, 'share_analytics');
     assertEqual('https://files.acme.com/public/intake.html', $p->intake_base_url ?? '', 'intake_base_url');
     assertEqual(true, $p->intake_analytics ?? null, 'intake_analytics');
+    assertEqual(['ops@acme.com'], $p->notify_to ?? null, 'notify_to forwarded');
+    assertEqual(300, $p->notify_batch_window ?? null, 'notify_batch_window forwarded');
+    assertEqual(true, $p->intake_notify_receipt ?? null, 'intake_notify_receipt forwarded');
 
     // …including via the edition preset, which defaults both gates for 'pro'.
     $pro = \FluxFiles\JwtCompat::decode($mgr->token(57, ['edition' => 'pro']), $secret);
@@ -782,6 +788,11 @@ test('every successful write is audited + webhooked centrally, through AuditPoli
     $routes = (string) file_get_contents(__DIR__ . '/../routes/fluxfiles.php');
     preg_match_all("#Route::(?:post|put|delete)\\('([a-z0-9/_-]+)'#", $routes, $m);
     foreach ($m[1] as $route) {
+        // The adapter-core floor guard runs this against older cores: there the notify
+        // routes answer 501 module_update_required (no NotifyEndpoint), never a success.
+        if (str_starts_with($route, 'notify/') && !class_exists(\FluxFiles\NotifyEndpoint::class)) {
+            continue;
+        }
         $action = \FluxFiles\AuditPolicy::resolveAction('/api/fm/' . $route);
         assertTrue($action !== 'unknown', "POST/PUT/DELETE /{$route} maps to an audit action");
     }

@@ -409,7 +409,10 @@
     "invalid_sort": "알 수 없는 정렬 방식입니다.",
     "invalid_order": "정렬 순서는 오름차순 또는 내림차순이어야 합니다.",
     "invalid_type": "알 수 없는 파일 형식 필터입니다.",
-    "cursor_stale": "불러오는 동안 폴더가 바뀌었습니다. 다시 불러오는 중…"
+    "cursor_stale": "불러오는 동안 폴더가 바뀌었습니다. 다시 불러오는 중…",
+    "notify_not_configured": "이메일 알림이 설정되지 않았습니다. 수신자(notify_to)를 추가하고 서버에서 메일 전송 방식을 설정하세요.",
+    "notify_recipient_denied": "이 이메일 주소는 허용된 수신자 목록에 없습니다.",
+    "notify_invalid_address": "올바른 이메일 주소가 아닙니다."
   },
   "presign": {
     "title": "서명된 URL",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "무결성 기준선 재설정",
       "retention_run": "보존 정책 실행",
       "retention_trash": "보존 정책으로 휴지통 이동",
-      "retention_delete": "보존 정책으로 삭제"
+      "retention_delete": "보존 정책으로 삭제",
+      "notify_test": "테스트 이메일을 보냈습니다",
+      "notify_run": "알림 일괄 처리",
+      "notify_mute": "알림을 음소거했거나 해제했습니다",
+      "notify_sent": "알림 이메일을 보냈습니다"
     },
     "fixity_run": "무결성 검사",
     "fixity_busy": "파일 확인 중…",
@@ -852,5 +859,33 @@
     "license_label": "라이선스",
     "notices": "서드파티 고지",
     "docs": "문서"
+  },
+  "notify": {
+    "test_subject": "FluxFiles 테스트 이메일",
+    "test_body": "{from}에서 보낸 테스트 메시지입니다. 이 메일을 읽을 수 있다면 이메일 알림이 정상 작동하는 것입니다.",
+    "intake_received_subject": "“{label}”에 새 파일이 도착했습니다 ({count})",
+    "intake_received_intro": "{start}부터 {end} 사이에 업로드 포털 “{label}”에 파일 {count}개(총 {size})가 도착했습니다.",
+    "intake_full_subject": "업로드 포털 “{label}”이(가) 가득 찼습니다",
+    "intake_full_intro": "업로드 포털 “{label}”이(가) 파일 {max}개 한도에 도달하여 더 이상 업로드를 받을 수 없습니다.",
+    "intake_expiring_subject": "업로드 포털 “{label}”이(가) 곧 만료됩니다",
+    "intake_expiring_intro": "업로드 포털 “{label}”은(는) {expires}에 만료됩니다. 지금까지 파일 {count}개를 받았습니다.",
+    "intake_receipt_subject": "파일을 받았습니다",
+    "intake_receipt_intro": "{time}에 “{label}”을(를) 통해 보내신 파일 {count}개(총 {size})를 {from}에서 받았습니다.",
+    "share_first_download_subject": "공유 링크 “{label}”이(가) 다운로드되었습니다",
+    "share_first_download_intro": "{time}에 누군가 공유 링크 “{label}”에서 “{file}”을(를) 다운로드했습니다. 남은 다운로드: {remaining}.",
+    "share_first_download_intro_noname": "{time}에 누군가 공유 링크 “{label}”에서 파일을 다운로드했습니다. 남은 다운로드: {remaining}.",
+    "share_exhausted_subject": "공유 링크 “{label}”이(가) 다운로드 한도에 도달했습니다",
+    "share_exhausted_intro": "공유 링크 “{label}”이(가) {max}회 다운로드되어 더 이상 다운로드할 수 없습니다.",
+    "share_expiring_subject": "공유 링크 “{label}”이(가) 곧 만료됩니다",
+    "share_expiring_intro": "공유 링크 “{label}”은(는) {expires}에 만료됩니다. 지금까지 조회 {views}회, 다운로드 {downloads}회.",
+    "share_expired_subject": "공유 링크 “{label}”이(가) 만료되었습니다",
+    "share_expired_intro": "공유 링크 “{label}”은(는) {expires}에 만료되었습니다. 최종 집계: 조회 {views}회, 다운로드 {downloads}회.",
+    "files_heading": "파일:",
+    "and_more": "…외 {count}개",
+    "submitter": "보낸 사람 이메일(확인되지 않음): {email}",
+    "open_app": "파일 관리자에서 열기: {url}",
+    "unlimited": "무제한",
+    "footer": "이 항목의 알림이 켜져 있어 이 이메일을 받으셨습니다. 알림을 중지하려면 파일 관리자에서 음소거하세요.",
+    "receipt_footer": "자동으로 발송된 수신 확인 메일입니다."
   }
 }

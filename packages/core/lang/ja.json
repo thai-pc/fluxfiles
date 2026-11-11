@@ -409,7 +409,10 @@
     "invalid_sort": "不明な並べ替えです。",
     "invalid_order": "並び順は昇順か降順で指定してください。",
     "invalid_type": "不明なファイル種別フィルターです。",
-    "cursor_stale": "読み込み中にフォルダーが変更されました。再読み込みしています…"
+    "cursor_stale": "読み込み中にフォルダーが変更されました。再読み込みしています…",
+    "notify_not_configured": "メール通知が設定されていません。受信者（notify_to）を追加し、サーバーでメール送信方法を設定してください。",
+    "notify_recipient_denied": "このメールアドレスは許可された受信者の一覧にありません。",
+    "notify_invalid_address": "有効なメールアドレスではありません。"
   },
   "presign": {
     "title": "署名付きURL",
@@ -498,7 +501,11 @@
       "fixity_rebaseline": "整合性ベースラインをリセット",
       "retention_run": "保持ポリシー実行",
       "retention_trash": "保持ポリシーでゴミ箱へ",
-      "retention_delete": "保持ポリシーで削除"
+      "retention_delete": "保持ポリシーで削除",
+      "notify_test": "テストメールを送信しました",
+      "notify_run": "通知の一括処理",
+      "notify_mute": "通知をミュートまたは解除しました",
+      "notify_sent": "通知メールを送信しました"
     },
     "fixity_run": "整合性チェック",
     "fixity_busy": "ファイルを確認中…",
@@ -852,5 +859,33 @@
     "license_label": "ライセンス",
     "notices": "サードパーティ通知",
     "docs": "ドキュメント"
+  },
+  "notify": {
+    "test_subject": "FluxFiles からのテストメール",
+    "test_body": "{from} からのテストメッセージです。このメールが読めていれば、メール通知は正常に動作しています。",
+    "intake_received_subject": "「{label}」に新しいファイルが届きました（{count}）",
+    "intake_received_intro": "アップロードポータル「{label}」に、{start} から {end} の間に {count} 件のファイル（合計 {size}）が届きました。",
+    "intake_full_subject": "アップロードポータル「{label}」がいっぱいです",
+    "intake_full_intro": "アップロードポータル「{label}」は上限の {max} 件に達したため、これ以上アップロードできません。",
+    "intake_expiring_subject": "アップロードポータル「{label}」がまもなく期限切れです",
+    "intake_expiring_intro": "アップロードポータル「{label}」は {expires} に期限切れになります。これまでに {count} 件のファイルを受信しています。",
+    "intake_receipt_subject": "ファイルを受け取りました",
+    "intake_receipt_intro": "{time} に「{label}」から送信いただいた {count} 件のファイル（合計 {size}）を {from} が受け取りました。",
+    "share_first_download_subject": "共有リンク「{label}」がダウンロードされました",
+    "share_first_download_intro": "{time} に、共有リンク「{label}」から「{file}」がダウンロードされました。残りダウンロード数：{remaining}。",
+    "share_first_download_intro_noname": "{time} に、共有リンク「{label}」からファイルがダウンロードされました。残りダウンロード数：{remaining}。",
+    "share_exhausted_subject": "共有リンク「{label}」がダウンロード上限に達しました",
+    "share_exhausted_intro": "共有リンク「{label}」は {max} 回ダウンロードされ、これ以上ダウンロードできません。",
+    "share_expiring_subject": "共有リンク「{label}」がまもなく期限切れです",
+    "share_expiring_intro": "共有リンク「{label}」は {expires} に期限切れになります。現在までの閲覧 {views} 回、ダウンロード {downloads} 回。",
+    "share_expired_subject": "共有リンク「{label}」の期限が切れました",
+    "share_expired_intro": "共有リンク「{label}」は {expires} に期限切れになりました。最終集計：閲覧 {views} 回、ダウンロード {downloads} 回。",
+    "files_heading": "ファイル：",
+    "and_more": "…ほか {count} 件",
+    "submitter": "送信者のメールアドレス（未確認）：{email}",
+    "open_app": "ファイルマネージャーで開く：{url}",
+    "unlimited": "無制限",
+    "footer": "この項目の通知がオンになっているため、このメールをお送りしています。停止するには、ファイルマネージャーでミュートしてください。",
+    "receipt_footer": "これは自動送信の受領通知です。"
   }
 }
