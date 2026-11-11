@@ -722,7 +722,7 @@ stateless request model).
 > **Implemented** (schema/admin-setting/handler/API-wiring + tests). The
 > `wp fluxfiles migrate-json-to-db` command below is **deferred** until §9's
 > `\FluxFiles\Db\JsonToDbMigrator` actually exists — everything else in this
-> section shipped as described. `WpDbMetadataHandler`'s constructor takes only
+> section shipped as described. `FluxFilesDbMetadataHandler`'s constructor takes only
 > `DiskManager` (`__construct(DiskManager $diskManager)`, no connection-name
 > parameter, unlike Laravel's `LaravelDbMetadataHandler`) since WordPress
 > always reuses the single `$wpdb` connection — there is no per-tenant
@@ -743,8 +743,8 @@ stateless request model).
 - New setting under **Settings → FluxFiles**: "Storage backend" (dropdown:
   JSON files / Database), stored as the `fluxfiles_storage_backend` option
   (default `json`). When `db`, `FluxFilesApi`'s `$this->metaRepo` becomes a
-  new `WpDbMetadataHandler implements MetadataRepositoryInterface`
-  (`packages/wordpress/includes/WpDbMetadataHandler.php`) built on `$wpdb`
+  new `FluxFilesDbMetadataHandler implements MetadataRepositoryInterface`
+  (`packages/wordpress/includes/FluxFilesDbMetadataHandler.php`) built on `$wpdb`
   directly (`$wpdb->prepare()` + `$wpdb->get_results()`/`get_row()` — no
   Eloquent available in a bare WP plugin).
 
@@ -757,7 +757,7 @@ stateless request model).
 - `wp fluxfiles migrate-json-to-db --dry-run --verify --disk=<name>
   --prefix=<p>` (registered via `WP_CLI::add_command` when `WP_CLI` is
   defined) — same `\FluxFiles\Db\JsonToDbMigrator` core class, constructing a
-  `WpDbMetadataHandler` as the destination.
+  `FluxFilesDbMetadataHandler` as the destination.
 
 - **Composer floor:** same reasoning as Laravel (§5) — `packages/wordpress/
   composer.json`'s core floor bump.
@@ -875,7 +875,7 @@ handler, reading `_fluxfiles/*.json`/`*.jsonl` directly, regardless of what
 the *live* backend setting currently is), and a destination
 `MetadataRepositoryInterface` (whatever handler the caller wants — core's own
 `DbMetadataHandler`, Laravel's `LaravelDbMetadataHandler`, or WordPress's
-`WpDbMetadataHandler`). This is why Laravel's artisan command and WP's WP-CLI
+`FluxFilesDbMetadataHandler`). This is why Laravel's artisan command and WP's WP-CLI
 command exist at all (per the task's decision 6) — they can't shell out to
 run `php scripts/migrate-json-to-db.php` conveniently inside their own
 deploy model, so they construct their own destination handler and hand it to
@@ -990,7 +990,7 @@ either — it always reuses `$wpdb`.
    `disk` and, per the calling `Claims`, `owner` (when `owner_only`) and path
    prefix — exactly the same invariants `FileManager` enforces today. The
    repository layer (`DbMetadataHandler`/`LaravelDbMetadataHandler`/
-   `WpDbMetadataHandler`) must **never independently derive scope from
+   `FluxFilesDbMetadataHandler`) must **never independently derive scope from
    request input** — it only ever receives an already-scoped `$disk`/`$key`/
    `$pathPrefix`/`$ownerUserId` from `FileManager`, and must apply every one
    of those parameters as a SQL predicate. This is the same trust
@@ -1309,7 +1309,7 @@ adapter's `db` storage-backend option (`LaravelDbMetadataHandler`, native
 Schema Builder migration, `packages/laravel/tests/test-laravel-db-metadata.php`);
 §6 as the WordPress plugin's `db` storage-backend option
 (`FluxFilesDbSchema` + `dbDelta()`, the "Storage backend" admin setting,
-`WpDbMetadataHandler`, `packages/wordpress/tests/test-wp-smoke.php`'s
+`FluxFilesDbMetadataHandler`, `packages/wordpress/tests/test-wp-smoke.php`'s
 spy-based unit coverage, and `packages/wordpress/tests/test-wp-db-metadata-mysql.php`'s
 real-MySQL round-trip suite).
 
@@ -1342,7 +1342,7 @@ safety net either way, so this only affects `migrate()`'s bucket counts and
 write volume on re-runs, never correctness.
 
 > **Adapter↔core floor note — resolved.** `LaravelDbMetadataHandler` and
-> `WpDbMetadataHandler` implement the core-defined `MigrationImportInterface`,
+> `FluxFilesDbMetadataHandler` implement the core-defined `MigrationImportInterface`,
 > which `core-v0.2.79` predates. `scripts/check-adapter-core-floor.sh` caught
 > the stale `^0.2.79` floor in CI (a fatal "Interface not found" building
 > core at that tag). Fixed by cutting `core-v0.2.80` at the commit that
@@ -1375,7 +1375,7 @@ all 16 `lang/*.json` locales. Not ported into the Laravel/WordPress proxy
 controllers: `MetadataExporter`/`MetadataImporter` work directly against
 core's own `\FluxFiles\Db\Connection` SQL layer (raw table access, not
 `MetadataRepositoryInterface`), but Laravel's and WordPress's own `db` backend
-options (§5/§6) run on `LaravelDbMetadataHandler`/`WpDbMetadataHandler` over
+options (§5/§6) run on `LaravelDbMetadataHandler`/`FluxFilesDbMetadataHandler` over
 each framework's own connection (Eloquent / `$wpdb`) instead of
 `\FluxFiles\Db\Connection`. A proxy port would be a second,
 framework-flavored export/import implementation, not a passthrough — no such

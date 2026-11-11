@@ -16,7 +16,7 @@ use FluxFiles\RateLimiterStorageInterface;
  * RateLimiterFactory::makeFile() instead — this class exists only so the limiter
  * lives in the database (not on disk) when fluxfiles_storage_backend = 'db'.
  */
-class WpRateLimiterStorage implements RateLimiterStorageInterface
+class FluxFilesRateLimiterStorage implements RateLimiterStorageInterface
 {
     private $wpdb;
     private string $table;

@@ -384,7 +384,7 @@ The free plugin's storage root gets a fix for the hard-coded `WP_CONTENT_DIR/flu
 - **Pro updater.** The current guarantees move unchanged: signed manifest, sha256 re-hash,
   https-only endpoint, licence in the `Authorization` header. It filters strictly by its own
   slug and never touches `fluxfiles`.
-- **HTTP seam.** `WpHttpTransport` routes AiTagger and BucketDoctor through `wp_remote_request`.
+- **HTTP seam.** `FluxFilesHttpTransport` routes AiTagger and BucketDoctor through `wp_remote_request`.
   `UrlImporter` **keeps** cURL: it needs `CURLOPT_RESOLVE` pinning and `assertConnectedIpSafe()`
   (TOCTOU, see `rules/url-import-exif.md`), which `wp_remote_*` can't do. It gets a
   `// phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_init -- DNS-pinned SSRF guard` and
@@ -407,7 +407,7 @@ The free plugin's storage root gets a fix for the hard-coded `WP_CONTENT_DIR/flu
   - `embed.php`, `modules-autoload.php`, `config/disks.php`, `public/share.html`, `public/intake.html`
 
   Excluding these, rather than adding `ABSPATH` guards, settles the direct-access finding.
-  `api/Db/` **stays** (`WpDbMetadataHandler` and `FluxFilesCli` use it).
+  `api/Db/` **stays** (`FluxFilesDbMetadataHandler` and `FluxFilesCli` use it).
 - **Composer.** The temp `composer.json` drops `autoload.files` before `composer install`.
   Otherwise `vendor/autoload.php` would `require` the missing `modules-autoload.php`.
 - **AWS SDK trim.** Add `"extra": {"aws/aws-sdk-php": ["S3", "Sts"]}` and
@@ -549,7 +549,7 @@ The short description is 145 characters. The sections:
 | 8 | **Launch**: submit the 1.1.0 zip to WP.org; on approval set `WPORG_DEPLOY=true` and redeploy; then flip the old channel to 1.1.0 (`handover`). Later, the first free release ≥ 90 days after 1.0.5 deletes the `public-link.php` shim and the `check-wp-dist.php` exemption | public | — | 6, 7 | manual: 1.0.4 → 1.0.5 → 1.1.0 on a staging site with and without modules; a share link minted on 1.0.4 opens after 1.1.0 |
 
 **Phase-5 notes (from the phase-1 review).**
-- `WpHttpTransport::request()` must pass `redirection => 0`. `HttpTransportInterface` promises
+- `FluxFilesHttpTransport::request()` must pass `redirection => 0`. `HttpTransportInterface` promises
   that redirects are not followed (`CurlTransport` does the same); `wp_remote_request` follows
   up to 5 by default.
 - The dist guard's rule "no `curl_init` outside `api/UrlImporter.php`" (§8.2) must also allow
@@ -577,11 +577,11 @@ because the packages are gitignored, so check them by hand. A tag isn't a releas
   - 9 superglobal reads: `wp_unslash` plus a type-appropriate sanitiser, or a `phpcs:ignore`
     with a reason where the raw value is a token or binary.
   - `error_log` at `:571` and `:578` goes through `FluxFilesPlugin::debugLog()` (gated on `WP_DEBUG`).
-  - Inject `WpHttpTransport` into AiTagger and BucketDoctor (`:871`, `:1493`, `:2076`).
+  - Inject `FluxFilesHttpTransport` into AiTagger and BucketDoctor (`:871`, `:1493`, `:2076`).
   - Set the `Log::setSink` to `debugLog`.
 - `includes/FluxFilesShortcode.php:74-76`: heredoc HTML with an inline `<script>` → `wp_register_script('fluxfiles-sdk')`, `wp_add_inline_script()`, and escaped attributes.
 - `includes/FluxFilesMediaButton.php:108`: inline `<script>` → `wp_add_inline_script` on an enqueued handle.
-- `includes/WpRateLimiterStorage.php:66`: `error_log` → `debugLog`.
+- `includes/FluxFilesRateLimiterStorage.php:66`: `error_log` → `debugLog`.
 - `includes/FluxFilesCli.php`: `phpcs:ignore` with reasons (CLI context).
 - `includes/FluxFilesPlugin.php`
   - `storagePath()` → `fluxfiles_storage_base` (§6).

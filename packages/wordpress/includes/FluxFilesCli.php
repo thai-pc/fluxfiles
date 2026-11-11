@@ -308,7 +308,7 @@ class FluxFilesCli
 
         $dm = new DiskManager($diskConfigs);
         $source = new StorageMetadataHandler($dm);
-        $destination = new \WpDbMetadataHandler($dm);
+        $destination = new \FluxFilesDbMetadataHandler($dm);
         $migrator = new JsonToDbMigrator($dm, $source, $destination);
 
         if ($verifyOnly) {

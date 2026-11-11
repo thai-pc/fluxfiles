@@ -48,7 +48,7 @@ class FluxFilesDbSchema
         // Head of the tamper-evident audit chain, one row per disk (AuditChain).
         $tChainHead = $wpdb->prefix . 'fluxfiles_audit_chain_head';
         $tHolds = $wpdb->prefix . 'fluxfiles_legal_holds';
-        // Sliding-window hits for the rate limiter (WpRateLimiterStorage).
+        // Sliding-window hits for the rate limiter (FluxFilesRateLimiterStorage).
         $tRate = $wpdb->prefix . 'fluxfiles_rate_limits';
 
         $sql = "CREATE TABLE {$tFileMeta} (

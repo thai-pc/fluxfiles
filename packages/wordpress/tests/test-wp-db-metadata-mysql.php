@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Behavioral test suite for WpDbMetadataHandler over a real MySQL database,
+ * Behavioral test suite for FluxFilesDbMetadataHandler over a real MySQL database,
  * driven through a wpdb-shaped shim backed by PDO (no full WordPress runtime).
  * Mirrors packages/laravel/tests/test-laravel-db-metadata.php's scenario list
  * — all three backends (core PDO, Laravel, WordPress) must stay behaviorally
@@ -30,7 +30,7 @@ $green = "\033[32m"; $red = "\033[31m"; $yellow = "\033[33m"; $cyan = "\033[36m"
 
 $dsn = getenv('FXTEST_DB_MYSQL_DSN');
 if (!$dsn) {
-    echo "\n{$cyan}══ WpDbMetadataHandler (MySQL) Test Suite ══{$reset}\n";
+    echo "\n{$cyan}══ FluxFilesDbMetadataHandler (MySQL) Test Suite ══{$reset}\n";
     echo "  {$yellow}SKIP{$reset} — FXTEST_DB_MYSQL_DSN not provided\n\n";
     exit(0);
 }
@@ -57,14 +57,14 @@ if (!defined('ARRAY_A')) {
 // run against core at this adapter's declared composer floor.
 $coreAutoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
 require_once $coreAutoload;
-require_once __DIR__ . '/../includes/WpDbMetadataHandler.php';
-require_once __DIR__ . '/../includes/WpRateLimiterStorage.php';
+require_once __DIR__ . '/../includes/FluxFilesDbMetadataHandler.php';
+require_once __DIR__ . '/../includes/FluxFilesRateLimiterStorage.php';
 
 use FluxFiles\DiskManager;
 
 /**
  * Minimal wpdb-shaped shim backed by a real PDO MySQL connection.
- * WpDbMetadataHandler always calls prepare() itself and passes the already-
+ * FluxFilesDbMetadataHandler always calls prepare() itself and passes the already-
  * interpolated SQL on to query()/get_row()/get_results()/get_var(), so those
  * four just need to execute plain SQL — no placeholder handling there.
  */
@@ -254,11 +254,11 @@ $diskManager = new DiskManager([
     'local' => ['driver' => 'local', 'root' => $storageRoot, 'url' => '/storage'],
 ]);
 
-$repo = new WpDbMetadataHandler($diskManager);
+$repo = new FluxFilesDbMetadataHandler($diskManager);
 $disk = 'local';
 
 echo "\n{$cyan}╔══════════════════════════════════════════════════╗{$reset}\n";
-echo "{$cyan}║   WpDbMetadataHandler (PDO-shimmed wpdb) Suite    ║{$reset}\n";
+echo "{$cyan}║   FluxFilesDbMetadataHandler (PDO-shimmed wpdb) Suite    ║{$reset}\n";
 echo "{$cyan}╚══════════════════════════════════════════════════╝{$reset}\n\n";
 
 // ═══════════════════════════════════════════════════════════════
@@ -720,11 +720,11 @@ test('readAuditWindow() narrows by actor, since and limit — and returns chrono
 });
 
 // ═══════════════════════════════════════════════════════════════
-echo "{$yellow}► WpRateLimiterStorage (db-mode rate limiter){$reset}\n";
+echo "{$yellow}► FluxFilesRateLimiterStorage (db-mode rate limiter){$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
-test('WpRateLimiterStorage allows up to the limit, then 429s; buckets and identifiers are independent', function () use ($pdo, $tRate) {
-    $lim = new WpRateLimiterStorage(3, 2, 60);
+test('FluxFilesRateLimiterStorage allows up to the limit, then 429s; buckets and identifiers are independent', function () use ($pdo, $tRate) {
+    $lim = new FluxFilesRateLimiterStorage(3, 2, 60);
     $lim->check('rl-u', 'write');
     $lim->check('rl-u', 'write');
     try { $lim->check('rl-u', 'write'); $code = null; }
@@ -735,15 +735,15 @@ test('WpRateLimiterStorage allows up to the limit, then 429s; buckets and identi
     assertEqual(2, (int) $pdo->query("SELECT COUNT(*) FROM {$tRate} WHERE identifier = 'rl-u' AND bucket = 'write'")->fetchColumn(), 'the refused hit is not recorded');
 });
 
-test('WpRateLimiterStorage forgets hits older than the window', function () use ($pdo, $tRate) {
+test('FluxFilesRateLimiterStorage forgets hits older than the window', function () use ($pdo, $tRate) {
     $old = time() - 120;
     $pdo->exec("INSERT INTO {$tRate} (identifier, bucket, ts) VALUES ('rl-old', 'write', {$old}), ('rl-old', 'write', {$old})");
-    (new WpRateLimiterStorage(5, 2, 60))->check('rl-old', 'write');   // would 429 if the stale hits counted
+    (new FluxFilesRateLimiterStorage(5, 2, 60))->check('rl-old', 'write');   // would 429 if the stale hits counted
     assertEqual(1, (int) $pdo->query("SELECT COUNT(*) FROM {$tRate} WHERE identifier = 'rl-old'")->fetchColumn(), 'stale rows swept, one fresh hit');
 });
 
 /**
- * Fire $workers processes at once at WpRateLimiterStorage::check() on COLD keys
+ * Fire $workers processes at once at FluxFilesRateLimiterStorage::check() on COLD keys
  * (no pre-seeded row). Each worker is its own PHP process with its own PDO
  * connection and a minimal wpdb stand-in. Returns [ok, limited, errors[]].
  */
@@ -754,7 +754,7 @@ function wpRaceColdKey(string $dsn, string $user, string $pass, string $prefix, 
 define("ABSPATH", sys_get_temp_dir() . "/");
 define("ARRAY_A", "ARRAY_A");
 require ' . var_export(realpath(__DIR__ . '/../../core/vendor/autoload.php'), true) . ';
-require ' . var_export(realpath(__DIR__ . '/../includes/WpRateLimiterStorage.php'), true) . ';
+require ' . var_export(realpath(__DIR__ . '/../includes/FluxFilesRateLimiterStorage.php'), true) . ';
 class FluxFilesPlugin { public static function debugLog($m) { fwrite(STDERR, $m); } }
 class RaceWpdb {
     public string $prefix; public string $last_error = ""; private PDO $pdo;
@@ -768,7 +768,7 @@ class RaceWpdb {
 }
 [$_, $dsn, $user, $pass, $prefix, $key, $limit, $start] = $argv;
 $GLOBALS["wpdb"] = new RaceWpdb(new PDO($dsn, $user, $pass), $prefix);
-$l = new WpRateLimiterStorage((int) $limit, (int) $limit, 60, null);
+$l = new FluxFilesRateLimiterStorage((int) $limit, (int) $limit, 60, null);
 while (microtime(true) < (float) $start) {}
 try { $l->check($key, "read"); echo "OK"; }
 catch (\FluxFiles\ApiException $e) { echo $e->getHttpCode() === 429 ? "LIMITED" : "ERR:" . $e->getMessage(); }
@@ -798,7 +798,7 @@ catch (Throwable $e) { echo "ERR:" . substr($e->getMessage(), 0, 160); }');
     return $res;
 }
 
-test('WpRateLimiterStorage: concurrent FIRST hits on one cold key never overshoot, error or deadlock', function () use ($pdo, $tRate, $dsn, $user, $pass, $prefix) {
+test('FluxFilesRateLimiterStorage: concurrent FIRST hits on one cold key never overshoot, error or deadlock', function () use ($pdo, $tRate, $dsn, $user, $pass, $prefix) {
     $pdo->exec("DELETE FROM {$tRate}");
     for ($round = 0; $round < 3; $round++) {
         [$ok, $limited, $errs] = wpRaceColdKey($dsn, $user, $pass, $prefix, 16, 5, false);
@@ -808,7 +808,7 @@ test('WpRateLimiterStorage: concurrent FIRST hits on one cold key never overshoo
     }
 });
 
-test('WpRateLimiterStorage: concurrent FIRST hits on distinct cold keys all succeed', function () use ($pdo, $tRate, $dsn, $user, $pass, $prefix) {
+test('FluxFilesRateLimiterStorage: concurrent FIRST hits on distinct cold keys all succeed', function () use ($pdo, $tRate, $dsn, $user, $pass, $prefix) {
     $pdo->exec("DELETE FROM {$tRate}");
     for ($round = 0; $round < 3; $round++) {
         [$ok, , $errs] = wpRaceColdKey($dsn, $user, $pass, $prefix, 16, 5, true);

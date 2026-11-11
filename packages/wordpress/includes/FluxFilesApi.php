@@ -54,7 +54,7 @@ class FluxFilesApi
 
         $this->diskManager = new DiskManager(FluxFilesPlugin::diskConfigs());
         $this->metaRepo = get_option('fluxfiles_storage_backend', 'json') === 'db'
-            ? new WpDbMetadataHandler($this->diskManager)
+            ? new FluxFilesDbMetadataHandler($this->diskManager)
             : new StorageMetadataHandler($this->diskManager);
     }
 
@@ -901,7 +901,7 @@ class FluxFilesApi
     /** WordPress' HTTP API for core's outbound calls. */
     private static function httpTransport(): ?\FluxFiles\HttpTransportInterface
     {
-        return new \WpHttpTransport();
+        return new \FluxFilesHttpTransport();
     }
 
     /**
@@ -909,7 +909,7 @@ class FluxFilesApi
      * mode — the plugin's own table, so rate state lives with the rest of the
      * bookkeeping instead of on disk (core: RateLimiterFactory::make()). Core's DB
      * limiter needs PDO + an unprefixed table; WordPress has `$wpdb` and prefixed
-     * tables, hence WpRateLimiterStorage behind the same interface.
+     * tables, hence FluxFilesRateLimiterStorage behind the same interface.
      */
     private function limiter(int $readLimit, int $writeLimit): RateLimiterStorageInterface
     {
@@ -918,7 +918,7 @@ class FluxFilesApi
             // rate_limits table exists before the first request that needs it.
             FluxFilesDbSchema::maybeUpgrade();
             // A table that cannot be used (even after a self-heal) degrades to the file limiter.
-            return new WpRateLimiterStorage($readLimit, $writeLimit, 60, RateLimiterFactory::makeFile(FluxFilesPlugin::storagePath(), $readLimit, $writeLimit, 60));
+            return new FluxFilesRateLimiterStorage($readLimit, $writeLimit, 60, RateLimiterFactory::makeFile(FluxFilesPlugin::storagePath(), $readLimit, $writeLimit, 60));
         }
         return RateLimiterFactory::makeFile(FluxFilesPlugin::storagePath(), $readLimit, $writeLimit, 60);
     }
