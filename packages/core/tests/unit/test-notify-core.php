@@ -238,6 +238,24 @@ test('mailer(): host-injected wins; else env; resolved once', function () {
         $_ENV = $saved;
     }
 });
+test('mailer(): a host resolver Closure is lazy, called once, and its null is final (no env fallback)', function () {
+    $saved = $_ENV;
+    $_ENV['FLUXFILES_MAIL_TRANSPORT'] = 'log';
+    try {
+        $calls = 0;
+        $ctx = new PublicContext(null, [], null, 's', new NoLicense(), true, function () use (&$calls) { $calls++; return null; });
+        eq(0, $calls, 'not resolved at construction');
+        eq(null, $ctx->mailer(), 'host said off: env transport NOT used');
+        $ctx->mailer();
+        eq(1, $calls, 'resolved once');
+        $m = new CaptureMailer();
+        ok((new PublicContext(null, [], null, 's', new NoLicense(), true, fn () => $m))->mailer() === $m, 'closure transport');
+        eq(null, (new PublicContext(null, [], null, 's', new NoLicense(), true, fn () => 'junk'))->mailer(), 'junk → off');
+        eq(null, (new PublicContext(null, [], null, 's', new NoLicense(), true, function () { throw new \RuntimeException('boom'); }))->mailer(), 'throwing resolver → off, no exception');
+    } finally {
+        $_ENV = $saved;
+    }
+});
 test('forLocale: shipped locale, unknown → en, never reads ?lang=', function () {
     $_GET['lang'] = 'de';
     try {

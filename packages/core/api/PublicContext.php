@@ -38,7 +38,8 @@ final class PublicContext
     /** True when the host supplied its own disks (so the standalone env switches don't apply). */
     public readonly bool $hostInjected;
 
-    private ?Mail\MailTransportInterface $injectedMailer;
+    /** @var Mail\MailTransportInterface|\Closure|null */
+    private $injectedMailer;
 
     private bool $mailerResolved = false;
 
@@ -46,8 +47,10 @@ final class PublicContext
 
     /**
      * @param array<string,mixed>|null $diskConfigs
-     * @param Mail\MailTransportInterface|null $mailer the host's own mail stack (WordPress:
-     *        wp_mail, Laravel: Mail::raw); null = the operator's env ({@see mailer()})
+     * @param Mail\MailTransportInterface|\Closure|null $mailer the host's own mail stack
+     *        (WordPress: wp_mail, Laravel: Mail::raw). A Closure is the host's resolver: it runs
+     *        only when a notice is sent and its answer is final, so returning null turns notices
+     *        off (no env fallback). null = no host mail stack: the operator's env ({@see mailer()})
      */
     public function __construct(
         ?DiskManager $dm,
@@ -56,7 +59,7 @@ final class PublicContext
         string $secret,
         LicenseCheckInterface $license,
         bool $hostInjected = false,
-        ?Mail\MailTransportInterface $mailer = null
+        Mail\MailTransportInterface|\Closure|null $mailer = null
     ) {
         $this->dm = $dm;
         $this->diskConfigs = $diskConfigs;
@@ -68,15 +71,27 @@ final class PublicContext
     }
 
     /**
-     * The transport for e-mail notices: the host-injected one, else the one the operator
-     * configured in env ({@see Mail\MailTransportFactory::fromEnv()}), else null (off).
-     * Resolved once per request; a misconfiguration logs and returns null, never throws.
+     * The transport for e-mail notices: the host's (a transport, or whatever the host's
+     * resolver Closure answers, null included), else the one the operator configured in env
+     * ({@see Mail\MailTransportFactory::fromEnv()}), else null (off). Resolved once per
+     * request and only when asked; a misconfiguration logs and returns null, never throws.
      */
     public function mailer(): ?Mail\MailTransportInterface
     {
         if (!$this->mailerResolved) {
             $this->mailerResolved = true;
-            $this->mailer = $this->injectedMailer ?? Mail\MailTransportFactory::fromEnv();
+            $host = $this->injectedMailer;
+            if ($host instanceof \Closure) {
+                try {
+                    $resolved = $host();
+                } catch (\Throwable $e) {
+                    Log::warn('[fluxfiles] the host mail resolver threw ' . get_class($e) . '; e-mail notices are off for this request');
+                    $resolved = null;
+                }
+                $this->mailer = $resolved instanceof Mail\MailTransportInterface ? $resolved : null;
+            } else {
+                $this->mailer = $host ?? Mail\MailTransportFactory::fromEnv();
+            }
         }
         return $this->mailer;
     }

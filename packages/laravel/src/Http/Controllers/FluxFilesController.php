@@ -1968,14 +1968,14 @@ class FluxFilesController
             $body = $request->all();
             if ($op === 'test') {
                 $why = null;
-                $mailer = \FluxFiles\Mail\MailTransportFactory::fromEnv(null, null, $why);
+                $mailer = $this->mailer($why);
                 return $this->ok(\FluxFiles\NotifyEndpoint::test($claims, $mailer, $body, null, $why));
             }
             if ($op === 'run') {
                 $audit = function (string $disk, string $key, string $detail) use ($claims): void {
                     $this->logAuditQuiet($claims, 'notify_sent', $disk, $key, $detail);
                 };
-                return $this->ok(\FluxFiles\NotifyEndpoint::run($this->diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $body, null, (string) config('fluxfiles.secret'), $audit));
+                return $this->ok(\FluxFiles\NotifyEndpoint::run($this->diskManager, $claims, $this->mailer(), $body, null, (string) config('fluxfiles.secret'), $audit));
             }
             return $this->ok(\FluxFiles\NotifyEndpoint::mute($this->diskManager, $claims, $body));
         } catch (ApiException $e) {
@@ -2289,8 +2289,35 @@ class FluxFilesController
             $this->metaRepo,
             (string) config('fluxfiles.secret'),
             \FluxFiles\ModuleRegistry::license(),
-            true
+            true,
+            // E-mail notices of portal drops / share downloads: resolved only when one is sent.
+            fn () => $this->mailer()
         );
+    }
+
+    /**
+     * The transport for e-mail notices on Laravel:
+     *  1. a provider configured explicitly for FluxFiles (FLUXFILES_MAIL_TRANSPORT in env);
+     *  2. otherwise the application's own mailer (`Mail::raw`, config/mail.php), or the one
+     *     named by FLUXFILES_LARAVEL_MAILER.
+     * null on an installed core that predates the mail layer.
+     */
+    private function mailer(?string &$why = null): ?\FluxFiles\Mail\MailTransportInterface
+    {
+        $why = null;
+        if (!interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
+            $why = 'this FluxFiles core has no e-mail support';
+            return null;
+        }
+        if (trim((string) ($_ENV['FLUXFILES_MAIL_TRANSPORT'] ?? '')) !== '') {
+            return \FluxFiles\Mail\MailTransportFactory::fromEnv(null, null, $why);
+        }
+        if (!class_exists(\Illuminate\Support\Facades\Mail::class)) {
+            $why = 'the application has no mailer';
+            return null;
+        }
+        $named = trim((string) ($_ENV['FLUXFILES_LARAVEL_MAILER'] ?? ''));
+        return new \FluxFiles\Laravel\LaravelMailTransport($named !== '' ? $named : null);
     }
 
     public function shareInfo(): void { $this->publicLink('share', '/api/fm/share/info'); }

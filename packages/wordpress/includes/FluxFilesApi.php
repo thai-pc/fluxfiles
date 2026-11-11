@@ -2322,7 +2322,10 @@ class FluxFilesApi
             $this->metaRepo,
             (string) get_option('fluxfiles_secret', ''),
             FluxFilesPlugin::license(),
-            true
+            true,
+            // E-mail notices of portal drops / share downloads: resolved only when one is sent,
+            // and final (a filter returning null turns them off here too, no env fallback).
+            fn () => $this->mailer()
         ));
         exit;   // the module has already sent status, headers and body
     }
@@ -2405,6 +2408,61 @@ class FluxFilesApi
         return $this->notify($request, 'mute');
     }
 
+    /** Mail settings a site may set in wp-config.php (real env vars win), for an explicit provider. */
+    private const MAIL_SETTINGS = [
+        'FLUXFILES_MAIL_TRANSPORT', 'FLUXFILES_MAIL_FROM', 'FLUXFILES_MAIL_FROM_NAME',
+        'FLUXFILES_RESEND_API_KEY', 'FLUXFILES_POSTMARK_TOKEN', 'FLUXFILES_POSTMARK_STREAM',
+        'FLUXFILES_MAILGUN_API_KEY', 'FLUXFILES_MAILGUN_DOMAIN', 'FLUXFILES_MAILGUN_REGION',
+        'FLUXFILES_SES_REGION',
+    ];
+
+    /**
+     * The transport for e-mail notices on WordPress:
+     *  1. a provider the site configured explicitly (`FLUXFILES_MAIL_TRANSPORT` as an env var
+     *     or a wp-config.php constant: resend / postmark / mailgun / ses / log), sent through
+     *     the WordPress HTTP API — this build ships no raw SMTP client;
+     *  2. otherwise `wp_mail()`, so the site's SMTP plugin or PHP mail delivers it.
+     * The `fluxfiles_mail_transport` filter may replace the result (null = notices off).
+     * null as well on a bundled core that predates the mail layer.
+     */
+    public function mailer(?string &$why = null): ?\FluxFiles\Mail\MailTransportInterface
+    {
+        $why = null;
+        if (!interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
+            $why = 'this FluxFiles core has no e-mail support';
+            return null;
+        }
+        $env = $_ENV;
+        foreach (self::MAIL_SETTINGS as $k) {
+            if (isset($env[$k])) {
+                continue;
+            }
+            $real = getenv($k);   // a real env var even when variables_order leaves $_ENV empty
+            if ($real !== false) {
+                $env[$k] = $real;
+            } elseif (defined($k)) {
+                $env[$k] = (string) constant($k);
+            }
+        }
+        if (trim((string) ($env['FLUXFILES_MAIL_TRANSPORT'] ?? '')) !== '') {
+            $transport = \FluxFiles\Mail\MailTransportFactory::fromEnv(new FluxFilesHttpTransport(), $env, $why);
+        } else {
+            require_once __DIR__ . '/FluxFilesMailTransport.php';
+            $transport = new FluxFilesMailTransport(
+                (string) ($env['FLUXFILES_MAIL_FROM'] ?? ''),
+                (string) ($env['FLUXFILES_MAIL_FROM_NAME'] ?? '')
+            );
+        }
+        $filtered = apply_filters('fluxfiles_mail_transport', $transport);
+        if ($filtered !== null && !$filtered instanceof \FluxFiles\Mail\MailTransportInterface) {
+            $filtered = $transport;   // a filter returning junk never breaks mail
+        }
+        if ($filtered === null && $why === null) {
+            $why = 'disabled by the fluxfiles_mail_transport filter';
+        }
+        return $filtered;
+    }
+
     private function notify(\WP_REST_Request $request, string $op): \WP_REST_Response
     {
         try {
@@ -2417,13 +2475,13 @@ class FluxFilesApi
             $license = FluxFilesPlugin::license();
             if ($op === 'test') {
                 $why = null;
-                $mailer = \FluxFiles\Mail\MailTransportFactory::fromEnv(null, null, $why);
+                $mailer = $this->mailer($why);
                 $result = \FluxFiles\NotifyEndpoint::test($claims, $mailer, $body, $license, $why);
             } elseif ($op === 'run') {
                 $audit = function (string $disk, string $key, string $detail) use ($claims): void {
                     $this->logAuditQuiet($claims, 'notify_sent', $disk, $key, $detail);
                 };
-                $result = \FluxFiles\NotifyEndpoint::run($this->diskManager, $claims, \FluxFiles\Mail\MailTransportFactory::fromEnv(), $body, $license, (string) get_option('fluxfiles_secret', ''), $audit);
+                $result = \FluxFiles\NotifyEndpoint::run($this->diskManager, $claims, $this->mailer(), $body, $license, (string) get_option('fluxfiles_secret', ''), $audit);
             } else {
                 $result = \FluxFiles\NotifyEndpoint::mute($this->diskManager, $claims, $body, $license);
             }
