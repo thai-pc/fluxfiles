@@ -59,10 +59,14 @@ class FluxFilesShortcode
         // The first container to load wins; later ones show this notice instead.
         $dupJson = wp_json_encode(__('FluxFiles: only one file manager can be embedded per page, so this one was not loaded.', 'fluxfiles'));
 
+        // Offer every enabled disk; start on the one the shortcode names when it is enabled.
+        $disks = FluxFilesPlugin::enabledDisks();
+        $startDisk = in_array((string) $atts['disk'], $disks, true) ? (string) $atts['disk'] : $disks[0];
         $configJson = wp_json_encode([
             'endpoint'  => $endpoint,
             'token'     => $token,
-            'disk'      => $atts['disk'],
+            'disk'      => $startDisk,
+            'disks'     => $disks,
             'mode'      => $atts['mode'],
             'multiple'  => filter_var($atts['multiple'], FILTER_VALIDATE_BOOLEAN),
             'container' => "#{$containerId}",

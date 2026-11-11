@@ -364,11 +364,11 @@
                  wrapping. The sort/filter/view tail lives on its OWN row below. -->
             <div class="ff-toolbar-main">
             <div class="ff-toolbar-actions">
-            <button class="tb-btn primary" @click="triggerUpload()">
+            <button class="tb-btn primary" x-show="_hasPerm('write')" @click="triggerUpload()">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 4l3-3 3 3M2 10h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span x-text="t('toolbar.upload')"></span>
             </button>
-            <button class="tb-btn" @click="createFolder()">
+            <button class="tb-btn" x-show="_hasPerm('write')" @click="createFolder()">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 3.5A1.5 1.5 0 012.5 2h2l1 1.5h4A1.5 1.5 0 0111 5v4A1.5 1.5 0 019.5 10.5h-7A1.5 1.5 0 011 9V3.5z" stroke="currentColor" stroke-width="1.1"/><path d="M6 6v3M4.5 7.5h3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                 <span x-text="t('toolbar.new_folder')"></span>
             </button>
@@ -381,11 +381,11 @@
 
             <!-- Contextual bulk buttons (desktop only) -->
             <div class="ff-toolbar-context">
-                <button class="tb-btn" x-show="selected.length === 1" @click="openRename(selected[0])">
+                <button class="tb-btn" x-show="_hasPerm('write') && selected.length === 1" @click="openRename(selected[0])">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.rename')"></span>
                 </button>
-                <button class="tb-btn danger" x-show="selected.length > 0" :disabled="selectionHasHold" :title="selectionHasHold ? t('legal_hold.badge_tooltip_user') : ''" @click="confirmDelete()">
+                <button class="tb-btn danger" x-show="_hasPerm('delete') && selected.length > 0" :disabled="selectionHasHold" :title="selectionHasHold ? t('legal_hold.badge_tooltip_user') : ''" @click="confirmDelete()">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.delete')"></span>
                     <span x-show="selected.length > 1" x-text="'(' + selected.length + ')'"></span>
@@ -469,7 +469,7 @@
                     </button>
                     <!-- Selection-dependent actions -->
                     <div class="ff-more-divider" x-show="selected.length > 0"></div>
-                    <button @click="open = false; openRename(selected[0])" x-show="selected.length === 1">
+                    <button @click="open = false; openRename(selected[0])" x-show="_hasPerm('write') && selected.length === 1">
                         <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         <span x-text="t('common.rename')"></span>
                     </button>
@@ -490,7 +490,7 @@
                         <span x-text="t('common.download')"></span>
                     </button>
                     <div class="ff-more-divider" x-show="selected.length > 0"></div>
-                    <button @click="open = false; confirmDelete()" x-show="selected.length > 0" class="ff-more-danger" :disabled="selectionHasHold" :title="selectionHasHold ? t('legal_hold.badge_tooltip_user') : ''">
+                    <button @click="open = false; confirmDelete()" x-show="_hasPerm('delete') && selected.length > 0" class="ff-more-danger" :disabled="selectionHasHold" :title="selectionHasHold ? t('legal_hold.badge_tooltip_user') : ''">
                         <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         <span x-text="t('common.delete')"></span>
                     </button>
@@ -594,7 +594,7 @@
              @scroll.passive="onContentScroll($event)">
 
             <!-- Drop zone -->
-            <div class="ff-dropzone"
+            <div class="ff-dropzone" x-show="_hasPerm('write')"
                  :class="{ active: dragActive }"
                  @click="triggerUpload()"
                  @dragover.prevent="dragActive = true"
@@ -757,7 +757,7 @@
                                         <div class="fname" x-text="folder.name" :title="folder.name"></div>
                                         <div class="fsize" x-text="t('file.folder')"></div>
                                         <div class="fdate" x-text="formatDate(folder.created || folder.modified)"></div>
-                                        <button class="ff-folder-delete"
+                                        <button class="ff-folder-delete" x-show="_hasPerm('delete')"
                                                 :disabled="folder.on_hold"
                                                 @click.stop="selected = [folder]; confirmDelete()"
                                                 :title="folder.on_hold ? holdTooltip(folder) : t('common.delete')">
@@ -894,7 +894,7 @@
                             <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
                         </svg>
                         <p x-text="t('file.no_files')"></p>
-                        <button class="ff-empty-cta" @click="triggerUpload()">
+                        <button class="ff-empty-cta" x-show="_hasPerm('write')" @click="triggerUpload()">
                             <svg viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 4l3-3 3 3M2 10h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             <span x-text="t('toolbar.upload')"></span>
                         </button>
@@ -1060,7 +1060,7 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/><path d="M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('toolbar.copy_url')"></span>
                 </button>
-                <button class="detail-btn" @click="openRename(detailFile)">
+                <button class="detail-btn" x-show="_hasPerm('write')" @click="openRename(detailFile)">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.rename')"></span>
                 </button>
@@ -1128,7 +1128,7 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 2v6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 10h8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('common.download')"></span>
                 </button>
-                <button class="detail-btn" style="color:var(--color-text-danger);" :disabled="detailFile?.on_hold" :title="detailFile?.on_hold ? holdTooltip(detailFile) : t('common.delete')" @click="selected = [detailFile]; confirmDelete()">
+                <button class="detail-btn" x-show="_hasPerm('delete')" style="color:var(--color-text-danger);" :disabled="detailFile?.on_hold" :title="detailFile?.on_hold ? holdTooltip(detailFile) : t('common.delete')" @click="selected = [detailFile]; confirmDelete()">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.delete')"></span>
                 </button>
@@ -2562,7 +2562,7 @@
     <div class="ff-bottom-bar" x-show="selected.length > 0" x-transition.opacity.duration.200ms>
         <span class="ff-bottom-bar-count" x-text="selected.length + ' ' + t('common.selected')"></span>
         <div class="ff-bottom-bar-actions">
-            <button :disabled="selectionHasHold" :title="selectionHasHold ? t('legal_hold.badge_tooltip_user') : ''" @click="confirmDelete()">
+            <button x-show="_hasPerm('delete')" :disabled="selectionHasHold" :title="selectionHasHold ? t('legal_hold.badge_tooltip_user') : ''" @click="confirmDelete()">
                 <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span x-text="t('common.delete')"></span>
             </button>
@@ -2597,7 +2597,7 @@
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                     <span x-text="t('metadata.tab_info')"></span>
                 </button>
-                <button @click="closeActionSheet(); openRename(mobileActionSheet)">
+                <button x-show="_hasPerm('write')" @click="closeActionSheet(); openRename(mobileActionSheet)">
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.rename')"></span>
                 </button>
@@ -2638,7 +2638,7 @@
                     <span x-text="t('common.move')"></span>
                 </button>
                 <div class="ff-sheet-divider"></div>
-                <button class="ff-sheet-danger" :disabled="mobileActionSheet?.on_hold" :title="mobileActionSheet?.on_hold ? holdTooltip(mobileActionSheet) : ''" @click="closeActionSheet(); selected = [mobileActionSheet]; confirmDelete()">
+                <button class="ff-sheet-danger" x-show="_hasPerm('delete')" :disabled="mobileActionSheet?.on_hold" :title="mobileActionSheet?.on_hold ? holdTooltip(mobileActionSheet) : ''" @click="closeActionSheet(); selected = [mobileActionSheet]; confirmDelete()">
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.delete')"></span>
                 </button>
@@ -2658,7 +2658,7 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                     <span x-text="t('metadata.tab_info')"></span>
                 </button>
-                <button @click="openRename(desktopContextMenu.item); closeDesktopContextMenu()">
+                <button x-show="_hasPerm('write')" @click="openRename(desktopContextMenu.item); closeDesktopContextMenu()">
                     <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.rename')"></span>
                 </button>
@@ -2699,7 +2699,7 @@
                     <span x-text="t('common.move')"></span>
                 </button>
                 <div class="ff-more-divider"></div>
-                <button class="ff-more-danger" :disabled="desktopContextMenu.item?.on_hold" :title="desktopContextMenu.item?.on_hold ? holdTooltip(desktopContextMenu.item) : ''" @click="selected = [desktopContextMenu.item]; confirmDelete(); closeDesktopContextMenu()">
+                <button class="ff-more-danger" x-show="_hasPerm('delete')" :disabled="desktopContextMenu.item?.on_hold" :title="desktopContextMenu.item?.on_hold ? holdTooltip(desktopContextMenu.item) : ''" @click="selected = [desktopContextMenu.item]; confirmDelete(); closeDesktopContextMenu()">
                     <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.delete')"></span>
                 </button>

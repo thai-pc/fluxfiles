@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -168,6 +168,16 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.1.4 =
+* Bundles FluxFiles core 1.2.3.
+* Fix: "From FluxFiles" in the WordPress media picker. The Image block no longer stays under a blank window, the classic editor's "Add Media" inserts the picked images (it inserted nothing), Gallery and "Add Media" take several files, and the button works in the Customizer.
+* Fix: images picked from FluxFiles now behave as images everywhere in WordPress (featured images in themes, classic inserts, Customizer crops).
+* Fix: Amazon S3 and Cloudflare R2 enabled in Settings can now be chosen in the file manager (only Local was offered).
+* Fix: image previews and private-storage links work on sites that use plain permalinks.
+* Fix: people who may not delete or rename files no longer see those buttons.
+* New settings screen: tabs, a status summary, a storage connection test, show/hide and generate for secrets, and validation that stops a 0 or negative TTL, upload size or quota. The nginx notice now checks your server and disappears once the rules are in place.
+* New setting: "Pick several files" for the FluxFiles button in the classic editor.
+
 = 1.1.3 =
 * Bundles FluxFiles core 1.2.1.
 * The file-content editor, chmod and the terminal embed are disabled in the WordPress plugin; clarified what the plugin can and cannot access.
@@ -241,6 +251,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.1.4 =
+Fixes inserting files through the WordPress media picker, lets S3 and R2 be chosen in the file manager, and brings a clearer settings screen. Recommended for everyone.
 
 = 1.1.3 =
 Disables the file-content editor, chmod and the terminal embed, and documents what the plugin can and cannot access. Files can still be previewed and downloaded.

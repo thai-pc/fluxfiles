@@ -72,6 +72,12 @@ if (!function_exists('apply_filters')) {
     }
 }
 $GLOBALS['WP_TRANSIENTS'] = [];
+if (!function_exists('esc_attr__')) { function esc_attr__($t, $d = null) { return htmlspecialchars((string) $t, ENT_QUOTES); } }
+if (!function_exists('__')) { function __($t, $d = null) { return $t; } }
+if (!defined('MINUTE_IN_SECONDS')) { define('MINUTE_IN_SECONDS', 60); }
+if (!function_exists('admin_url')) { function admin_url($p = '') { return 'http://wp.test/wp-admin/' . $p; } }
+if (!function_exists('wp_create_nonce')) { function wp_create_nonce($a = -1) { return 'nonce-' . $a; } }
+if (!function_exists('delete_transient')) { function delete_transient($k) { unset($GLOBALS['WP_TRANSIENTS'][$k]); return true; } }
 if (!function_exists('get_transient')) {
     function get_transient($k) { return $GLOBALS['WP_TRANSIENTS'][$k] ?? false; }
 }
@@ -788,6 +794,20 @@ test('attachment bridge: URL filters rewrite our attachments, leave others alone
     // a normal attachment (no marker) → untouched
     $GLOBALS['WP_POSTS'][999] = ['post' => [], 'meta' => []];
     assertEqual('http://wp/normal.jpg', FluxFilesAttachments::filterUrl('http://wp/normal.jpg', 999), 'normal attachment untouched');
+});
+
+test('attachment bridge: get_attached_file gives our attachments a never-existing path so WP treats them as images', function () {
+    if (!function_exists('wp_get_upload_dir')) { function wp_get_upload_dir() { return ['basedir' => '/var/www/wp-content/uploads']; } }
+    $GLOBALS['WP_POSTS'] = [];
+    $res = FluxFilesAttachments::findOrCreate(['url' => 'https://cdn/z/pic.webp', 'key' => 'z/pic.webp', 'disk' => 'r2']);
+    $p = FluxFilesAttachments::filterAttachedFile('', $res['id']);
+    assertTrue(is_string($p) && $p !== '', 'empty _wp_attached_file gets a placeholder');
+    assertEqual('/var/www/wp-content/uploads/fluxfiles-offload/ff-' . $res['id'] . '/pic.webp', $p, 'visible (non-dot) folder of its own, named after the file');
+    $other = FluxFilesAttachments::findOrCreate(['url' => 'https://cdn/other/pic.webp', 'key' => 'other/pic.webp', 'disk' => 'r2']);
+    assertTrue(FluxFilesAttachments::filterAttachedFile('', $other['id']) !== $p, 'two files with the same name never share a placeholder (a delete could hit the other one\'s crop)');
+    assertEqual('/real/file.jpg', FluxFilesAttachments::filterAttachedFile('/real/file.jpg', $res['id']), 'a real path is never replaced');
+    $GLOBALS['WP_POSTS'][998] = ['post' => [], 'meta' => []];
+    assertEqual('', FluxFilesAttachments::filterAttachedFile('', 998), 'a normal attachment is left alone');
 });
 
 test('attachment bridge: wired into the plugin (routes + button + block)', function () {
@@ -2708,10 +2728,13 @@ test('settings: the stored secrets are never echoed into the page; a blank save 
         $GLOBALS['WP_OPTIONS']['fluxfiles_r2_secret'] = 'R2-SECRET-VALUE-XYZ';
         $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
         $admin->registerSettings();
-        $render = static function (string $id): string { ob_start(); try { ($GLOBALS['WP_FIELDS'][$id])(); } finally { return (string) ob_get_clean(); } };
+        $render = static function (string $id): string { ob_start(); try { ($GLOBALS['WP_FIELDS'][$id])(); } catch (\Throwable $e) { echo 'EXC: ' . $e->getMessage(); } finally { return (string) ob_get_clean(); } };
         $html = $render('fluxfiles_secret');
         assertTrue(strpos($html, $jwt) === false, 'the JWT secret is not in the HTML');
         assertTrue(preg_match('/<input[^>]*type="password"[^>]*value=""/', $html) === 1, 'empty password input');
+        assertTrue(strpos($html, 'fluxfiles-secret-eye') !== false && strpos($html, 'aria-pressed="false"') !== false, 'a show/hide toggle (reveals only what is typed)');
+        assertTrue(strpos($html, 'fluxfiles-secret-gen') !== false && strpos($html, 'minlength="32"') !== false, 'the JWT secret has a Generate button and a 32-char minimum');
+        assertTrue(strpos($html, 'invalidates') !== false, 'the hint warns what changing it does');
         assertTrue(strpos($html, substr($jwt, -4)) !== false, 'only the last 4 characters are hinted');
         foreach (['fluxfiles_s3_secret' => 'S3-SECRET-VALUE-XYZ', 'fluxfiles_r2_secret' => 'R2-SECRET-VALUE-XYZ'] as $id => $val) {
             $html = $render($id);
@@ -2790,6 +2813,56 @@ test('multisite + private local storage: the nginx deny rule names only THIS sit
     }
 });
 
+test('nginx notice: loads with the warning + a background check; a verified result hides it', function () {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $keep = [$_SERVER['SERVER_SOFTWARE'] ?? null, $GLOBALS['pagenow'] ?? null, $GLOBALS['WP_OPTIONS']['fluxfiles_local_private'] ?? null, $GLOBALS['WP_TRANSIENTS'] ?? []];
+    try {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_disks'] = ['local'];
+        $GLOBALS['WP_OPTIONS']['fluxfiles_local_private'] = '';
+        $_SERVER['SERVER_SOFTWARE'] = 'nginx/1.25.3';
+        $GLOBALS['pagenow'] = 'plugins.php';
+        $GLOBALS['WP_TRANSIENTS'] = [];
+        $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+        ob_start(); $admin->renderNginxStorageNotice(); $out = (string) ob_get_clean();
+        assertTrue(strpos($out, 'id="fluxfiles-nginx-notice"') !== false && strpos($out, 'fluxfiles_nginx_probe') !== false, 'warning renders at once and wires the background probe');
+        // A previous successful check (cached) → no warning on plugins.php.
+        $r = FluxFilesAdmin::probeNginxProtection('/wp-content/uploads/fluxfiles/uploads/', 'http://wp.test/wp-content/uploads/fluxfiles', '/wp-content/uploads/fluxfiles/uploads/', false, true);
+        add_filter('fluxfiles_nginx_probe', function () { return ['state' => 'ok', 'missing' => []]; }, 10, 3);
+        $r = FluxFilesAdmin::probeNginxProtection('/wp-content/uploads/fluxfiles/uploads/', 'http://wp.test/wp-content/uploads/fluxfiles', '/wp-content/uploads/fluxfiles/uploads/', false, true);
+        assertEqual('ok', $r['state'], 'verified when the server denies every probe');
+        ob_start(); $admin->renderNginxStorageNotice(); $out = (string) ob_get_clean();
+        assertEqual('', $out, 'a verified setup shows nothing on plugins.php');
+        $GLOBALS['pagenow'] = 'options-general.php'; $_GET['page'] = 'fluxfiles';
+        ob_start(); $admin->renderNginxStorageNotice(); $out = (string) ob_get_clean();
+        assertEqual('', $out, 'no notice on the settings page either (its status header shows the verified state)');
+        $chip = array_values(array_filter(FluxFilesAdmin::statusSummary(), static function ($s) { return ($s['id'] ?? '') === 'ff-status-nginx'; }));
+        assertTrue($chip && $chip[0]['state'] === 'ok', 'the status header reports nginx as verified');
+    } finally {
+        [$_SERVER['SERVER_SOFTWARE'], $GLOBALS['pagenow'], $GLOBALS['WP_OPTIONS']['fluxfiles_local_private'], $GLOBALS['WP_TRANSIENTS']] = $keep;
+        unset($_GET['page']);
+    }
+});
+
+test('every picker host hands the enabled disks to the UI (else only LOCAL is offered)', function () {
+    $dir = __DIR__ . '/../';
+    foreach (['includes/FluxFilesBlock.php', 'includes/FluxFilesMediaButton.php', 'includes/FluxFilesMediaIntegration.php', 'includes/FluxFilesShortcode.php'] as $f) {
+        $src = (string) file_get_contents($dir . $f);
+        assertTrue(strpos($src, "'disks'") !== false && strpos($src, 'enabledDisks()') !== false, "{$f} passes disks");
+    }
+    foreach (['assets/block.js', 'assets/media-integration.js'] as $f) {
+        assertTrue(strpos((string) file_get_contents($dir . $f), 'disks: cfg.disks') !== false, "{$f} forwards disks to FluxFiles.open");
+    }
+    $keep = $GLOBALS['WP_OPTIONS']['fluxfiles_disks'] ?? null;
+    try {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_disks'] = ['s3', 'bogus', 'local'];
+        assertEqual(['s3', 'local'], FluxFilesPlugin::enabledDisks(), 'order kept, unknown dropped');
+        $GLOBALS['WP_OPTIONS']['fluxfiles_disks'] = [];
+        assertEqual(['local'], FluxFilesPlugin::enabledDisks(), 'never empty');
+    } finally {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_disks'] = $keep;
+    }
+});
+
 test('WordPress.org polish: translatable strings, block API v3, keyed toolbar buttons, shortcode instance guard', function () {
     $dir = __DIR__ . '/../';
     $sc = (string) file_get_contents($dir . 'includes/FluxFilesShortcode.php');
@@ -2797,7 +2870,7 @@ test('WordPress.org polish: translatable strings, block API v3, keyed toolbar bu
     assertTrue(substr_count($sc, "'fluxfiles')") >= 5, 'shortcode strings use the plugin text domain');
     assertTrue(strpos($sc, 'window.fluxfilesShortcodeOpen') !== false, 'a second [fluxfiles] on a page gets a notice instead of replacing the first');
     $adm = (string) file_get_contents($dir . 'includes/FluxFilesAdmin.php');
-    foreach (['General Settings', 'JWT Secret', 'Storage Backend', 'Enabled Disks', 'Bucket'] as $label) {
+    foreach (['General Settings', 'JWT Secret', 'Storage', 'Danger zone', 'Media Library', 'Enabled Disks', 'Bucket'] as $label) {
         assertTrue(strpos($adm, "esc_html__('" . $label . "', 'fluxfiles')") !== false, "{$label} is translatable");
     }
     assertTrue(strpos((string) file_get_contents($dir . 'includes/FluxFilesBlock.php'), "'api_version' => 3") !== false, 'PHP block registration is API v3');
