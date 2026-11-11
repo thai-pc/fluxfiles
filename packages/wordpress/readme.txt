@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.1.5
+Stable tag: 1.1.6
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -168,6 +168,10 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.1.6 =
+* Bundles FluxFiles core 1.2.4.
+* Internal classes renamed with the plugin's FluxFiles prefix (WordPress.org Plugin Check). No behaviour change.
+
 = 1.1.5 =
 * Bundles FluxFiles core 1.2.4.
 * Fix: deleting, trashing, renaming or moving an image now also removes the resized copies FluxFiles had cached for it.
@@ -256,6 +260,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.1.6 =
+Code-naming cleanup requested by the WordPress.org Plugin Check. No behaviour change.
 
 = 1.1.5 =
 Removes resized copies of images you delete or trash, and tidies the settings screen code. Recommended for everyone on 1.1.4.

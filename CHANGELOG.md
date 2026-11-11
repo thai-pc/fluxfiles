@@ -5,6 +5,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.31] — 2026-11-11
+
+> Released: `wordpress-v1.1.6` (bundles core 1.2.4).
+
+### Fixed
+- WordPress 1.1.6: WordPress.org Plugin Check (Prefixing) flagged three non-prefixed global classes in 1.1.5. `WpHttpTransport`, `WpDbMetadataHandler` and `WpRateLimiterStorage` are now `FluxFilesHttpTransport`, `FluxFilesDbMetadataHandler` and `FluxFilesRateLimiterStorage` (files renamed too); a smoke test keeps every global class/function prefixed. No behaviour change.
+
 ## [1.0.30] — 2026-11-11
 
 > Released: `core-v1.2.4`, `wordpress-v1.1.5` (bundles core 1.2.4).
