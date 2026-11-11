@@ -1,7 +1,9 @@
 # Licence Key Refresh: Design
 
-Status: **Implemented (licence server); core client pending.** Code references point at branch
-`feat/update-server-pro-entitlement`, the newest version of `services/license-server`.
+Status: **Implemented end to end.** Licence server side (`POST /refresh`) first; the core client
+shipped in core-v1.2.0 (`packages/core/api/LicenseRefresh.php`, `LicenseKeyFile.php`,
+`fluxfiles license refresh`, CHANGELOG `[1.0.24]`), and FluxFiles Pro for WordPress runs the same
+refresh daily via wp-cron (`ProRefresh`). The branches this text mentions are merged to master.
 
 ## 0. Summary
 

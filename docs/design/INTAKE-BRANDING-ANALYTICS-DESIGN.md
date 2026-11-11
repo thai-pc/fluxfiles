@@ -1,7 +1,9 @@
 # Intake Branding + Per-Event Analytics — Design
 
 Status: **Implemented in core-v0.2.76** (module `intake` v1.2.0, CHANGELOG `[0.2.93]`). Branding (`intake_brand_*` claims,
-`Claims::sanitizeIntakeBrand()`, rendered in `packages/core/public/intake.html`)
+`Claims::sanitizeIntakeBrand()`, rendered in the portal page — originally
+`packages/core/public/intake.html`; since core-v1.1.0 the `intake` module serves it at
+`/api/fm/intake/page` and `PublicLinks.php` no longer exists, so those paths below are historical)
 and per-event analytics (`intake_analytics` claim, `GET /api/fm/intake/analytics`,
 `IntakeModule::analytics()`) both live in `packages/intake/src/IntakeModule.php`.
 See the CHANGELOG "Intake branding + per-event analytics" entry (`intake`'s

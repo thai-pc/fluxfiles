@@ -2,7 +2,9 @@
 
 Status: **Implemented in core-v0.2.75 (module `share` v1.2.0).** `share_analytics` claim, per-event JSONL
 log (`_fluxfiles/share-events/<jti>.jsonl`), and `GET /api/fm/share/analytics`
-all live in `packages/share/src/ShareModule.php` and `Claims::$shareAnalytics`.
+all live in `packages/share/src/ShareModule.php` and `Claims::$shareAnalytics`. (Path note:
+the `PublicLinks.php` mentions below are historical — core-v1.1.0 moved the public handlers into
+the module behind `PublicRoutes::dispatch()`.)
 See the CHANGELOG "Share per-event analytics" entry (`share`'s composer floor
 bumped to `^0.2.75`). All five token builders now give it named forwarding —
 `packages/core/embed.php`, `packages/node/src/token.ts` (+ `types.ts`'s

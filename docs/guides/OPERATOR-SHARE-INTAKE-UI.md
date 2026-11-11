@@ -7,7 +7,9 @@
 > packages and the two PHP adapters. See `51bcc2f feat(core): operator UI for Share links and
 > Upload portals` + follow-ups (`509aa8e`, `d36c7cd`, `1f8b2ec` WordPress support).
 > This is a design record, not an operator guide — it lives under `guides/` only because of
-> where it was first filed. The same `proGate()` three-state pattern now also gates the
+> where it was first filed. Path note: the `/public/share.html` and `/public/intake.html` link
+> bases mentioned below are historical; since core-v1.1.0 the modules serve those pages at
+> `/api/fm/share/page` and `/api/fm/intake/page`. The same `proGate()` three-state pattern now also gates the
 > Versioning, AI Vision, OCR, Virus, Backup, Audit-export and Legal-hold UIs.
 
 ## 0. One objection to the settled decisions

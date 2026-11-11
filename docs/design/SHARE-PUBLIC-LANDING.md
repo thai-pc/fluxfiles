@@ -2,8 +2,11 @@
 
 Status: **Implemented in core-v0.2.64** (CHANGELOG `[0.2.78]`). Source plan: `.claude/work/plan-share-public-landing.md`
 (its decisions are settled input). Mirrors the shipped Intake precedent. See
-`packages/core/api/ShareGrant.php`, `PublicLinks.php`, `packages/core/public/share.html`,
-and the Share routes in `.claude/api-map.md` for the current implementation.
+`packages/core/api/ShareGrant.php` and the Share routes in `.claude/api-map.md` for the current
+implementation. **Path note (core-v1.1.0):** `PublicLinks.php` was removed and the static
+`public/share.html` became a redirect stub; the `share` module now serves the landing page at
+`/api/fm/share/page` through `PublicRoutes::page()`. References to those two files below are
+historical.
 Later hardening (not in the text below): the public rate-limit buckets key on the `jti`
 only for a signature-verified token and on the client IP otherwise, and S3/R2 redirects
 also sign an extension-derived `ResponseContentType` (both core-v0.2.94).

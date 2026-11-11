@@ -1,10 +1,13 @@
 # Licence Server Admin UI, Statistics and Alerts — Design
 
-Status: **Approved for implementation** (owner review 2026-11-08). Nothing in this document is implemented yet.
+Status: **Implemented and deployed** (PRs #245 and #246, deployed to production and sandbox on
+2026-11-09; CHANGELOG `[1.0.28]`). Code: `services/license-server/AdminApi.php`, `AdminStore.php`,
+`Analytics.php`, `Communications.php`, `OperationsStore.php`, `admin/`, `ops/`. Approved for
+implementation 2026-11-08; the branches it mentions are merged. Runbook for the deployed admin UI:
+`docs/guides/OPERATIONS.md` and the owner's deploy kit.
 
-This spec covers `services/license-server/` as it will look once `feat/update-server-pro-entitlement`,
-`feat/license-mail-html` and `feat/license-refresh-server` are merged to master. **§17 is the handoff for
-the implementing agent.** It is self-contained, but read §2 and §5 before writing code.
+This spec covers `services/license-server/` as it was designed; **§17 was the handoff for the
+implementing agent.** Where the text says "will", read "does".
 
 ## 0. Decisions
 
