@@ -55,6 +55,10 @@ final class MailTransportFactory
         try {
             switch ($kind) {
                 case 'smtp':
+                    if (!class_exists(SmtpTransport::class)) {
+                        // The WordPress build ships no raw SMTP client (WP.org: use wp_mail).
+                        return self::off($why, 'the SMTP transport is not bundled in this build; use the site\'s mail settings');
+                    }
                     $host = $get('FLUXFILES_SMTP_HOST');
                     $user = $get('FLUXFILES_SMTP_USER');
                     $tls = strtolower($get('FLUXFILES_SMTP_TLS', 'tls'));
