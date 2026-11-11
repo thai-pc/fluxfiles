@@ -2863,6 +2863,12 @@ test('every picker host hands the enabled disks to the UI (else only LOCAL is of
     }
 });
 
+test('Plugin Check: the settings template enqueues, never prints a <script> tag (WordPress.WP.EnqueuedResources)', function () {
+    $tpl = (string) file_get_contents(__DIR__ . '/../templates/settings.php');
+    assertTrue(stripos($tpl, '<script') === false, 'templates/settings.php must not contain a literal <script> tag, not even in a code sample');
+    assertTrue(strpos($tpl, 'wp_add_inline_script') !== false, 'the theme sample shows the enqueue way');
+});
+
 test('WordPress.org polish: translatable strings, block API v3, keyed toolbar buttons, shortcode instance guard', function () {
     $dir = __DIR__ . '/../';
     $sc = (string) file_get_contents($dir . 'includes/FluxFilesShortcode.php');
