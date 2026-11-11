@@ -16,6 +16,8 @@ class FluxFilesAdmin
         add_action('admin_init', [$this, 'registerSettings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('admin_notices', [$this, 'renderNginxStorageNotice']);
+        add_action('wp_ajax_fluxfiles_nginx_probe', [$this, 'ajaxNginxProbe']);
+        add_action('wp_ajax_fluxfiles_test_disk', [$this, 'ajaxTestDisk']);
         add_action('admin_notices', [$this, 'renderUnconfiguredNotice']);
     }
 
@@ -42,6 +44,118 @@ class FluxFilesAdmin
             [],
             FLUXFILES_VERSION
         );
+        wp_enqueue_style('fluxfiles-settings', FLUXFILES_PLUGIN_URL . 'assets/settings.css', ['fluxfiles-admin'], FLUXFILES_VERSION);
+        wp_enqueue_script('fluxfiles-settings', FLUXFILES_PLUGIN_URL . 'assets/settings.js', [], FLUXFILES_VERSION, true);
+        wp_localize_script('fluxfiles-settings', 'FluxFilesSettings', [
+            'ajaxUrl'   => admin_url('admin-ajax.php'),
+            'testNonce' => wp_create_nonce('fluxfiles_test_disk'),
+            'i18n'      => [
+                'testing'   => __('Testing…', 'fluxfiles'),
+                'saveFirst' => __('Save your changes first; the test uses the saved settings.', 'fluxfiles'),
+                'copied'    => __('Copied', 'fluxfiles'),
+                'unsaved'   => __('You have unsaved changes', 'fluxfiles'),
+                'leave'     => __('You have unsaved changes. Leave anyway?', 'fluxfiles'),
+            ],
+        ]);
+    }
+
+    /**
+     * AJAX: check that a cloud disk works with the SAVED settings by listing its root the
+     * same way the file manager does. Admin only; reports the storage error verbatim.
+     */
+    public function ajaxTestDisk(): void
+    {
+        check_ajax_referer('fluxfiles_test_disk');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Not allowed.', 'fluxfiles')], 403);
+        }
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified above
+        $disk = isset($_POST['disk']) ? sanitize_key(wp_unslash($_POST['disk'])) : '';
+        if (!in_array($disk, ['s3', 'r2'], true)) {
+            wp_send_json_error(['message' => __('Unknown disk.', 'fluxfiles')], 400);
+        }
+        if (trim((string) get_option('fluxfiles_' . $disk . '_bucket', '')) === '') {
+            wp_send_json_error(['message' => __('Fill in the bucket and save first.', 'fluxfiles')]);
+        }
+        if (!in_array($disk, (array) get_option('fluxfiles_disks', ['local']), true)) {
+            /* translators: %s: disk name, e.g. S3 */
+            wp_send_json_error(['message' => sprintf(__('Tick %s under Access › Enabled disks and save, then test again.', 'fluxfiles'), strtoupper($disk))]);
+        }
+        $start = microtime(true);
+        try {
+            $req = new \WP_REST_Request('GET', '/fluxfiles/v1/api/fm/list');
+            $req->set_header('authorization', 'Bearer ' . FluxFilesPlugin::tokenForCurrentUser());
+            $req->set_param('disk', $disk);
+            $req->set_param('path', '');
+            $req->set_param('limit', 1);
+            $res = rest_do_request($req);
+        } catch (\Throwable $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+        $ms = (int) round((microtime(true) - $start) * 1000);
+        if ($res->get_status() === 200) {
+            /* translators: %d: milliseconds */
+            wp_send_json_success(['message' => sprintf(__('Connected (%d ms).', 'fluxfiles'), $ms)]);
+        }
+        $data = $res->get_data();
+        $msg = is_array($data) ? (string) ($data['error'] ?? $data['message'] ?? '') : '';
+        wp_send_json_error(['message' => $msg !== '' ? $msg : sprintf('HTTP %d', $res->get_status())]);
+    }
+
+    /**
+     * Status for the header of the settings page.
+     *
+     * @return array<int,array{label:string,value:string,state:string,id?:string}>
+     */
+    public static function statusSummary(): array
+    {
+        $secret = (string) get_option('fluxfiles_secret', '');
+        $disks = (array) get_option('fluxfiles_disks', ['local']);
+        $out = [];
+        $out[] = [
+            'label' => __('JWT secret', 'fluxfiles'),
+            'value' => strlen($secret) >= 32 ? __('Set', 'fluxfiles') : __('Missing', 'fluxfiles'),
+            'state' => strlen($secret) >= 32 ? 'ok' : 'bad',
+        ];
+        $diskLabels = [];
+        $diskState = 'ok';
+        foreach ($disks as $d) {
+            $ok = $d === 'local' || trim((string) get_option('fluxfiles_' . $d . '_bucket', '')) !== '';
+            $diskLabels[] = strtoupper((string) $d) . ($ok ? '' : ' ⚠');
+            if (!$ok) {
+                $diskState = 'warn';
+            }
+        }
+        $out[] = [
+            'label' => __('Storage', 'fluxfiles'),
+            'value' => $diskLabels ? implode(' · ', $diskLabels) : __('None enabled', 'fluxfiles'),
+            'state' => $diskLabels ? $diskState : 'bad',
+        ];
+        $out[] = [
+            'label' => __('Metadata', 'fluxfiles'),
+            'value' => get_option('fluxfiles_storage_backend', 'json') === 'db' ? __('Database', 'fluxfiles') : __('JSON files', 'fluxfiles'),
+            'state' => 'ok',
+        ];
+        if (in_array('local', $disks, true)) {
+            if (self::isNginx()) {
+                $ctx = self::nginxContext();
+                $cached = $ctx ? get_transient($ctx['cacheKey']) : false;
+                $okState = is_array($cached) && ($cached['state'] ?? '') === 'ok';
+                $out[] = [
+                    'label' => __('Server protection', 'fluxfiles'),
+                    'value' => $ctx === null ? __('Not web-served', 'fluxfiles') : ($okState ? __('nginx rules verified', 'fluxfiles') : __('Checking nginx…', 'fluxfiles')),
+                    'state' => $ctx === null || $okState ? 'ok' : 'pending',
+                    'id'    => 'ff-status-nginx',
+                ];
+            } else {
+                $out[] = [
+                    'label' => __('Server protection', 'fluxfiles'),
+                    'value' => __('.htaccess', 'fluxfiles'),
+                    'state' => 'ok',
+                ];
+            }
+        }
+        return $out;
     }
 
     public function registerSettings(): void
@@ -55,33 +169,39 @@ class FluxFilesAdmin
         );
 
         $this->addField('fluxfiles_secret', esc_html__('JWT Secret', 'fluxfiles'), 'fluxfiles_general', 'password');
-        $this->addField('fluxfiles_max_upload', esc_html__('Max Upload Size (MB)', 'fluxfiles'), 'fluxfiles_general', 'number');
-        $this->addField('fluxfiles_max_storage', esc_html__('Max Storage Quota (MB, 0 = unlimited)', 'fluxfiles'), 'fluxfiles_general', 'number');
-        $this->addField('fluxfiles_ttl', esc_html__('Token TTL (seconds)', 'fluxfiles'), 'fluxfiles_general', 'number');
+        $this->addField('fluxfiles_max_upload', esc_html__('Max Upload Size (MB)', 'fluxfiles'), 'fluxfiles_general', 'number', ['min' => 1, 'step' => 1]);
+        $this->addField('fluxfiles_max_storage', esc_html__('Max Storage Quota (MB, 0 = unlimited)', 'fluxfiles'), 'fluxfiles_general', 'number', ['min' => 0, 'step' => 1]);
+        $this->addField('fluxfiles_ttl', esc_html__('Token TTL (seconds)', 'fluxfiles'), 'fluxfiles_general', 'number', [
+            'min' => 60, 'max' => 86400, 'step' => 60,
+            'hint' => esc_html__('How long the file manager stays signed in before it asks WordPress for a fresh token. 3600 = 1 hour.', 'fluxfiles'),
+        ]);
 
         register_setting('fluxfiles', 'fluxfiles_secret', [
             'type' => 'string',
             'sanitize_callback' => $this->keepSecret('fluxfiles_secret', false, 32),
         ]);
+        // A blank or 0 would mean "no uploads" / "tokens that expire instantly", so fall back to the
+        // defaults instead of saving a value that silently breaks the plugin.
         register_setting('fluxfiles', 'fluxfiles_max_upload', [
             'type' => 'integer',
-            'sanitize_callback' => 'absint',
+            'sanitize_callback' => static function ($v) { $n = absint($v); return $n > 0 ? $n : 10; },
         ]);
         register_setting('fluxfiles', 'fluxfiles_max_storage', [
             'type' => 'integer',
-            'sanitize_callback' => 'absint',
+            // absint('-5') is 5, which would turn a typo into a real quota; a negative means "none".
+            'sanitize_callback' => static function ($v) { return max(0, (int) $v); },
         ]);
         register_setting('fluxfiles', 'fluxfiles_ttl', [
             'type' => 'integer',
-            'sanitize_callback' => 'absint',
+            'sanitize_callback' => static function ($v) { $n = absint($v); return $n === 0 ? 3600 : max(60, min($n, 86400)); },
         ]);
 
         // Storage backend section
         add_settings_section(
             'fluxfiles_storage',
-            esc_html__('Storage Backend', 'fluxfiles'),
+            esc_html__('Storage', 'fluxfiles'),
             function () {
-                echo '<p>' . esc_html__('Where file metadata (titles, tags, folder index, trash, audit log) is stored.', 'fluxfiles') . '</p>';
+                echo '<p>' . esc_html__('Where file metadata (titles, tags, folder index, trash, audit log) is kept, and how local files are served.', 'fluxfiles') . '</p>';
             },
             'fluxfiles'
         );
@@ -96,15 +216,32 @@ class FluxFilesAdmin
             esc_html__('Storage backend', 'fluxfiles'),
             [$this, 'renderStorageBackendField'],
             'fluxfiles',
-            'fluxfiles_storage'
+            'fluxfiles_storage',
+            ['label_for' => 'fluxfiles_storage_backend']
         );
 
         // Permissions section
         add_settings_section(
             'fluxfiles_permissions',
-            esc_html__('Default Permissions', 'fluxfiles'),
+            esc_html__('Access', 'fluxfiles'),
             function () {
-                echo '<p>' . esc_html__('Default permissions applied when generating tokens for WordPress users.', 'fluxfiles') . '</p>';
+                echo '<p>' . esc_html__('What WordPress users may do in the file manager, and which storage they see. Each user still gets no more than their WordPress role allows.', 'fluxfiles') . '</p>';
+            },
+            'fluxfiles'
+        );
+        add_settings_section(
+            'fluxfiles_media',
+            esc_html__('Media Library', 'fluxfiles'),
+            function () {
+                echo '<p>' . esc_html__('How files picked from FluxFiles join the WordPress Media Library and editors.', 'fluxfiles') . '</p>';
+            },
+            'fluxfiles'
+        );
+        add_settings_section(
+            'fluxfiles_danger',
+            esc_html__('Danger zone', 'fluxfiles'),
+            function () {
+                echo '<p>' . esc_html__('Settings that permanently remove data. Leave them off unless you are sure.', 'fluxfiles') . '</p>';
             },
             'fluxfiles'
         );
@@ -145,7 +282,7 @@ class FluxFilesAdmin
             esc_html__('Media offload (3-in-1)', 'fluxfiles'),
             [$this, 'renderOffloadField'],
             'fluxfiles',
-            'fluxfiles_permissions'
+            'fluxfiles_media'
         );
 
         register_setting('fluxfiles', 'fluxfiles_replace_picker', [
@@ -158,7 +295,20 @@ class FluxFilesAdmin
             esc_html__('Native picker (experimental)', 'fluxfiles'),
             [$this, 'renderReplacePickerField'],
             'fluxfiles',
-            'fluxfiles_permissions'
+            'fluxfiles_media'
+        );
+
+        register_setting('fluxfiles', 'fluxfiles_picker_multiple', [
+            'type' => 'string',
+            'sanitize_callback' => static fn ($v) => $v === '1' ? '1' : '0',
+            'default' => '0',
+        ]);
+        add_settings_field(
+            'fluxfiles_picker_multiple',
+            esc_html__('Pick several files', 'fluxfiles'),
+            [$this, 'renderPickerMultipleField'],
+            'fluxfiles',
+            'fluxfiles_media'
         );
 
         register_setting('fluxfiles', 'fluxfiles_delete_storage', [
@@ -171,7 +321,7 @@ class FluxFilesAdmin
             esc_html__('Delete from storage', 'fluxfiles'),
             [$this, 'renderDeleteStorageField'],
             'fluxfiles',
-            'fluxfiles_permissions'
+            'fluxfiles_media'
         );
 
         register_setting('fluxfiles', 'fluxfiles_local_private', [
@@ -184,7 +334,7 @@ class FluxFilesAdmin
             esc_html__('Private local storage', 'fluxfiles'),
             [$this, 'renderLocalPrivateField'],
             'fluxfiles',
-            'fluxfiles_permissions'
+            'fluxfiles_storage'
         );
 
         register_setting('fluxfiles', 'fluxfiles_delete_data_on_uninstall', [
@@ -197,7 +347,7 @@ class FluxFilesAdmin
             esc_html__('Delete data on uninstall', 'fluxfiles'),
             [$this, 'renderDeleteDataOnUninstallField'],
             'fluxfiles',
-            'fluxfiles_permissions'
+            'fluxfiles_danger'
         );
 
         // S3 section
@@ -210,13 +360,13 @@ class FluxFilesAdmin
             'fluxfiles'
         );
 
-        $this->addField('fluxfiles_s3_bucket', esc_html__('Bucket', 'fluxfiles'), 'fluxfiles_s3');
-        $this->addField('fluxfiles_s3_region', esc_html__('Region', 'fluxfiles'), 'fluxfiles_s3');
+        $this->addField('fluxfiles_s3_bucket', esc_html__('Bucket', 'fluxfiles'), 'fluxfiles_s3', 'text', ['placeholder' => 'my-bucket']);
+        $this->addField('fluxfiles_s3_region', esc_html__('Region', 'fluxfiles'), 'fluxfiles_s3', 'text', ['placeholder' => 'us-east-1']);
         $this->addField('fluxfiles_s3_key', esc_html__('Access Key ID', 'fluxfiles'), 'fluxfiles_s3');
         $this->addField('fluxfiles_s3_secret', esc_html__('Secret Access Key', 'fluxfiles'), 'fluxfiles_s3', 'password');
-        $this->addField('fluxfiles_s3_endpoint', esc_html__('Endpoint (MinIO/Spaces — empty for AWS)', 'fluxfiles'), 'fluxfiles_s3');
-        $this->addField('fluxfiles_s3_visibility', esc_html__('Visibility (private | public)', 'fluxfiles'), 'fluxfiles_s3');
-        $this->addField('fluxfiles_s3_public_url', esc_html__('Public URL (CDN/custom domain)', 'fluxfiles'), 'fluxfiles_s3');
+        $this->addField('fluxfiles_s3_endpoint', esc_html__('Endpoint (MinIO/Spaces — empty for AWS)', 'fluxfiles'), 'fluxfiles_s3', 'url', ['placeholder' => 'https://minio.example.com']);
+        $this->addField('fluxfiles_s3_visibility', esc_html__('Visibility', 'fluxfiles'), 'fluxfiles_s3', 'visibility');
+        $this->addField('fluxfiles_s3_public_url', esc_html__('Public URL (CDN/custom domain)', 'fluxfiles'), 'fluxfiles_s3', 'url', ['placeholder' => 'https://cdn.example.com']);
 
         foreach ([
             'fluxfiles_s3_bucket', 'fluxfiles_s3_region', 'fluxfiles_s3_key', 'fluxfiles_s3_secret',
@@ -224,7 +374,7 @@ class FluxFilesAdmin
         ] as $opt) {
             register_setting('fluxfiles', $opt, [
                 'type' => 'string',
-                'sanitize_callback' => $opt === 'fluxfiles_s3_secret' ? $this->keepSecret($opt, true) : 'sanitize_text_field',
+                'sanitize_callback' => $opt === 'fluxfiles_s3_secret' ? $this->keepSecret($opt, true) : self::fieldSanitizer($opt),
             ]);
         }
 
@@ -242,8 +392,8 @@ class FluxFilesAdmin
         $this->addField('fluxfiles_r2_account_id', esc_html__('Account ID', 'fluxfiles'), 'fluxfiles_r2');
         $this->addField('fluxfiles_r2_key', esc_html__('Access Key ID', 'fluxfiles'), 'fluxfiles_r2');
         $this->addField('fluxfiles_r2_secret', esc_html__('Secret Access Key', 'fluxfiles'), 'fluxfiles_r2', 'password');
-        $this->addField('fluxfiles_r2_visibility', esc_html__('Visibility (private | public)', 'fluxfiles'), 'fluxfiles_r2');
-        $this->addField('fluxfiles_r2_public_url', esc_html__('Public URL (r2.dev / custom domain)', 'fluxfiles'), 'fluxfiles_r2');
+        $this->addField('fluxfiles_r2_visibility', esc_html__('Visibility', 'fluxfiles'), 'fluxfiles_r2', 'visibility');
+        $this->addField('fluxfiles_r2_public_url', esc_html__('Public URL (r2.dev / custom domain)', 'fluxfiles'), 'fluxfiles_r2', 'url', ['placeholder' => 'https://pub-xxxx.r2.dev']);
 
         foreach ([
             'fluxfiles_r2_bucket', 'fluxfiles_r2_account_id', 'fluxfiles_r2_key', 'fluxfiles_r2_secret',
@@ -251,7 +401,7 @@ class FluxFilesAdmin
         ] as $opt) {
             register_setting('fluxfiles', $opt, [
                 'type' => 'string',
-                'sanitize_callback' => $opt === 'fluxfiles_r2_secret' ? $this->keepSecret($opt, true) : 'sanitize_text_field',
+                'sanitize_callback' => $opt === 'fluxfiles_r2_secret' ? $this->keepSecret($opt, true) : self::fieldSanitizer($opt),
             ]);
         }
 
@@ -289,8 +439,12 @@ class FluxFilesAdmin
      * (no PHP execution, HTML/SVG served inert, `_fluxfiles/` denied). The plugin
      * cannot write nginx config, so the operator has to — say so on the screens
      * where they manage plugins / FluxFiles. Private local storage does not hide it
-     * (it only stops plain URLs; the notice then shows a plain deny rule). Hidden via `add_filter('fluxfiles_nginx_storage_notice', '__return_false')` after
-     * adding the rules.
+     * (it only stops plain URLs; the notice then shows a plain deny rule).
+     *
+     * Once the rules are in place the notice goes away by itself: the page loads at once with
+     * the warning, then a background request asks the server whether the folder is really
+     * denied (see probeNginxProtection) and swaps the warning for a "verified" line. The
+     * `fluxfiles_nginx_storage_notice` filter still hides it outright.
      */
     public function renderNginxStorageNotice(): void
     {
@@ -303,12 +457,86 @@ class FluxFilesAdmin
         if ($page !== 'plugins.php' && !($page === 'options-general.php' && $screen === 'fluxfiles')) {
             return;
         }
+        $ctx = self::nginxContext();
+        if ($ctx === null) {
+            return;
+        }
+        $onSettings = ($page === 'options-general.php');
+        $verified = esc_html__('nginx protection verified: the storage folder denies _fluxfiles/, dotfiles and PHP files. Nothing to do.', 'fluxfiles');
+
+        // A recent successful check: show nothing (a confirmation on the settings page only).
+        $cached = get_transient($ctx['cacheKey']);
+        if (is_array($cached) && ($cached['state'] ?? '') === 'ok') {
+            return; // the settings page shows the verified state in its status header
+        }
+
+        $private = $ctx['private'];
+        printf(
+            '<div id="fluxfiles-nginx-notice" class="notice notice-warning"><p><strong>FluxFiles:</strong> %s</p><pre style="white-space:pre-wrap">%s</pre><p>%s</p><p class="fluxfiles-nginx-status"><em>%s</em></p></div>',
+            $private
+                ? esc_html__('Private local storage is on, but this site runs on nginx, which ignores the .htaccess that denies the FluxFiles folder. Until you deny it in your server block, the files and the _fluxfiles/ bookkeeping (audit log with IP addresses, index, trash) can still be fetched by their plain URL. Add this rule (then reload nginx):', 'fluxfiles')
+                : esc_html__('This site runs on nginx, which ignores the .htaccess protecting the FluxFiles uploads folder. Uploads there are served from the same origin as wp-admin: the folder must never execute PHP and must not serve HTML/SVG/XML as active content, and its _fluxfiles/ bookkeeping must not be public. Add rules like these to your server block (then reload nginx):', 'fluxfiles'),
+            esc_html($ctx['snippet']),
+            $private
+                ? esc_html__('FluxFiles keeps serving files through signed links, so denying the folder does not break the file manager.', 'fluxfiles')
+                : esc_html__('Alternatively turn on private local storage and deny the folder (the rule is shown here once it is on); files are then only served through signed links.', 'fluxfiles'),
+            esc_html__('Checking whether your server already denies the folder…', 'fluxfiles')
+        );
+        // Ask the server in the background so a slow loopback never delays the page.
+        $cfg = [
+            'url'        => admin_url('admin-ajax.php'),
+            'nonce'      => wp_create_nonce('fluxfiles_nginx_probe'),
+            'onSettings' => $onSettings,
+            'verified'   => $verified,
+            'chipOk'      => esc_html__('nginx rules verified', 'fluxfiles'),
+            'chipMissing' => esc_html__('nginx rules missing', 'fluxfiles'),
+            'chipUnknown' => esc_html__('Could not check', 'fluxfiles'),
+            'missing'    => esc_html__('Still missing on this server:', 'fluxfiles'),
+            'unknown'    => esc_html__('FluxFiles could not check the rules automatically (the server did not answer a request to itself). If you already added them, you can ignore this; hide it with the fluxfiles_nginx_storage_notice filter.', 'fluxfiles'),
+        ];
+        // phpcs:disable WordPress.Security.EscapeOutput -- JSON-encoded config + static script
+        echo '<script>(function(c){var n=document.getElementById("fluxfiles-nginx-notice");if(!n||!window.fetch){return;}'
+            . 'var st=n.querySelector(".fluxfiles-nginx-status em");'
+            . 'var b=new URLSearchParams({action:"fluxfiles_nginx_probe",_wpnonce:c.nonce});'
+            . 'fetch(c.url,{method:"POST",credentials:"same-origin",body:b}).then(function(r){return r.json();}).then(function(j){'
+            . 'var d=j&&j.data||{};var chip=document.getElementById("ff-status-nginx");'
+            . 'if(chip){chip.setAttribute("data-state",d.state==="ok"?"ok":(d.state==="missing"?"bad":"warn"));var v=chip.querySelector(".ff-status-value");if(v){v.textContent=d.state==="ok"?c.chipOk:(d.state==="missing"?c.chipMissing:c.chipUnknown);}}'
+            . 'if(d.state==="ok"){n.parentNode.removeChild(n);}'
+            . 'else if(d.state==="missing"){st.textContent=c.missing+" "+(d.missing||[]).join(", ")+".";}'
+            . 'else{st.textContent=c.unknown;}}).catch(function(){st.textContent=c.unknown;});'
+            . '})(' . wp_json_encode($cfg) . ');</script>';
+        // phpcs:enable
+    }
+
+    /** AJAX: run the protection probe now (fresh) and report. Admin only. */
+    public function ajaxNginxProbe(): void
+    {
+        check_ajax_referer('fluxfiles_nginx_probe');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['state' => 'unknown'], 403);
+        }
+        $ctx = self::nginxContext();
+        if ($ctx === null) {
+            wp_send_json_success(['state' => 'ok', 'missing' => []]);
+        }
+        wp_send_json_success(self::probeNginxProtection($ctx['checkPath'], $ctx['baseUrl'], $ctx['probeDir'], $ctx['private'], true));
+    }
+
+    /**
+     * Where the storage folder is served and which rule set applies. Null when nothing is
+     * web-served from it (not the local disk, or outside the web root) or the notice is
+     * filtered off.
+     *
+     * @return array{private:bool,baseUrl:string,probeDir:string,checkPath:string,snippet:string,cacheKey:string}|null
+     */
+    private static function nginxContext(): ?array
+    {
         // Private local storage does NOT hide this notice: it only stops handing out plain
         // URLs. nginx still serves the folder (audit log, index and trash live in its
         // _fluxfiles/) until the operator denies it.
         if (!in_array('local', (array) get_option('fluxfiles_disks', ['local']), true)
             || !apply_filters('fluxfiles_nginx_storage_notice', true)) {
-            return;
+            return null;
         }
         // Same rules as README.md "Storage protection (Apache / nginx)", rooted at
         // this site's actual content path.
@@ -319,7 +547,7 @@ class FluxFilesAdmin
             $abs = rtrim(str_replace('\\', '/', (string) (defined('ABSPATH') ? ABSPATH : '')), '/');
             $base = FluxFilesStorage::base();
             if ($abs === '' || strpos($base . '/', $abs . '/') !== 0) {
-                return; // outside the web root: nothing is web-served
+                return null; // outside the web root: nothing is web-served
             }
             $baseUrl = rtrim((string) (function_exists('site_url') ? site_url() : ''), '/') . substr($base, strlen($abs));
         }
@@ -350,16 +578,112 @@ class FluxFilesAdmin
             . "    }\n"
             . "    deny all;\n"
             . "}";
-        printf(
-            '<div class="notice notice-warning"><p><strong>FluxFiles:</strong> %s</p><pre style="white-space:pre-wrap">%s</pre><p>%s</p></div>',
-            $private
-                ? esc_html__('Private local storage is on, but this site runs on nginx, which ignores the .htaccess that denies the FluxFiles folder. Until you deny it in your server block, the files and the _fluxfiles/ bookkeeping (audit log with IP addresses, index, trash) can still be fetched by their plain URL. Add this rule (then reload nginx):', 'fluxfiles')
-                : esc_html__('This site runs on nginx, which ignores the .htaccess protecting the FluxFiles uploads folder. Uploads there are served from the same origin as wp-admin: the folder must never execute PHP and must not serve HTML/SVG/XML as active content, and its _fluxfiles/ bookkeeping must not be public. Add rules like these to your server block (then reload nginx):', 'fluxfiles'),
-            esc_html($snippet),
-            $private
-                ? esc_html__('FluxFiles keeps serving files through signed links, so denying the folder does not break the file manager.', 'fluxfiles')
-                : esc_html__('Alternatively turn on private local storage and deny the folder (the rule is shown here once it is on); files are then only served through signed links.', 'fluxfiles')
-        );
+        $probeDir = $multisite ? $root . 'sites/' . (int) get_current_blog_id() . '/uploads/' : $dir;
+        $checkPath = $private ? $denyRoot : $probeDir;
+        return [
+            'private'   => $private,
+            'baseUrl'   => $baseUrl,
+            'probeDir'  => $probeDir,
+            'checkPath' => $checkPath,
+            'snippet'   => $snippet,
+            'cacheKey'  => 'fluxfiles_nginx_probe_' . md5($checkPath . ($private ? 'p' : 'o')),
+        ];
+    }
+
+    /**
+     * HTTP status per key for a map of key => URL, fetched concurrently when WP's Requests
+     * library can (WP >= 6.2), else one by one. A transport failure yields null for that key.
+     *
+     * @param array<string,string> $urls
+     * @return array<string,int|null>
+     */
+    private static function fetchStatusCodes(array $urls): array
+    {
+        $out = [];
+        if (class_exists('\\WpOrg\\Requests\\Requests')) {
+            $reqs = [];
+            foreach ($urls as $k => $u) {
+                $reqs[$k] = ['url' => $u, 'type' => 'GET', 'headers' => ['Cache-Control' => 'no-cache']];
+            }
+            try {
+                $res = \WpOrg\Requests\Requests::request_multiple($reqs, ['timeout' => 15, 'connect_timeout' => 10, 'follow_redirects' => false, 'verify' => false]);
+                foreach ($urls as $k => $u) {
+                    $r = $res[$k] ?? null;
+                    $out[$k] = (is_object($r) && isset($r->status_code)) ? (int) $r->status_code : null;
+                }
+                return $out;
+            } catch (\Throwable $e) {
+                // fall through to the sequential path
+            }
+        }
+        foreach ($urls as $k => $u) {
+            $res = wp_remote_get($u, ['timeout' => 4, 'redirection' => 0, 'sslverify' => false]);
+            $out[$k] = is_wp_error($res) ? null : (int) wp_remote_retrieve_response_code($res);
+        }
+        return $out;
+    }
+
+    /**
+     * Ask the web server whether the storage folder is really protected. Sends loopback GETs to
+     * paths that do not exist: a `deny` rule answers 403 even for a missing file, an unprotected
+     * nginx answers 404/200. Nothing is written to disk.
+     *
+     * @param string $checkPath URL path to probe under (public: the uploads dir; private: the root)
+     * @return array{state:string,missing:string[]} state: ok | missing | unknown
+     */
+    public static function probeNginxProtection(string $checkPath, string $baseUrl, string $dirPath, bool $private, bool $fresh): array
+    {
+        $cacheKey = 'fluxfiles_nginx_probe_' . md5($checkPath . ($private ? 'p' : 'o'));
+        if (!$fresh) {
+            $cached = get_transient($cacheKey);
+            if (is_array($cached) && isset($cached['state'])) {
+                return $cached;
+            }
+        }
+        $origin = '';
+        $parts = wp_parse_url($baseUrl);
+        if (!empty($parts['scheme']) && !empty($parts['host'])) {
+            $origin = $parts['scheme'] . '://' . $parts['host'] . (!empty($parts['port']) ? ':' . $parts['port'] : '');
+        }
+        $dirPath = '/' . ltrim($dirPath, '/');
+        // Public mode: the three deny rules the snippet adds. Private mode: the blanket deny.
+        $checks = $private
+            ? [
+                __('the folder is denied', 'fluxfiles')   => $checkPath . 'fx-probe.txt',
+                __('_fluxfiles/ is denied', 'fluxfiles')  => $checkPath . '_fluxfiles/fx-probe.txt',
+            ]
+            : [
+                __('_fluxfiles/ is denied', 'fluxfiles')  => $dirPath . '_fluxfiles/fx-probe.txt',
+                __('dotfiles are denied', 'fluxfiles')    => $dirPath . '.fx-probe',
+                __('PHP files are denied', 'fluxfiles')   => $dirPath . 'fx-probe.php',
+            ];
+        $result = apply_filters('fluxfiles_nginx_probe', null, $checks, $origin);
+        if (!is_array($result)) {
+            $missing = [];
+            $unknown = false;
+            if ($origin === '') {
+                $unknown = true;
+            } else {
+                // All probes in parallel: one round trip instead of one per rule (a slow
+                // loopback, e.g. .local name resolution, would otherwise stack up).
+                $codes = self::fetchStatusCodes(array_map(static function ($path) use ($origin) { return $origin . $path; }, $checks));
+                foreach ($checks as $label => $path) {
+                    $code = $codes[$label] ?? null;
+                    if ($code === null) {
+                        $unknown = true;
+                        break;
+                    }
+                    if ($code !== 403 && $code !== 401) {
+                        $missing[] = $label;
+                    }
+                }
+            }
+            $result = $missing ? ['state' => 'missing', 'missing' => $missing]
+                : ($unknown ? ['state' => 'unknown', 'missing' => []] : ['state' => 'ok', 'missing' => []]);
+        }
+        // Cache the "ok" briefly so wp-admin → Plugins does not fire requests on every load.
+        set_transient($cacheKey, $result, $result['state'] === 'ok' ? 10 * MINUTE_IN_SECONDS : 30);
+        return $result;
     }
 
 
@@ -381,12 +705,46 @@ class FluxFilesAdmin
         );
     }
 
-    private function addField(string $name, string $label, string $section, string $type = 'text'): void
+    /** One small inline script (printed once) for the show/hide and generate buttons. */
+    private static function printSecretFieldScript(): void
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+        // phpcs:disable WordPress.Security.EscapeOutput -- static script, no interpolated data
+        echo '<script>document.addEventListener("click",function(e){var b=e.target.closest(".fluxfiles-secret-eye,.fluxfiles-secret-gen");if(!b){return;}'
+            . 'var i=document.getElementById(b.getAttribute("data-target"));if(!i){return;}'
+            . 'if(b.classList.contains("fluxfiles-secret-eye")){var show=i.type==="password";i.type=show?"text":"password";'
+            . 'var l=show?b.getAttribute("data-hide"):b.getAttribute("data-show");b.setAttribute("aria-label",l);b.title=l;b.setAttribute("aria-pressed",show?"true":"false");return;}'
+            . 'var a=new Uint8Array(32);crypto.getRandomValues(a);i.value=Array.prototype.map.call(a,function(x){return("0"+x.toString(16)).slice(-2);}).join("");'
+            . 'i.type="text";var eye=document.querySelector(".fluxfiles-secret-eye[data-target=\""+i.id+"\"]");if(eye){var h=eye.getAttribute("data-hide");eye.setAttribute("aria-label",h);eye.title=h;eye.setAttribute("aria-pressed","true");}i.focus();i.select();});</script>';
+        // phpcs:enable
+    }
+
+    /**
+     * Sanitizer for a plain S3/R2 text option: URLs keep their scheme check, visibility is
+     * limited to the two values the storage layer understands (blank -> the default, private).
+     */
+    private static function fieldSanitizer(string $opt): callable
+    {
+        if (substr($opt, -11) === '_public_url' || substr($opt, -9) === '_endpoint') {
+            return static function ($v) { $v = trim((string) $v); return $v === '' ? '' : esc_url_raw($v, ['http', 'https']); };
+        }
+        if (substr($opt, -11) === '_visibility') {
+            return static function ($v) { return $v === 'public' ? 'public' : 'private'; };
+        }
+        return static function ($v) { return sanitize_text_field((string) $v); };
+    }
+
+    /** @param array<string,mixed> $args min / max / step / placeholder / hint */
+    private function addField(string $name, string $label, string $section, string $type = 'text', array $args = []): void
     {
         add_settings_field(
             $name,
             $label,
-            function () use ($name, $type) {
+            function () use ($name, $type, $args) {
                 $value = (string) get_option($name, '');
                 if ($type === 'password') {
                     // Never echo a stored secret back into the page source: a blank
@@ -396,12 +754,23 @@ class FluxFilesAdmin
                         : ($name === 'fluxfiles_secret' && strlen($value) >= 8
                             /* translators: %s: the last 4 characters of the stored secret. */
                             ? sprintf(esc_html__('A secret is set (ends in %s). Leave blank to keep it, or type a new one to replace it.', 'fluxfiles'), esc_html(substr($value, -4)))
+                              . ($name === 'fluxfiles_secret' ? ' ' . esc_html__('At least 32 characters. Changing it signs everyone out of open file managers and invalidates links FluxFiles already signed (private-storage links, share links).', 'fluxfiles') : '')
                             : esc_html__('A secret is set. Leave blank to keep it, or type a new one to replace it.', 'fluxfiles'));
+                    // The stored secret is never echoed (it would sit in the page source), so the eye
+                    // reveals only what the admin is typing or pasting; "Generate" fills a fresh random one.
+                    $gen = $name === 'fluxfiles_secret'
+                        ? sprintf('<button type="button" class="button ff-icon-btn fluxfiles-secret-gen" data-target="%1$s" aria-label="%2$s" title="%2$s">%3$s</button>', esc_attr($name), esc_attr__('Generate a random secret', 'fluxfiles'), '<svg class="ff-ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>')
+                        : '';
                     printf(
-                        '<input type="password" name="%s" value="" autocomplete="new-password" class="regular-text" /><p class="description">%s</p>',
+                        '<span class="fluxfiles-secret-row ff-input-group"><input type="password" id="%1$s" name="%1$s" value="" autocomplete="new-password" spellcheck="false" autocapitalize="off" class="regular-text" aria-describedby="%1$s-hint"%3$s /><button type="button" class="button ff-icon-btn fluxfiles-secret-eye" data-target="%1$s" aria-controls="%1$s" aria-pressed="false" aria-label="%4$s" title="%4$s" data-show="%4$s" data-hide="%5$s"><svg class="ff-ico ff-ico-on" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="ff-ico ff-ico-off" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-2.2 3.1M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5.1-1.5"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M2 2l20 20"/></svg></button>%6$s</span><p class="description" id="%1$s-hint">%2$s</p>',
                         esc_attr($name),
-                        $hint // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- both branches are escaped above
+                        $hint, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- both branches are escaped above
+                        $name === 'fluxfiles_secret' ? ' minlength="32"' : '',
+                        esc_attr__('Show what you typed', 'fluxfiles'),
+                        esc_attr__('Hide', 'fluxfiles'),
+                        $gen // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from escaped parts above
                     );
+                    self::printSecretFieldScript();
                     if ($name !== 'fluxfiles_secret' && $value !== '') {
                         printf(
                             '<p><label><input type="checkbox" name="%1$s_clear" value="1" /> %2$s</label></p>',
@@ -411,15 +780,41 @@ class FluxFilesAdmin
                     }
                     return;
                 }
+                if ($type === 'visibility') {
+                    $cur = $value === 'public' ? 'public' : 'private';
+                    printf(
+                        '<select id="%1$s" name="%1$s"><option value="private"%2$s>%3$s</option><option value="public"%4$s>%5$s</option></select>',
+                        esc_attr($name),
+                        selected($cur, 'private', false),
+                        esc_html__('Private (presigned links)', 'fluxfiles'),
+                        selected($cur, 'public', false),
+                        esc_html__('Public (direct object URLs)', 'fluxfiles')
+                    );
+                    return;
+                }
+                $attrs = '';
+                foreach (['min', 'max', 'step', 'placeholder'] as $a) {
+                    if (isset($args[$a])) {
+                        $attrs .= ' ' . $a . '="' . esc_attr((string) $args[$a]) . '"';
+                    }
+                }
+                $mode = $type === 'number' ? ' inputmode="numeric"' : '';
+                $hintHtml = !empty($args['hint']) ? '<p class="description" id="' . esc_attr($name) . '-hint">' . $args['hint'] . '</p>' : ''; // phpcs:ignore WordPress.Security.EscapeOutput -- escaped at the call site
                 printf(
-                    '<input type="%s" name="%s" value="%s" class="regular-text" />',
+                    '<input type="%1$s" id="%2$s" name="%2$s" value="%3$s" class="%4$s"%5$s%6$s%7$s />%8$s',
                     esc_attr($type),
                     esc_attr($name),
-                    esc_attr($value)
+                    esc_attr($value),
+                    $type === 'number' ? 'small-text' : 'regular-text',
+                    $attrs,
+                    $mode,
+                    $hintHtml !== '' ? ' aria-describedby="' . esc_attr($name) . '-hint"' : '',
+                    $hintHtml // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from an escaped string above
                 );
             },
             'fluxfiles',
-            $section
+            $section,
+            ['label_for' => $name]
         );
     }
 
@@ -435,12 +830,13 @@ class FluxFilesAdmin
         foreach ($allPerms as $perm) {
             $checked = in_array($perm, $current, true) ? 'checked' : '';
             printf(
-                '<label style="margin-right:15px"><input type="checkbox" name="fluxfiles_default_perms[]" value="%s" %s /> %s</label>',
+                '<label class="ff-chip"><input type="checkbox" name="fluxfiles_default_perms[]" value="%s" %s /> <span>%s</span></label>',
                 esc_attr($perm),
                 esc_attr($checked),
                 esc_html(ucfirst($perm))
             );
         }
+        echo '<p class="description">' . esc_html__('Audit opens the activity log and compliance tools; it is only ever given to administrators.', 'fluxfiles') . '</p>';
     }
 
     public function renderDisksField(): void
@@ -451,10 +847,24 @@ class FluxFilesAdmin
         foreach ($allDisks as $disk) {
             $checked = in_array($disk, $current, true) ? 'checked' : '';
             printf(
-                '<label style="margin-right:15px"><input type="checkbox" name="fluxfiles_disks[]" value="%s" %s /> %s</label>',
+                '<label class="ff-chip"><input type="checkbox" name="fluxfiles_disks[]" value="%s" %s /> <span>%s</span></label>',
                 esc_attr($disk),
                 esc_attr($checked),
                 esc_html(strtoupper($disk))
+            );
+        }
+        // An enabled cloud disk with no bucket would be offered to users and then fail on first use.
+        $unconfigured = [];
+        foreach (['s3', 'r2'] as $disk) {
+            if (in_array($disk, (array) $current, true) && trim((string) get_option('fluxfiles_' . $disk . '_bucket', '')) === '') {
+                $unconfigured[] = strtoupper($disk);
+            }
+        }
+        if ($unconfigured) {
+            printf(
+                '<p class="description" style="color:#b32d2e">%s</p>',
+                /* translators: %s: disk names, e.g. "S3, R2" */
+                sprintf(esc_html__('%s is enabled but has no bucket yet. Fill in its section below, or untick it; otherwise it will fail when someone opens it.', 'fluxfiles'), esc_html(implode(', ', $unconfigured)))
             );
         }
     }
@@ -464,11 +874,11 @@ class FluxFilesAdmin
         $on = get_option('fluxfiles_offload', '1') === '1';
         printf(
             '<input type="hidden" name="fluxfiles_offload" value="0" />'
-            . '<label><input type="checkbox" name="fluxfiles_offload" value="1" %s /> %s</label>'
+            . '<label class="ff-switch-label"><input type="checkbox" class="ff-switch" name="fluxfiles_offload" value="1" %s /> %s</label>'
             . '<p class="description">%s</p>',
             $on ? 'checked' : '',
             esc_html__('Register picked files as Media Library attachments served from your storage', 'fluxfiles'),
-            esc_html__('One plugin instead of three: files picked from FluxFiles become real WP attachments (offloaded to S3/R2/SFTP, URLs rewritten) — folders + cloud + offload in one.', 'fluxfiles')
+            esc_html__('Files picked from FluxFiles become real WordPress attachments served straight from your storage (URLs rewritten, nothing copied into uploads). Needs a stable public URL: the local disk, or S3/R2 set to Public or with a Public URL. Private buckets are refused, because their links expire.', 'fluxfiles')
         );
     }
 
@@ -476,11 +886,11 @@ class FluxFilesAdmin
     {
         $current = get_option('fluxfiles_storage_backend', 'json');
         printf(
-            '<select name="fluxfiles_storage_backend">'
+            '<select id="fluxfiles_storage_backend" name="fluxfiles_storage_backend" aria-describedby="fluxfiles_storage_backend-hint">'
             . '<option value="json" %s>%s</option>'
             . '<option value="db" %s>%s</option>'
             . '</select>'
-            . '<p class="description">%s</p>',
+            . '<p class="description" id="fluxfiles_storage_backend-hint">%s</p>',
             selected($current, 'json', false),
             esc_html__('JSON files (default)', 'fluxfiles'),
             selected($current, 'db', false),
@@ -494,11 +904,24 @@ class FluxFilesAdmin
         $on = get_option('fluxfiles_replace_picker', '0') === '1';
         printf(
             '<input type="hidden" name="fluxfiles_replace_picker" value="0" />'
-            . '<label><input type="checkbox" name="fluxfiles_replace_picker" value="1" %s /> %s</label>'
+            . '<label class="ff-switch-label"><input type="checkbox" class="ff-switch" name="fluxfiles_replace_picker" value="1" %s /> %s</label>'
             . '<p class="description">%s</p>',
             $on ? 'checked' : '',
             esc_html__('Add a “From FluxFiles” button to the native WordPress media picker', 'fluxfiles'),
             esc_html__('Experimental: lets Featured Image, the core Image block and the Customizer pull from FluxFiles too. The FluxFiles button + Gutenberg block work without this. Test on staging first.', 'fluxfiles')
+        );
+    }
+
+    public function renderPickerMultipleField(): void
+    {
+        $on = get_option('fluxfiles_picker_multiple', '0') === '1';
+        printf(
+            '<input type="hidden" name="fluxfiles_picker_multiple" value="0" />'
+            . '<label class="ff-switch-label"><input type="checkbox" class="ff-switch" name="fluxfiles_picker_multiple" value="1" %s /> %s</label>'
+            . '<p class="description">%s</p>',
+            $on ? 'checked' : '',
+            esc_html__('Let the “FluxFiles” button insert several files at once', 'fluxfiles'),
+            esc_html__('Applies to the “FluxFiles” button next to “Add Media” in the classic editor. The native picker follows WordPress itself: Gallery and “Add Media” take several files, Featured Image and the Image block take one.', 'fluxfiles')
         );
     }
 
@@ -507,7 +930,7 @@ class FluxFilesAdmin
         $on = get_option('fluxfiles_delete_storage', '0') === '1';
         printf(
             '<input type="hidden" name="fluxfiles_delete_storage" value="0" />'
-            . '<label><input type="checkbox" name="fluxfiles_delete_storage" value="1" %s /> %s</label>'
+            . '<label class="ff-switch-label"><input type="checkbox" class="ff-switch" name="fluxfiles_delete_storage" value="1" %s /> %s</label>'
             . '<p class="description">%s</p>',
             $on ? 'checked' : '',
             esc_html__('Also delete the file from FluxFiles storage when its attachment is deleted', 'fluxfiles'),
@@ -520,10 +943,12 @@ class FluxFilesAdmin
         $on = (bool) get_option('fluxfiles_local_private', false);
         printf(
             '<input type="hidden" name="fluxfiles_local_private" value="0" />'
-            . '<label><input type="checkbox" name="fluxfiles_local_private" value="1" %s /> %s</label>'
-            . '<p class="description">%s</p>',
+            . '<label class="ff-switch-label"><input type="checkbox" class="ff-switch" name="fluxfiles_local_private" value="1" %s /> %s</label>'
+            . '<p class="description">%s</p><details class="ff-more"><summary>%s</summary><p class="description">%s</p></details>',
             $on ? 'checked' : '',
             esc_html__('Serve local files only through signed links', 'fluxfiles'),
+            esc_html__('Files are streamed through short-lived signed links instead of plain URLs, so a link pasted into a post stops working.', 'fluxfiles'),
+            esc_html__('Details', 'fluxfiles'),
             esc_html__('The file manager stops handing out plain URLs and streams files through FluxFiles on short-lived links, so a link saved in a post stops working. On Apache the uploads folder is then denied by its .htaccess. On nginx you must deny the folder yourself (a notice shows the rule). Files written before you switched this on keep their old permissions, and links to attachments created while the folder was public stop working too. Use an S3/R2 disk with a public URL for permanent links.', 'fluxfiles')
         );
     }
@@ -533,10 +958,12 @@ class FluxFilesAdmin
         $on = get_option('fluxfiles_delete_data_on_uninstall', '0') === '1';
         printf(
             '<input type="hidden" name="fluxfiles_delete_data_on_uninstall" value="0" />'
-            . '<label><input type="checkbox" name="fluxfiles_delete_data_on_uninstall" value="1" %s /> %s</label>'
-            . '<p class="description"><strong>%s</strong> %s</p>',
+            . '<label class="ff-switch-label"><input type="checkbox" class="ff-switch" name="fluxfiles_delete_data_on_uninstall" value="1" %s /> %s</label>'
+            . '<p class="description">%s</p><details class="ff-more"><summary>%s</summary><p class="description"><strong>%s</strong> %s</p></details>',
             $on ? 'checked' : '',
             esc_html__('Delete all FluxFiles data when the plugin is deleted', 'fluxfiles'),
+            esc_html__('Off: a reinstall finds everything again. On: metadata, trash, audit log and settings are permanently removed (the files themselves are never deleted).', 'fluxfiles'),
+            esc_html__('What exactly is kept or removed', 'fluxfiles'),
             esc_html__('Warning:', 'fluxfiles'),
             esc_html__('Off by default: deleting the plugin from the Plugins screen then removes only the settings and rate-limit counters, and KEEPS the files in the local FluxFiles storage folder together with their metadata, trash, audit log and legal-hold tables, the secret key (the audit log key) and the settings that decide where and how that data is read (storage backend, storage location, private mode), so a reinstall picks everything up again. When on, all of that is permanently removed, including the trash and the generated variants. The files in the storage folder are never deleted, whoever put them there: remove the folder by hand if you no longer need them. From a custom location set with the FLUXFILES_STORAGE_DIR constant or the fluxfiles_storage_base filter only the rate-limit counters are deleted, and nothing from S3, R2 or SFTP.', 'fluxfiles')
         );
