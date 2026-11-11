@@ -135,20 +135,18 @@ $fluxfiles_render_section = static function (string $sid) use ($fluxfiles_all): 
 <?php
 $fluxfiles_php = <<<'PHPSNIPPET'
 <?php
-$token    = FluxFilesPlugin::tokenForCurrentUser();
-$endpoint = FluxFilesPlugin::apiEndpoint();
-?>
-<div id="my-file-manager" style="height:600px"></div>
-<script src="<?= esc_url(plugins_url('assets/fluxfiles.js', FLUXFILES_PLUGIN_FILE)) ?>"></script>
-<script>
-FluxFiles.open({
-    endpoint: "<?= esc_js($endpoint) ?>",
-    token: "<?= esc_js($token) ?>",
-    disk: "local",
-    mode: "picker",
-    container: "#my-file-manager"
-});
-</script>
+// In a theme template, before get_footer(). Logged-in users only: the token is theirs.
+if (is_user_logged_in()) {
+    wp_enqueue_script('fluxfiles-sdk', plugins_url('assets/fluxfiles.js', FLUXFILES_PLUGIN_FILE), [], FLUXFILES_VERSION, true);
+    wp_add_inline_script('fluxfiles-sdk', 'FluxFiles.open(' . wp_json_encode([
+        'endpoint'  => FluxFilesPlugin::apiEndpoint(),
+        'token'     => FluxFilesPlugin::tokenForCurrentUser(),
+        'disk'      => 'local',
+        'mode'      => 'picker',
+        'container' => '#my-file-manager',
+    ]) . ');');
+    echo '<div id="my-file-manager" style="height:600px"></div>';
+}
 PHPSNIPPET;
 ?>
                         <div class="ff-code"><button type="button" class="button button-small ff-copy" data-copy-target="ff-php-snippet"><?php echo esc_html__('Copy', 'fluxfiles'); ?></button><pre id="ff-php-snippet"><code><?php echo esc_html($fluxfiles_php); ?></code></pre></div>

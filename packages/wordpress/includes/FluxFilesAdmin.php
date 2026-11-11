@@ -792,25 +792,35 @@ class FluxFilesAdmin
                     );
                     return;
                 }
-                $attrs = '';
+                // Every attribute is escaped where it is printed (Plugin Check cannot follow a
+                // pre-escaped string into printf()).
+                $extra = [];
                 foreach (['min', 'max', 'step', 'placeholder'] as $a) {
                     if (isset($args[$a])) {
-                        $attrs .= ' ' . $a . '="' . esc_attr((string) $args[$a]) . '"';
+                        $extra[$a] = (string) $args[$a];
                     }
                 }
-                $mode = $type === 'number' ? ' inputmode="numeric"' : '';
-                $hintHtml = !empty($args['hint']) ? '<p class="description" id="' . esc_attr($name) . '-hint">' . $args['hint'] . '</p>' : ''; // phpcs:ignore WordPress.Security.EscapeOutput -- escaped at the call site
+                if ($type === 'number') {
+                    $extra['inputmode'] = 'numeric';
+                }
+                $hint = !empty($args['hint']) ? (string) $args['hint'] : '';
+                if ($hint !== '') {
+                    $extra['aria-describedby'] = $name . '-hint';
+                }
                 printf(
-                    '<input type="%1$s" id="%2$s" name="%2$s" value="%3$s" class="%4$s"%5$s%6$s%7$s />%8$s',
+                    '<input type="%1$s" id="%2$s" name="%2$s" value="%3$s" class="%4$s"',
                     esc_attr($type),
                     esc_attr($name),
                     esc_attr($value),
-                    $type === 'number' ? 'small-text' : 'regular-text',
-                    $attrs,
-                    $mode,
-                    $hintHtml !== '' ? ' aria-describedby="' . esc_attr($name) . '-hint"' : '',
-                    $hintHtml // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from an escaped string above
+                    esc_attr($type === 'number' ? 'small-text' : 'regular-text')
                 );
+                foreach ($extra as $attr => $attrValue) {
+                    printf(' %s="%s"', esc_attr($attr), esc_attr($attrValue));
+                }
+                echo ' />';
+                if ($hint !== '') {
+                    printf('<p class="description" id="%s">%s</p>', esc_attr($name . '-hint'), wp_kses_post($hint));
+                }
             },
             'fluxfiles',
             $section,
