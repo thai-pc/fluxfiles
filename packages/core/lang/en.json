@@ -762,7 +762,34 @@
     "empty": "No upload portals yet.",
     "col_received": "Received",
     "revoke_confirm": "Revoke this upload portal? Nobody will be able to send files to it.",
-    "pro_teaser": "Let people send you files without an account — straight into your storage."
+    "pro_teaser": "Let people send you files without an account — straight into your storage.",
+    "request": {
+      "title": "Request documents",
+      "items_hint": "List the documents you need. The person you send the link to sees this checklist and tags each upload to an item.",
+      "item_ph": "e.g. Passport (photo page)",
+      "item_label": "Document name",
+      "required": "Required",
+      "remove": "Remove",
+      "add_item": "Add document",
+      "due": "Due date (optional)",
+      "client_email": "Client e-mail (optional)",
+      "client_hint": "Used only for this request. It is never shown on the upload page.",
+      "send_now": "E-mail the link to my client now",
+      "message": "Message to the client (optional)",
+      "err_label": "Each document name can be at most 80 characters.",
+      "err_unique": "Document names must be different from each other.",
+      "err_items": "Add between 1 and 20 documents.",
+      "err_due": "Pick a due date that is more than an hour away and before the link expires.",
+      "err_email": "Enter a valid client e-mail address.",
+      "err_message": "The message can be at most 1000 characters.",
+      "sent": "Request sent to {to}",
+      "not_sent": "The request e-mail could not be sent. Copy the link and send it yourself.",
+      "col": "Request",
+      "progress": "{done}/{total} documents",
+      "due_on": "Due {date}",
+      "overdue": "Overdue",
+      "complete": "Complete"
+    }
   },
   "compliance": {
     "title": "Compliance",
@@ -907,6 +934,22 @@
     "open_app": "Open in your file manager: {url}",
     "unlimited": "unlimited",
     "footer": "You get this e-mail because notifications are turned on for this item. To stop them, mute it in your file manager.",
-    "receipt_footer": "This is an automatic receipt."
+    "receipt_footer": "This is an automatic receipt.",
+    "ui": {
+      "email_me": "E-mail me about this",
+      "add_address": "Add an address",
+      "add_hint": "You may also add addresses on: {domains}",
+      "err_address": "That is not a valid e-mail address.",
+      "err_none": "Choose at least one recipient.",
+      "test_btn": "Send test e-mail",
+      "test_sent": "Test e-mail sent ({transport}).",
+      "test_failed": "Test e-mail failed ({transport}): {error}",
+      "mute": "Stop e-mails about this one",
+      "unmute": "Resume e-mails about this one",
+      "muted": "E-mails muted for this one.",
+      "unmuted": "E-mails resumed for this one.",
+      "muted_tip": "E-mails muted",
+      "on_tip": "E-mailing {n} recipient(s)"
+    }
   }
 }

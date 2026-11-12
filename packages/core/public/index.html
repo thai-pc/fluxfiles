@@ -1659,6 +1659,75 @@
                         </label>
                     </div>
                 </template>
+                <!-- E-mail notices: only offered when the token vouches for recipients. -->
+                <template x-if="notifyAvailable">
+                    <fieldset class="ff-notify-box" data-testid="notify-box">
+                        <label class="ff-check">
+                            <input type="checkbox" x-model="linkForm.notifyOn" data-testid="notify-on">
+                            <span x-text="t('notify.ui.email_me')"></span>
+                        </label>
+                        <div x-show="linkForm.notifyOn" class="ff-notify-rcpt">
+                            <template x-for="a in notifyAddrs" :key="a">
+                                <label class="ff-check">
+                                    <input type="checkbox" :value="a" x-model="linkForm.notifyTo" data-testid="notify-rcpt">
+                                    <span x-text="a"></span>
+                                </label>
+                            </template>
+                            <label class="ff-links-field" x-show="notifyDomains.length > 0">
+                                <span x-text="t('notify.ui.add_address')"></span>
+                                <input type="text" x-model="linkForm.notifyExtra" autocomplete="off" :placeholder="'name@' + (notifyDomains[0] || '')" data-testid="notify-extra">
+                                <small x-text="t('notify.ui.add_hint', { domains: notifyDomains.join(', ') })"></small>
+                            </label>
+                        </div>
+                    </fieldset>
+                </template>
+
+                <!-- Document requests (Intake only): a disclosure; closed = a plain portal. -->
+                <template x-if="linkModal === 'intake'">
+                    <div class="ff-req-box">
+                        <button type="button" class="ff-req-toggle" @click="linkForm.reqOpen = !linkForm.reqOpen"
+                                :aria-expanded="linkForm.reqOpen" data-testid="req-toggle">
+                            <span x-text="linkForm.reqOpen ? '\u25BE' : '\u25B8'" aria-hidden="true"></span>
+                            <span x-text="t('intake.request.title')"></span>
+                        </button>
+                        <div x-show="linkForm.reqOpen" class="ff-req-body">
+                            <p class="ff-req-hint" x-text="t('intake.request.items_hint')"></p>
+                            <template x-for="(it, i) in linkForm.reqItems" :key="i">
+                                <div class="ff-req-item">
+                                    <input type="text" x-model="it.label" maxlength="80" :placeholder="t('intake.request.item_ph')"
+                                           :aria-label="t('intake.request.item_label')" data-testid="req-label">
+                                    <label class="ff-check ff-req-required">
+                                        <input type="checkbox" x-model="it.required">
+                                        <span x-text="t('intake.request.required')"></span>
+                                    </label>
+                                    <button type="button" class="ff-btn ff-btn-sm" @click="removeReqItem(i)"
+                                            :aria-label="t('intake.request.remove')" :title="t('intake.request.remove')">&times;</button>
+                                </div>
+                            </template>
+                            <button type="button" class="ff-btn ff-btn-sm" :disabled="linkForm.reqItems.length >= 20"
+                                    @click="addReqItem()" x-text="t('intake.request.add_item')" data-testid="req-add"></button>
+                            <label class="ff-links-field ff-req-field">
+                                <span x-text="t('intake.request.due')"></span>
+                                <input type="date" x-model="linkForm.reqDue" data-testid="req-due">
+                            </label>
+                            <label class="ff-links-field">
+                                <span x-text="t('intake.request.client_email')"></span>
+                                <input type="email" x-model="linkForm.reqEmail" autocomplete="off" data-testid="req-email">
+                                <small x-text="t('intake.request.client_hint')"></small>
+                            </label>
+                            <label class="ff-check" x-show="linkForm.reqEmail.trim() !== ''">
+                                <input type="checkbox" x-model="linkForm.reqSendNow" data-testid="req-send-now">
+                                <span x-text="t('intake.request.send_now')"></span>
+                            </label>
+                            <label class="ff-links-field ff-req-field">
+                                <span x-text="t('intake.request.message')"></span>
+                                <textarea x-model="linkForm.reqMessage" maxlength="1000" rows="3" data-testid="req-message"></textarea>
+                            </label>
+                        </div>
+                    </div>
+                </template>
+
+                <p class="ff-new-folder-error ff-links-form-error" x-show="linkFormError" x-text="linkFormError" role="alert"></p>
                 <div class="ff-links-actions">
                     <button class="ff-btn" @click="closeLinkModal()" x-text="t('common.cancel')"></button>
                     <button class="ff-btn ff-btn-primary" :disabled="linkBusy" @click="submitLink()"
@@ -1677,6 +1746,9 @@
                         </div>
                     </div>
                 </template>
+                <p class="ff-links-sent" x-show="linkSentTo" data-testid="req-sent"
+                   x-text="t('intake.request.sent', { to: linkSentTo })"></p>
+                <p class="ff-links-sendfail" x-show="linkSendFailed" x-text="t('intake.request.not_sent')"></p>
                 <!-- Degenerate: no base URL configured. Never rebuild a URL from the token. -->
                 <p class="ff-new-folder-error" x-show="!linkResult?.url" x-text="t('links.no_url')"></p>
                 <div class="ff-links-actions">
@@ -1711,6 +1783,10 @@
                 <button :class="linksTab === 'intake' ? 'active' : ''" @click="setLinksTab('intake')" x-text="t('intake.manage')"></button>
             </div>
             <p class="ff-activity-note" x-text="t('links.note')"></p>
+            <div class="ff-links-toolbar" x-show="canNotifyTest">
+                <button class="ff-btn ff-btn-sm" :disabled="notifyTestBusy" @click="sendNotifyTest()"
+                        x-text="t('notify.ui.test_btn')" data-testid="notify-test"></button>
+            </div>
             <div class="ff-activity-body">
                 <p class="ff-new-folder-error" x-show="linksError" x-text="linksError"></p>
                 <p x-show="linksError && linksErrorIsInstall">
@@ -1740,6 +1816,13 @@
                                         <td>
                                             <span x-text="r.label || (r.path || '').split('/').pop()"></span>
                                             <span class="ff-links-lock" x-show="r.has_password" :title="t('links.col_password')">&#128274;</span>
+                                            <button type="button" class="ff-links-bell" x-show="r.has_notify"
+                                                    :class="r.notify_muted ? 'is-muted' : ''" :aria-pressed="!!r.notify_muted"
+                                                    :aria-label="r.notify_muted ? t('notify.ui.unmute') : t('notify.ui.mute')"
+                                                    :title="(r.notify_muted ? t('notify.ui.muted_tip') : t('notify.ui.on_tip', { n: r.notify_recipients ?? 0 }))"
+                                                    @click="toggleNotifyMute(r)" data-testid="notify-bell">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/><path class="ff-bell-strike" d="M3 3l18 18"/></svg>
+                                            </button>
                                         </td>
                                         <td class="ff-activity-file" :title="r.path" x-text="r.path || '—'"></td>
                                         <td :title="formatDate(r.expires)">
@@ -1768,6 +1851,7 @@
                                     <th x-text="t('links.col_target')"></th>
                                     <th x-text="t('links.col_expires')"></th>
                                     <th x-text="t('intake.col_received')"></th>
+                                    <th x-text="t('intake.request.col')"></th>
                                     <th x-text="t('intake.allowed_ext')"></th>
                                     <th x-text="t('links.col_link')"></th>
                                     <th></th>
@@ -1779,6 +1863,13 @@
                                         <td>
                                             <span x-text="r.label || (r.path || '').split('/').pop()"></span>
                                             <span class="ff-links-lock" x-show="r.has_password" :title="t('links.col_password')">&#128274;</span>
+                                            <button type="button" class="ff-links-bell" x-show="r.has_notify"
+                                                    :class="r.notify_muted ? 'is-muted' : ''" :aria-pressed="!!r.notify_muted"
+                                                    :aria-label="r.notify_muted ? t('notify.ui.unmute') : t('notify.ui.mute')"
+                                                    :title="(r.notify_muted ? t('notify.ui.muted_tip') : t('notify.ui.on_tip', { n: r.notify_recipients ?? 0 }))"
+                                                    @click="toggleNotifyMute(r)" data-testid="notify-bell">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/><path class="ff-bell-strike" d="M3 3l18 18"/></svg>
+                                            </button>
                                         </td>
                                         <td class="ff-activity-file" :title="r.path" x-text="r.path || '—'"></td>
                                         <td :title="formatDate(r.expires)">
@@ -1786,6 +1877,17 @@
                                             <span class="ff-links-badge" x-show="isLinkExpired(r)" x-text="t('links.expired')"></span>
                                         </td>
                                         <td x-text="(r.received ?? 0) + (r.max_files ? ' / ' + r.max_files : '')"></td>
+                                        <td class="ff-links-req" data-testid="req-cell">
+                                            <template x-if="r.request">
+                                                <div>
+                                                    <span x-text="requestProgress(r)"></span>
+                                                    <span class="ff-links-due" x-show="r.request.due_at" x-text="t('intake.request.due_on', { date: formatDate(r.request.due_at) })"></span>
+                                                    <span class="ff-links-badge ff-links-badge-warn" x-show="r.request.overdue && !r.request.complete_at" x-text="t('intake.request.overdue')"></span>
+                                                    <span class="ff-links-badge ff-links-badge-ok" x-show="r.request.complete_at" x-text="t('intake.request.complete')"></span>
+                                                </div>
+                                            </template>
+                                            <span x-show="!r.request">&mdash;</span>
+                                        </td>
                                         <td x-text="(r.allowed_ext && r.allowed_ext.length) ? r.allowed_ext.join(', ') : t('links.unlimited')"></td>
                                         <td class="ff-links-hidden" :title="t('links.link_hidden_hint')" x-text="t('links.link_hidden')"></td>
                                         <td><button class="ff-btn ff-btn-sm" @click="revokeLink(r.jti)" x-text="t('links.revoke')"></button></td>

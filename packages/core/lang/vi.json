@@ -762,7 +762,34 @@
     "empty": "Chưa có cổng nhận tệp nào.",
     "col_received": "Đã nhận",
     "revoke_confirm": "Thu hồi cổng nhận tệp này? Sẽ không ai gửi tệp vào đây được nữa.",
-    "pro_teaser": "Cho phép người khác gửi tệp cho bạn mà không cần tài khoản — vào thẳng kho lưu trữ của bạn."
+    "pro_teaser": "Cho phép người khác gửi tệp cho bạn mà không cần tài khoản — vào thẳng kho lưu trữ của bạn.",
+    "request": {
+      "title": "Yêu cầu tài liệu",
+      "items_hint": "Liệt kê các tài liệu bạn cần. Người nhận liên kết sẽ thấy danh sách này và gắn từng tệp tải lên vào một mục.",
+      "item_ph": "VD: Hộ chiếu (trang ảnh)",
+      "item_label": "Tên tài liệu",
+      "required": "Bắt buộc",
+      "remove": "Xóa",
+      "add_item": "Thêm tài liệu",
+      "due": "Hạn nộp (tùy chọn)",
+      "client_email": "E-mail khách hàng (tùy chọn)",
+      "client_hint": "Chỉ dùng cho yêu cầu này. Không bao giờ hiển thị trên trang tải lên.",
+      "send_now": "Gửi liên kết cho khách hàng ngay",
+      "message": "Lời nhắn cho khách hàng (tùy chọn)",
+      "err_label": "Tên mỗi tài liệu tối đa 80 ký tự.",
+      "err_unique": "Tên các tài liệu phải khác nhau.",
+      "err_items": "Hãy thêm từ 1 đến 20 tài liệu.",
+      "err_due": "Chọn hạn nộp cách hiện tại hơn một giờ và trước khi liên kết hết hạn.",
+      "err_email": "Hãy nhập địa chỉ e-mail khách hàng hợp lệ.",
+      "err_message": "Lời nhắn tối đa 1000 ký tự.",
+      "sent": "Đã gửi yêu cầu tới {to}",
+      "not_sent": "Không gửi được e-mail yêu cầu. Hãy sao chép liên kết và tự gửi.",
+      "col": "Yêu cầu",
+      "progress": "{done}/{total} tài liệu",
+      "due_on": "Hạn {date}",
+      "overdue": "Quá hạn",
+      "complete": "Hoàn tất"
+    }
   },
   "compliance": {
     "title": "Tuân thủ",
@@ -907,6 +934,22 @@
     "open_app": "Mở trong trình quản lý tệp của bạn: {url}",
     "unlimited": "không giới hạn",
     "footer": "Bạn nhận được e-mail này vì thông báo đang được bật cho mục này. Để dừng nhận, hãy tắt thông báo trong trình quản lý tệp của bạn.",
-    "receipt_footer": "Đây là biên nhận tự động."
+    "receipt_footer": "Đây là biên nhận tự động.",
+    "ui": {
+      "email_me": "Gửi e-mail cho tôi về mục này",
+      "add_address": "Thêm địa chỉ",
+      "add_hint": "Bạn cũng có thể thêm địa chỉ thuộc: {domains}",
+      "err_address": "Địa chỉ e-mail không hợp lệ.",
+      "err_none": "Hãy chọn ít nhất một người nhận.",
+      "test_btn": "Gửi e-mail thử",
+      "test_sent": "Đã gửi e-mail thử ({transport}).",
+      "test_failed": "Gửi e-mail thử thất bại ({transport}): {error}",
+      "mute": "Ngừng gửi e-mail về mục này",
+      "unmute": "Tiếp tục gửi e-mail về mục này",
+      "muted": "Đã tắt e-mail cho mục này.",
+      "unmuted": "Đã bật lại e-mail cho mục này.",
+      "muted_tip": "E-mail đã tắt",
+      "on_tip": "Đang gửi e-mail cho {n} người nhận"
+    }
   }
 }

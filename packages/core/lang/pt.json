@@ -762,7 +762,34 @@
     "empty": "Ainda não há portais de envio.",
     "col_received": "Recebidos",
     "revoke_confirm": "Revogar este portal de envio? Ninguém poderá mais enviar arquivos.",
-    "pro_teaser": "Deixe que enviem arquivos para você sem conta — direto no seu armazenamento."
+    "pro_teaser": "Deixe que enviem arquivos para você sem conta — direto no seu armazenamento.",
+    "request": {
+      "title": "Solicitar documentos",
+      "items_hint": "Liste os documentos de que precisa. Quem receber o link verá esta lista e associará cada envio a um item.",
+      "item_ph": "ex.: Passaporte (página da foto)",
+      "item_label": "Nome do documento",
+      "required": "Obrigatório",
+      "remove": "Remover",
+      "add_item": "Adicionar documento",
+      "due": "Data limite (opcional)",
+      "client_email": "E-mail do cliente (opcional)",
+      "client_hint": "Usado apenas nesta solicitação. Nunca é mostrado na página de envio.",
+      "send_now": "Enviar agora o link ao meu cliente por e-mail",
+      "message": "Mensagem para o cliente (opcional)",
+      "err_label": "Cada nome de documento pode ter no máximo 80 caracteres.",
+      "err_unique": "Os nomes dos documentos devem ser diferentes entre si.",
+      "err_items": "Adicione de 1 a 20 documentos.",
+      "err_due": "Escolha uma data limite com mais de uma hora de antecedência e antes de o link expirar.",
+      "err_email": "Informe um e-mail de cliente válido.",
+      "err_message": "A mensagem pode ter no máximo 1000 caracteres.",
+      "sent": "Solicitação enviada para {to}",
+      "not_sent": "Não foi possível enviar o e-mail da solicitação. Copie o link e envie você mesmo.",
+      "col": "Solicitação",
+      "progress": "{done}/{total} documentos",
+      "due_on": "Vence em {date}",
+      "overdue": "Atrasado",
+      "complete": "Concluído"
+    }
   },
   "compliance": {
     "title": "Conformidade",
@@ -907,6 +934,22 @@
     "open_app": "Abrir no seu gerenciador de arquivos: {url}",
     "unlimited": "ilimitado",
     "footer": "Você recebe este e-mail porque as notificações estão ativadas para este item. Para interrompê-las, silencie-o no seu gerenciador de arquivos.",
-    "receipt_footer": "Este é um recibo automático."
+    "receipt_footer": "Este é um recibo automático.",
+    "ui": {
+      "email_me": "Avisar-me por e-mail sobre isto",
+      "add_address": "Adicionar um endereço",
+      "add_hint": "Também pode adicionar endereços de: {domains}",
+      "err_address": "Este não é um endereço de e-mail válido.",
+      "err_none": "Escolha pelo menos um destinatário.",
+      "test_btn": "Enviar e-mail de teste",
+      "test_sent": "E-mail de teste enviado ({transport}).",
+      "test_failed": "Falha no e-mail de teste ({transport}): {error}",
+      "mute": "Silenciar e-mails deste item",
+      "unmute": "Retomar e-mails deste item",
+      "muted": "E-mails silenciados para este item.",
+      "unmuted": "E-mails retomados para este item.",
+      "muted_tip": "E-mails silenciados",
+      "on_tip": "Enviando e-mail para {n} destinatário(s)"
+    }
   }
 }

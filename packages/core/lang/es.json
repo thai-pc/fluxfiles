@@ -762,7 +762,34 @@
     "empty": "Aún no hay portales de subida.",
     "col_received": "Recibidos",
     "revoke_confirm": "¿Revocar este portal de subida? Nadie podrá enviarte archivos por él.",
-    "pro_teaser": "Deja que te envíen archivos sin necesidad de cuenta, directamente a tu almacenamiento."
+    "pro_teaser": "Deja que te envíen archivos sin necesidad de cuenta, directamente a tu almacenamiento.",
+    "request": {
+      "title": "Solicitar documentos",
+      "items_hint": "Indique los documentos que necesita. Quien reciba el enlace verá esta lista y asignará cada archivo subido a un elemento.",
+      "item_ph": "p. ej. Pasaporte (página de la foto)",
+      "item_label": "Nombre del documento",
+      "required": "Obligatorio",
+      "remove": "Quitar",
+      "add_item": "Añadir documento",
+      "due": "Fecha límite (opcional)",
+      "client_email": "Correo del cliente (opcional)",
+      "client_hint": "Solo se usa para esta solicitud. Nunca se muestra en la página de subida.",
+      "send_now": "Enviar ahora el enlace a mi cliente por correo",
+      "message": "Mensaje para el cliente (opcional)",
+      "err_label": "Cada nombre de documento admite como máximo 80 caracteres.",
+      "err_unique": "Los nombres de los documentos deben ser distintos.",
+      "err_items": "Añada entre 1 y 20 documentos.",
+      "err_due": "Elija una fecha límite a más de una hora de distancia y anterior a la caducidad del enlace.",
+      "err_email": "Introduzca un correo de cliente válido.",
+      "err_message": "El mensaje admite como máximo 1000 caracteres.",
+      "sent": "Solicitud enviada a {to}",
+      "not_sent": "No se pudo enviar el correo de la solicitud. Copie el enlace y envíelo usted mismo.",
+      "col": "Solicitud",
+      "progress": "{done}/{total} documentos",
+      "due_on": "Vence el {date}",
+      "overdue": "Vencido",
+      "complete": "Completo"
+    }
   },
   "compliance": {
     "title": "Cumplimiento",
@@ -907,6 +934,22 @@
     "open_app": "Abrir en tu gestor de archivos: {url}",
     "unlimited": "ilimitado",
     "footer": "Recibes este correo porque las notificaciones están activadas para este elemento. Para detenerlas, silénciala en tu gestor de archivos.",
-    "receipt_footer": "Este es un acuse de recibo automático."
+    "receipt_footer": "Este es un acuse de recibo automático.",
+    "ui": {
+      "email_me": "Avisarme por correo sobre esto",
+      "add_address": "Añadir una dirección",
+      "add_hint": "También puede añadir direcciones de: {domains}",
+      "err_address": "Esa no es una dirección de correo válida.",
+      "err_none": "Elija al menos un destinatario.",
+      "test_btn": "Enviar correo de prueba",
+      "test_sent": "Correo de prueba enviado ({transport}).",
+      "test_failed": "Falló el correo de prueba ({transport}): {error}",
+      "mute": "Silenciar los correos de este elemento",
+      "unmute": "Reanudar los correos de este elemento",
+      "muted": "Correos silenciados para este elemento.",
+      "unmuted": "Correos reanudados para este elemento.",
+      "muted_tip": "Correos silenciados",
+      "on_tip": "Se enviará correo a {n} destinatario(s)"
+    }
   }
 }

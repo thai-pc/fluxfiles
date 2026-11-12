@@ -762,7 +762,34 @@
     "empty": "Noch keine Upload-Portale.",
     "col_received": "Empfangen",
     "revoke_confirm": "Dieses Upload-Portal widerrufen? Niemand kann dann noch Dateien senden.",
-    "pro_teaser": "Lassen Sie andere Ihnen Dateien ohne Konto senden — direkt in Ihren Speicher."
+    "pro_teaser": "Lassen Sie andere Ihnen Dateien ohne Konto senden — direkt in Ihren Speicher.",
+    "request": {
+      "title": "Dokumente anfordern",
+      "items_hint": "Listen Sie die benötigten Dokumente auf. Wer den Link erhält, sieht diese Checkliste und ordnet jeden Upload einem Eintrag zu.",
+      "item_ph": "z. B. Reisepass (Fotoseite)",
+      "item_label": "Dokumentname",
+      "required": "Erforderlich",
+      "remove": "Entfernen",
+      "add_item": "Dokument hinzufügen",
+      "due": "Fälligkeitsdatum (optional)",
+      "client_email": "E-Mail des Kunden (optional)",
+      "client_hint": "Wird nur für diese Anfrage verwendet und nie auf der Upload-Seite angezeigt.",
+      "send_now": "Link jetzt per E-Mail an meinen Kunden senden",
+      "message": "Nachricht an den Kunden (optional)",
+      "err_label": "Jeder Dokumentname darf höchstens 80 Zeichen haben.",
+      "err_unique": "Die Dokumentnamen müssen sich unterscheiden.",
+      "err_items": "Fügen Sie 1 bis 20 Dokumente hinzu.",
+      "err_due": "Wählen Sie ein Fälligkeitsdatum, das mehr als eine Stunde entfernt liegt und vor Ablauf des Links.",
+      "err_email": "Geben Sie eine gültige E-Mail-Adresse des Kunden ein.",
+      "err_message": "Die Nachricht darf höchstens 1000 Zeichen haben.",
+      "sent": "Anfrage an {to} gesendet",
+      "not_sent": "Die Anfrage-E-Mail konnte nicht gesendet werden. Kopieren Sie den Link und senden Sie ihn selbst.",
+      "col": "Anfrage",
+      "progress": "{done}/{total} Dokumente",
+      "due_on": "Fällig am {date}",
+      "overdue": "Überfällig",
+      "complete": "Vollständig"
+    }
   },
   "compliance": {
     "title": "Compliance",
@@ -907,6 +934,22 @@
     "open_app": "In Ihrem Dateimanager öffnen: {url}",
     "unlimited": "unbegrenzt",
     "footer": "Sie erhalten diese E-Mail, weil Benachrichtigungen für dieses Element aktiviert sind. Um sie zu beenden, schalten Sie es in Ihrem Dateimanager stumm.",
-    "receipt_footer": "Dies ist eine automatische Empfangsbestätigung."
+    "receipt_footer": "Dies ist eine automatische Empfangsbestätigung.",
+    "ui": {
+      "email_me": "Mich per E-Mail benachrichtigen",
+      "add_address": "Adresse hinzufügen",
+      "add_hint": "Sie können auch Adressen dieser Domains hinzufügen: {domains}",
+      "err_address": "Das ist keine gültige E-Mail-Adresse.",
+      "err_none": "Wählen Sie mindestens einen Empfänger.",
+      "test_btn": "Test-E-Mail senden",
+      "test_sent": "Test-E-Mail gesendet ({transport}).",
+      "test_failed": "Test-E-Mail fehlgeschlagen ({transport}): {error}",
+      "mute": "E-Mails zu diesem Eintrag stummschalten",
+      "unmute": "E-Mails zu diesem Eintrag wieder aktivieren",
+      "muted": "E-Mails für diesen Eintrag stummgeschaltet.",
+      "unmuted": "E-Mails für diesen Eintrag wieder aktiviert.",
+      "muted_tip": "E-Mails stummgeschaltet",
+      "on_tip": "E-Mail an {n} Empfänger"
+    }
   }
 }
