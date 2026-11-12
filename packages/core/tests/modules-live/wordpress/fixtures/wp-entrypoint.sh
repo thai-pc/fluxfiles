@@ -13,7 +13,7 @@ wp core is-installed 2>/dev/null || wp core install --url=http://localhost:8390 
   --admin_user=admin --admin_password=password --admin_email=admin@example.test --skip-email --quiet
 wp plugin activate fluxfiles --quiet
 wp option update fluxfiles_secret "$FF_E2E_SECRET" --quiet
-# The licence goes where a WordPress customer pastes it (Settings → FluxFiles → Licence).
+# The licence option the rig's Pro stand-in (fixtures/fluxfiles-live.php) verifies.
 printf '%s' "$FF_E2E_LICENSE" | wp option update fluxfiles_license_key --quiet
 # Second disk for Backup: the plugin's own S3 settings, pointed at LocalStack.
 wp option update fluxfiles_s3_bucket ff-backup --quiet
@@ -22,10 +22,7 @@ wp option update fluxfiles_s3_key test --quiet
 wp option update fluxfiles_s3_secret test --quiet
 wp option update fluxfiles_s3_endpoint http://localstack:4566 --quiet
 wp option update fluxfiles_disks '["local","s3"]' --format=json --quiet
-# Module engine settings: the plugin's "Module engines" option (Settings → FluxFiles),
-# the way a shared-hosting customer sets them. FLUXFILES_C2PA_MANIFEST stays a REAL
-# env var (wp.env) so the rig also proves an env var wins over / coexists with the option.
-wp option update fluxfiles_module_env "$(cat /wpfixtures/module-env.json)" --format=json --quiet
+# Module engine settings are real env vars (wp.env): the free plugin has no option for them.
 # Module claims: the edition preset + per-module tuning, through the filter above.
 wp option update fluxfiles_e2e_overrides "$(cat /wpfixtures/overrides.json)" --quiet
 mkdir -p wp-content/mu-plugins && cp /wpfixtures/fluxfiles-live.php wp-content/mu-plugins/

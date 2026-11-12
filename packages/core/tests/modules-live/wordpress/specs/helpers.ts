@@ -137,6 +137,7 @@ export async function grantAuditViaSettings(page: Page) {
   wp('option', 'update', 'fluxfiles_default_perms', '["read","write","delete"]', '--format=json');
   await loginAdmin(page);
   await page.goto(`${BASE}/wp-admin/options-general.php?page=fluxfiles`);
+  await page.getByRole('tab', { name: 'Access' }).click();   // the settings screen is tabbed since d2f021f
   const audit = page.locator('input[name="fluxfiles_default_perms[]"][value="audit"]');
   await expect(audit).toHaveCount(1);
   await audit.check();

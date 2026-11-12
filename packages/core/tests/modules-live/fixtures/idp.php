@@ -1,10 +1,11 @@
 <?php
 // A minimal but real OIDC provider for the SSO module: discovery, JWKS,
 // an authorize page with a "Sign in" button, and a PKCE-checking token endpoint
-// that mints RS256 id_tokens. Base URL = http://ff-idp:8191 for BOTH the core
-// container (compose DNS) and the browser (Playwright maps ff-idp → 127.0.0.1).
+// that mints RS256 id_tokens. Base URL = http://localhost:8191 for BOTH the core
+// container (ff-idp shares core's network namespace) and the browser (published port):
+// core accepts a plain-http issuer only on loopback (OidcDiscovery, core-v1.1.9+).
 require_once '/app/core/vendor/autoload.php';
-$base = 'http://ff-idp:8191';
+$base = 'http://localhost:8191';   // loopback for core (shared netns) AND the browser: core accepts http only on loopback
 $client = getenv('IDP_CLIENT_ID') ?: 'fluxfiles-live';
 $keyFile = '/tmp/idp-key.pem';
 if (!is_file($keyFile)) {
