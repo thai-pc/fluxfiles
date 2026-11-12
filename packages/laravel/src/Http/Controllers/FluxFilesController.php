@@ -2220,7 +2220,12 @@ class FluxFilesController
             $body = $request->all();
             $res = $module === 'share'
                 ? $mod->createShare($fm, $this->diskManager, $claims, $secret, $body)
-                : $mod->createPortal($fm, $this->diskManager, $claims, $secret, $body);
+                : $mod->createPortal($fm, $this->diskManager, $claims, $secret, $body,
+                    // Document requests: the "e-mail the link to my client now" send + its audit line.
+                    is_array($body['request'] ?? null) && !empty($body['request']['send_now']) ? $this->mailer() : null,
+                    function (string $disk, string $key, string $detail) use ($claims): void {
+                        $this->logAuditQuiet($claims, 'notify_sent', $disk, $key, $detail);
+                    });
             // Minting a public link is exactly what an access review must be able to see.
 
             // The recipient URL. The module builds it when the token carries a base

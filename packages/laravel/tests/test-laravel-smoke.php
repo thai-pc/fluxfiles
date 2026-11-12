@@ -251,6 +251,16 @@ test('token() forwards versioning + webhook config claims, not just the gate', f
 // claims — and the config that travels with them (link base, presigned-URL TTL,
 // preview policy, analytics — all read at create time) — forward unconditionally
 // in both modes, same as the other module gates below.
+test('intake_base_url defaults to the adapter page (app.url) once Intake is on, so a document request can e-mail the link', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $p = \FluxFiles\JwtCompat::decode($mgr->token(71, ['allow_intake' => true]), $secret);
+    assertEqual(FluxFilesManager::publicLinkUrl('intake.html'), $p->intake_base_url ?? '', 'default base');
+    assertTrue(str_starts_with((string) ($p->intake_base_url ?? ''), 'http'), 'an http(s) base the module trusts');
+    $off = \FluxFiles\JwtCompat::decode($mgr->token(72, []), $secret);
+    assertTrue(!isset($off->intake_base_url), 'no Intake, no base');
+    $own = \FluxFiles\JwtCompat::decode($mgr->token(73, ['allow_intake' => true, 'intake_base_url' => 'https://x.test/p.html']), $secret);
+    assertEqual('https://x.test/p.html', $own->intake_base_url ?? '', 'an explicit base wins');
+});
 test('share/intake gates + their config forward in proxy mode', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $overrides = [

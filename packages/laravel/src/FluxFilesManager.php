@@ -395,6 +395,12 @@ class FluxFilesManager
         // Intake portal link base — the same role for `allow_intake`.
         if (!empty($overrides['intake_base_url'])) {
             $payload['intake_base_url'] = (string) $overrides['intake_base_url'];
+        } elseif (!empty($payload['allow_intake'])) {
+            // Default to the page this adapter serves (config('app.url'), a trusted base): an
+            // Intake document request e-mails the portal link to the client, and the module
+            // only trusts a configured base URL for that, never the request's Host header.
+            // Same URL the controller already falls back to for the create response.
+            $payload['intake_base_url'] = self::publicLinkUrl('intake.html');
         }
         if (array_key_exists('intake_analytics', $overrides)) {
             $payload['intake_analytics'] = (bool) $overrides['intake_analytics'];
