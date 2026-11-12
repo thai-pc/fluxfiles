@@ -2220,7 +2220,12 @@ class FluxFilesController
             $body = $request->all();
             $res = $module === 'share'
                 ? $mod->createShare($fm, $this->diskManager, $claims, $secret, $body)
-                : $mod->createPortal($fm, $this->diskManager, $claims, $secret, $body);
+                : $mod->createPortal($fm, $this->diskManager, $claims, $secret, $body,
+                    // Document requests: the "e-mail the link to my client now" send + its audit line.
+                    is_array($body['request'] ?? null) && !empty($body['request']['send_now']) ? $this->mailer() : null,
+                    function (string $disk, string $key, string $detail) use ($claims): void {
+                        $this->logAuditQuiet($claims, 'notify_sent', $disk, $key, $detail);
+                    });
             // Minting a public link is exactly what an access review must be able to see.
 
             // The recipient URL. The module builds it when the token carries a base
@@ -2295,29 +2300,10 @@ class FluxFilesController
         );
     }
 
-    /**
-     * The transport for e-mail notices on Laravel:
-     *  1. a provider configured explicitly for FluxFiles (FLUXFILES_MAIL_TRANSPORT in env);
-     *  2. otherwise the application's own mailer (`Mail::raw`, config/mail.php), or the one
-     *     named by FLUXFILES_LARAVEL_MAILER.
-     * null on an installed core that predates the mail layer.
-     */
+    /** The transport for e-mail notices (see {@see \FluxFiles\Laravel\MailerResolver}). */
     private function mailer(?string &$why = null): ?\FluxFiles\Mail\MailTransportInterface
     {
-        $why = null;
-        if (!interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
-            $why = 'this FluxFiles core has no e-mail support';
-            return null;
-        }
-        if (trim((string) ($_ENV['FLUXFILES_MAIL_TRANSPORT'] ?? '')) !== '') {
-            return \FluxFiles\Mail\MailTransportFactory::fromEnv(null, null, $why);
-        }
-        if (!class_exists(\Illuminate\Support\Facades\Mail::class)) {
-            $why = 'the application has no mailer';
-            return null;
-        }
-        $named = trim((string) ($_ENV['FLUXFILES_LARAVEL_MAILER'] ?? ''));
-        return new \FluxFiles\Laravel\LaravelMailTransport($named !== '' ? $named : null);
+        return \FluxFiles\Laravel\MailerResolver::resolve($why);
     }
 
     public function shareInfo(): void { $this->publicLink('share', '/api/fm/share/info'); }

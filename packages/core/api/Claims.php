@@ -294,6 +294,8 @@ class Claims
     public const NOTIFY_EVENTS = [
         'intake_received', 'intake_full', 'intake_expiring', 'intake_receipt',
         'share_first_download', 'share_exhausted', 'share_expiring', 'share_expired',
+        // Intake document requests (docs/design/INTAKE-DOCUMENT-REQUESTS-DESIGN.md).
+        'intake_request', 'intake_reminder', 'intake_overdue', 'intake_complete',
     ];
 
     /** @var string[] Recipients the operator vouches for (≤ 5, validated, lower-cased).
@@ -318,6 +320,9 @@ class Claims
     public bool $notifyIncludeNames = true;
     /** @var bool Offer "e-mail me a receipt" on the portal page and send `intake_receipt`. */
     public bool $intakeNotifyReceipt = false;
+    /** @var bool A document request may e-mail ANY client address the operator types at create
+     *  (otherwise only addresses passing notify_to / notify_recipient_domains). Default off. */
+    public bool $intakeRequestAnyRecipient = false;
 
     /** @var bool Auto-optimize images on upload (recompress to WebP in the pipeline)?
      *            Default FALSE. Like allow_optimize, only effective when the module
@@ -913,6 +918,7 @@ class Claims
             ? max(60, min(3600, (int) $payload->notify_batch_window)) : 600;
         $c->notifyIncludeNames = isset($payload->notify_include_names) ? (bool) $payload->notify_include_names : true;
         $c->intakeNotifyReceipt = (bool) ($payload->intake_notify_receipt ?? false);
+        $c->intakeRequestAnyRecipient = (bool) ($payload->intake_request_any_recipient ?? false);
         $c->allowAiVision = (bool) ($payload->allow_ai_vision ?? false);
         $c->allowOcr = (bool) ($payload->allow_ocr ?? false);
         $c->allowVirusScan = (bool) ($payload->allow_virus_scan ?? false);

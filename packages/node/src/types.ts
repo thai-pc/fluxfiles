@@ -215,6 +215,8 @@ export interface BaseTokenOptions {
   notifyIncludeNames?: boolean;
   /** Offer "e-mail me a receipt" on the portal page. Default false. */
   intakeNotifyReceipt?: boolean;
+  /** A document request may e-mail any client address typed at create. Default false. */
+  intakeRequestAnyRecipient?: boolean;
   /** Intake portal branding — same four fields and same decode-time sanitizing as
    *  the `shareBrand*` options above, applied to the upload portal instead. */
   intakeBrandName?: string;
