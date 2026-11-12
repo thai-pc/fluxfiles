@@ -261,6 +261,12 @@ test('intake_base_url defaults to the adapter page (app.url) once Intake is on, 
     $own = \FluxFiles\JwtCompat::decode($mgr->token(73, ['allow_intake' => true, 'intake_base_url' => 'https://x.test/p.html']), $secret);
     assertEqual('https://x.test/p.html', $own->intake_base_url ?? '', 'an explicit base wins');
 });
+test('createPortal gets a mailer only for request.send_now, plus an audit callback', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    $call = substr($src, (int) strpos($src, '$mod->createPortal('), 700);
+    assertTrue(str_contains($call, "!empty(\$body['request']['send_now']) ? \$this->mailer() : null"), 'mailer only for send_now');
+    assertTrue(str_contains($call, "logAuditQuiet(\$claims, 'notify_sent'"), 'audit callback writes notify_sent');
+});
 test('share/intake gates + their config forward in proxy mode', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $overrides = [
@@ -275,6 +281,7 @@ test('share/intake gates + their config forward in proxy mode', function () use 
         'notify_to'        => ['ops@acme.com'],
         'notify_batch_window' => 300,
         'intake_notify_receipt' => true,
+        'intake_request_any_recipient' => true,
     ];
     // Assert on the RAW JWT payload, not Claims — the adapter only writes payload
     // keys (no new core API), so this stays valid against the declared core floor.
@@ -290,6 +297,9 @@ test('share/intake gates + their config forward in proxy mode', function () use 
     assertEqual(['ops@acme.com'], $p->notify_to ?? null, 'notify_to forwarded');
     assertEqual(300, $p->notify_batch_window ?? null, 'notify_batch_window forwarded');
     assertEqual(true, $p->intake_notify_receipt ?? null, 'intake_notify_receipt forwarded');
+    assertEqual(true, $p->intake_request_any_recipient ?? null, 'intake_request_any_recipient forwarded');
+    $none = \FluxFiles\JwtCompat::decode($mgr->token(58, ['allow_intake' => true]), $secret);
+    assertTrue(!isset($none->intake_request_any_recipient), 'not set unless asked for');
 
     // …including via the edition preset, which defaults both gates for 'pro'.
     $pro = \FluxFiles\JwtCompat::decode($mgr->token(57, ['edition' => 'pro']), $secret);
@@ -1980,13 +1990,15 @@ if (interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
     });
 
     // fluxfiles:notify-run (design INTAKE-DOCUMENT-REQUESTS §11). Needs a core that ships the sweep.
-    if (class_exists(\FluxFiles\NotifyEndpoint::class) && interface_exists(\FluxFiles\NotifyProviderInterface::class)) {
+    if (class_exists(\FluxFiles\NotifyScheduler::class) && interface_exists(\FluxFiles\NotifyProviderInterface::class)) {
         require_once __DIR__ . '/../src/Console/NotifyRunCommand.php';
         eval('namespace FluxFiles\Laravel\Tests; final class FakeNotifyIntake implements \FluxFiles\ModuleInterface, \FluxFiles\NotifyProviderInterface {
-            public static array $seen = [];
+            public static array $seen = []; public static array $prefixes = []; public static bool $fail = false;
             public static function id(): string { return "intake"; }
             public static function claim(): string { return "allow_intake"; }
             public function runNotify(\FluxFiles\DiskManager $dm, \FluxFiles\Claims $c, string $disk, ?\FluxFiles\Mail\MailTransportInterface $m, bool $dry, int $max, string $secret, ?callable $audit = null): array {
+                self::$prefixes[] = $c->pathPrefix;
+                if (self::$fail) { throw new \RuntimeException("storage down"); }
                 self::$seen = ["claims" => $c, "disk" => $disk, "dry" => $dry, "max" => $max, "mailer" => $m !== null ? $m->name() : null];
                 return ["sent" => $dry ? 0 : 3, "coalesced" => 1, "rate_limited" => 0, "truncated" => false, "items" => []];
             }
@@ -1997,9 +2009,9 @@ if (interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
             @mkdir($root, 0775, true);
             $base = [
                 'fluxfiles.disks' => ['local' => ['driver' => 'local', 'root' => $root]],
-                'fluxfiles.notify' => ['to' => 'Boss@Acme.com, ops@acme.com', 'locale' => 'de', 'from_name' => 'Acme', 'reply_to' => 'help@acme.com', 'app_url' => 'https://files.acme.com'],
             ];
-            \Illuminate\Console\Command::$opts = $opts + ['disk' => 'local', 'prefix' => '', 'dry-run' => false, 'max' => '50'];
+            \Illuminate\Console\Command::$opts = $opts + ['disk' => 'local', 'prefix' => [], 'prefixes-file' => '', 'discover' => false, 'dry-run' => false, 'max' => '50'];
+            \FluxFiles\Laravel\Tests\FakeNotifyIntake::$prefixes = [];
             \FluxFiles\ModuleRegistry::register('intake', \FluxFiles\Laravel\Tests\FakeNotifyIntake::class);
             \FluxFiles\ModuleRegistry::setLicenseResolver(static fn () => new class implements \FluxFiles\LicenseCheckInterface {
                 public function licensed(string $module): bool { return true; }
@@ -2015,18 +2027,37 @@ if (interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
                 \FluxFiles\ModuleRegistry::setLicenseResolver(null);
             }
         };
-        test('notify-run: registered, claims built from config(fluxfiles.notify), mail through the shared resolver', function () use ($notifyRun) {
+        test('notify-run: registered, claims carry gates/disk/prefix only, mail through the shared resolver', function () use ($notifyRun) {
             assertTrue(str_contains((string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php'), 'Console\NotifyRunCommand::class'), 'registered in the provider');
-            [$code, $out] = $notifyRun(['prefix' => '/t1/', 'max' => '7']);
+            [$code, $out] = $notifyRun(['prefix' => ['/t1/'], 'max' => '7']);
             assertEqual(0, $code, implode("\n", $out));
             $seen = \FluxFiles\Laravel\Tests\FakeNotifyIntake::$seen;
-            assertEqual(['boss@acme.com', 'ops@acme.com'], $seen['claims']->notifyTo);
-            assertEqual('de', $seen['claims']->notifyLocale);
-            assertEqual('https://files.acme.com', $seen['claims']->notifyAppUrl);
+            assertEqual([], $seen['claims']->notifyTo);
             assertEqual('t1', $seen['claims']->pathPrefix);
             assertEqual(7, $seen['max']);
             assertEqual('laravel_mail', $seen['mailer']);
-            assertTrue(str_contains(implode("\n", $out), 'sent 3'), implode("\n", $out));
+            assertTrue(str_contains(implode("\n", $out), 'swept 1 store, sent 3'), implode("\n", $out));
+        });
+        test('notify-run: --prefix is repeatable, --prefixes-file adds lines, --discover walks a local disk', function () use ($notifyRun, $ffTmp) {
+            [$code] = $notifyRun(['prefix' => ['a', 'b/c']]);
+            assertEqual(0, $code); assertEqual(['a', 'b/c'], \FluxFiles\Laravel\Tests\FakeNotifyIntake::$prefixes);
+            $f = $ffTmp . '/prefixes.txt';
+            file_put_contents($f, "# tenants\nusers/1\n\nusers/2\n");
+            $notifyRun(['prefix' => ['x'], 'prefixes-file' => $f]);
+            assertEqual(['x', 'users/1', 'users/2'], \FluxFiles\Laravel\Tests\FakeNotifyIntake::$prefixes);
+            assertEqual(1, $notifyRun(['prefixes-file' => $ffTmp . '/missing.txt'])[0]);
+            @mkdir($ffTmp . '/notify-disk/users/9/_fluxfiles', 0775, true);
+            file_put_contents($ffTmp . '/notify-disk/users/9/_fluxfiles/intakes.json', '{}');
+            [$code, $out] = $notifyRun(['discover' => true]);
+            assertEqual(0, $code, implode("\n", $out)); assertEqual(['users/9'], \FluxFiles\Laravel\Tests\FakeNotifyIntake::$prefixes);
+        });
+        test('notify-run: a short secret is a clear error, a failing store exits 2 without a stack dump', function () use ($notifyRun) {
+            [$code, $out] = $notifyRun([], ['fluxfiles.secret' => 'short']);
+            assertEqual(1, $code); assertTrue(str_contains(implode("\n", $out), 'FLUXFILES_SECRET'), implode("\n", $out));
+            \FluxFiles\Laravel\Tests\FakeNotifyIntake::$fail = true;
+            try { [$code, $out] = $notifyRun(['prefix' => ['t1']]); } finally { \FluxFiles\Laravel\Tests\FakeNotifyIntake::$fail = false; }
+            assertEqual(2, $code); assertTrue(str_contains(implode("\n", $out), "Store 't1' failed"), implode("\n", $out));
+            assertTrue(!str_contains(implode("\n", $out), '#0'), 'no stack trace');
         });
         test('notify-run: --dry-run sends nothing; a bad --max or unknown disk fails fast', function () use ($notifyRun) {
             [$code, $out] = $notifyRun(['dry-run' => true]);
@@ -2036,7 +2067,7 @@ if (interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
             assertEqual(1, $notifyRun(['disk' => 'nope'])[0]);
         });
         test('notify-run: no module installed is a clean failure, not a crash', function () use ($notifyRun, $ffTmp) {
-            \Illuminate\Console\Command::$opts = ['disk' => 'local', 'prefix' => '', 'dry-run' => false, 'max' => '50'];
+            \Illuminate\Console\Command::$opts = ['disk' => 'local', 'prefix' => [], 'prefixes-file' => '', 'discover' => false, 'dry-run' => false, 'max' => '50'];
             \FluxFiles\ModuleRegistry::reset();
             $cmd = new \FluxFiles\Laravel\Console\NotifyRunCommand();
             $code = withConfig(['fluxfiles.disks' => ['local' => ['driver' => 'local', 'root' => $ffTmp . '/notify-disk']]], fn () => $cmd->handle());

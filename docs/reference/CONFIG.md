@@ -369,11 +369,6 @@ private-local-media requirement.
 | `FLUXFILES_NOTIFY_ADDRESS_DAILY` | `100` | Notices per recipient address per day, across all records (the limiter key is a hash, no address is stored). |
 | `FLUXFILES_NOTIFY_RECEIPT_LIMIT` | `10` | Submitter receipts per portal per hour. |
 | `FLUXFILES_NOTIFY_RECEIPT_ADDRESS_DAILY` | `3` | Submitter receipts per address per day; also caps document-request mails (request, reminders, complete) per client address per day. |
-| `FLUXFILES_NOTIFY_TO` | — | **Scheduler commands only** (`fluxfiles notify:run`, `php artisan fluxfiles:notify-run`): comma list of owner recipients the hourly sweep's claims carry. Never read as a request claim. |
-| `FLUXFILES_NOTIFY_LOCALE` | `en` | Scheduler commands only: the sweep claims' `notify_locale`. |
-| `FLUXFILES_NOTIFY_FROM_NAME` | — | Scheduler commands only: the sweep claims' `notify_from_name`. |
-| `FLUXFILES_NOTIFY_REPLY_TO` | — | Scheduler commands only: the sweep claims' `notify_reply_to`. |
-| `FLUXFILES_NOTIFY_APP_URL` | — | Scheduler commands only: the sweep claims' `notify_app_url`. |
 | `FLUXFILES_SHARE_RATE_LIMIT` | `60` | Public share requests/min per share id (`share/info` + `share/file`). |
 | `FLUXFILES_SHARE_UNLOCK_LIMIT` | `5` | Share password attempts/min per share id **+ client IP**. Stops one guesser; an attacker can rotate `REMOTE_ADDR`, so it is never the only limit. |
 | `FLUXFILES_SHARE_UNLOCK_TOTAL` | `30` | Share password attempts/min per share id, **no IP component** — the ceiling IP rotation can't escape. Keep it comfortably above a shared-office NAT (all recipients behind one IP share the per-IP bucket); lower it for high-value links. |

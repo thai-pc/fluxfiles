@@ -2,8 +2,9 @@
 
 /**
  * `fluxfiles notify:run` (docs/design/INTAKE-DOCUMENT-REQUESTS-DESIGN.md §11): the
- * claims NotifyScheduler builds from FLUXFILES_NOTIFY_* env, the sweep it drives through
- * NotifyEndpoint::run() against a fake module, and the CLI's usage handling.
+ * claims NotifyScheduler builds (gates, perms, disk, prefix; no notify_* setting), the
+ * multi-store sweep it drives through NotifyEndpoint::run() against a fake module, store
+ * discovery on a local disk, and the CLI's usage handling and exit codes.
  *
  * Usage: php tests/unit/test-notify-scheduler.php
  */
@@ -47,10 +48,14 @@ final class SchedMailer implements MailTransportInterface
 final class SchedIntake implements ModuleInterface, NotifyProviderInterface
 {
     public static array $seen = [];
+    public static array $prefixes = [];
+    public static array $failOn = [];
     public static function id(): string { return 'intake'; }
     public static function claim(): string { return 'allow_intake'; }
     public function runNotify(DiskManager $dm, \FluxFiles\Claims $c, string $disk, ?MailTransportInterface $m, bool $dry, int $max, string $secret, ?callable $audit = null): array
     {
+        self::$prefixes[] = $c->pathPrefix;
+        if (in_array($c->pathPrefix, self::$failOn, true)) { throw new ApiException('Storage unavailable', 503, 'storage_unavailable'); }
         self::$seen = ['claims' => $c, 'disk' => $disk, 'dry' => $dry, 'max' => $max, 'secret' => $secret, 'mailer' => $m !== null];
         if ($audit !== null && !$dry) { $audit($disk, 'jti1', 'event=intake_request n=1'); }
         return ['sent' => $dry ? 0 : 1, 'coalesced' => 0, 'rate_limited' => 0, 'truncated' => false, 'items' => []];
@@ -62,28 +67,20 @@ $tmp = sys_get_temp_dir() . '/fxsched-' . bin2hex(random_bytes(4));
 mkdir($tmp, 0775, true);
 $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $tmp]]);
 $secret = str_repeat('s', 32);
-$env = [
-    'FLUXFILES_SECRET' => $secret,
-    'FLUXFILES_NOTIFY_TO' => 'Boss@Acme.com, ops@acme.com, bad',
-    'FLUXFILES_NOTIFY_LOCALE' => 'de',
-    'FLUXFILES_NOTIFY_FROM_NAME' => 'Acme Files',
-    'FLUXFILES_NOTIFY_REPLY_TO' => 'help@acme.com',
-    'FLUXFILES_NOTIFY_APP_URL' => 'https://files.acme.com/app',
-];
+$env = ['FLUXFILES_SECRET' => $secret];
 
 echo "\n\033[36m══ NotifyScheduler ══\033[0m\n";
 
-test('claims come from the FLUXFILES_NOTIFY_* env, scoped to one disk + prefix', function () use ($env, $secret) {
-    $c = NotifyScheduler::claims($env, 'local', '/tenant-a/', $secret);
-    eq(['boss@acme.com', 'ops@acme.com'], $c->notifyTo);
-    eq('de', $c->notifyLocale); eq('Acme Files', $c->notifyFromName);
-    eq('help@acme.com', $c->notifyReplyTo); eq('https://files.acme.com/app', $c->notifyAppUrl);
+test('claims carry only the gates, perms, disk and prefix', function () use ($secret) {
+    $c = NotifyScheduler::claims('local', '/tenant-a/', $secret);
+    eq([], $c->notifyTo); eq('', $c->notifyLocale); eq('', $c->notifyAppUrl);
     eq(['local'], $c->allowedDisks); eq('tenant-a', $c->pathPrefix);
     eq(true, $c->hasPerm('read')); eq(true, $c->hasPerm('write'));
 });
-test('no notify env means empty claims, not a crash', function () use ($secret) {
-    $c = NotifyScheduler::claims([], 'local', '', $secret);
-    eq([], $c->notifyTo); eq('', $c->notifyLocale);
+test('cleanPrefixes: trims, de-duplicates, refuses a traversal', function () {
+    eq(['a', 'b/c', ''], NotifyScheduler::cleanPrefixes(['/a/', 'a', 'b/c/', '']));
+    try { NotifyScheduler::cleanPrefixes(['x/../y']); throw new \RuntimeException('expected ApiException'); }
+    catch (ApiException $e) { eq(400, $e->getHttpCode()); }
 });
 test('run: drives the module with the max cap, mailer and the host secret', function () use ($env, $dm, $secret) {
     ModuleRegistry::register('intake', SchedIntake::class);
@@ -115,16 +112,66 @@ test('run: writes notify_sent + notify_run audit lines (no address)', function (
     if (str_contains($blob, 'acme.com')) throw new \RuntimeException('an address leaked into the audit log');
 });
 
+function mkstore(string $root, string $rel, string $file = 'intakes.json'): void {
+    $d = $root . ($rel === '' ? '' : '/' . $rel) . '/_fluxfiles';
+    mkdir($d, 0775, true);
+    file_put_contents($d . '/' . $file, '{}');
+}
+$tree = $tmp . '-tree';
+mkdir($tree, 0775, true);
+mkstore($tree, '', 'shares.json');
+mkstore($tree, 'users/1');
+mkstore($tree, 'users/2', 'shares.json');
+mkstore($tree, 'a/b/c/d/e/f');          // depth 6: found
+mkstore($tree, 'a/b/c/d/e/f/g');        // depth 7: too deep
+mkstore($tree, 'users/1/_fluxfiles/trash/x');   // inside _fluxfiles: never walked
+mkdir($tree . '/users/3/_fluxfiles', 0775, true);   // no store file
+test('discover: finds stores up to depth 6, skips _fluxfiles/trash and empty dirs', function () use ($tree) {
+    $r = NotifyScheduler::discover($tree);
+    eq(['', 'a/b/c/d/e/f', 'users/1', 'users/2'], $r['prefixes']);
+    eq(false, $r['truncated']);
+});
+test('discover: stops at the store cap and says so', function () use ($tree) {
+    $r = NotifyScheduler::discover($tree, 2);
+    eq(2, count($r['prefixes'])); eq(true, $r['truncated']);
+});
+test('run: several prefixes are each swept, the max is shared, reports stores', function () use ($env, $dm) {
+    ModuleRegistry::register('intake', SchedIntake::class);
+    SchedIntake::$prefixes = [];
+    $r = NotifyScheduler::run($env, ['prefixes' => ['t1', 't2', 't3'], 'max' => 2], $dm, new SchedMailer(), null, new SchedLicensed());
+    eq(['t1', 't2'], SchedIntake::$prefixes);
+    eq(2, $r['sent']); eq(2, $r['stores']); eq(3, $r['stores_total']); eq(true, $r['truncated']);
+});
+test('run: --discover sweeps what it finds on a local disk and refuses a non-local one', function () use ($env, $tree) {
+    ModuleRegistry::register('intake', SchedIntake::class);
+    SchedIntake::$prefixes = [];
+    $ddm = new DiskManager(['local' => ['driver' => 'local', 'root' => $tree], 's3' => ['driver' => 's3']]);
+    $r = NotifyScheduler::run($env, ['discover' => true, 'prefixes' => ['extra']], $ddm, new SchedMailer(), null, new SchedLicensed());
+    eq(['extra', '', 'a/b/c/d/e/f', 'users/1', 'users/2'], SchedIntake::$prefixes);
+    eq(5, $r['stores']);
+    try { NotifyScheduler::run($env, ['discover' => true, 'disk' => 's3'], $ddm, new SchedMailer(), null, new SchedLicensed()); throw new \RuntimeException('expected ApiException'); }
+    catch (ApiException $e) { eq(400, $e->getHttpCode()); }
+});
+test('run: a store that fails is reported and the others still run', function () use ($env, $dm) {
+    ModuleRegistry::register('intake', SchedIntake::class);
+    SchedIntake::$prefixes = []; SchedIntake::$failOn = ['bad'];
+    try {
+        $r = NotifyScheduler::run($env, ['prefixes' => ['ok1', 'bad', 'ok2']], $dm, new SchedMailer(), null, new SchedLicensed());
+    } finally { SchedIntake::$failOn = []; }
+    eq(['ok1', 'bad', 'ok2'], SchedIntake::$prefixes);
+    eq(2, $r['stores']); eq([['prefix' => 'bad', 'error' => '503 storage_unavailable']], $r['failed']);
+});
+
 echo "\n\033[36m══ bin/fluxfiles notify:run ══\033[0m\n";
 
 $bin = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/../../bin/fluxfiles') . ' notify:run';
 test('usage errors exit 1 without touching anything', function () use ($bin) {
-    foreach (['--bogus', '--max=abc', '--max=0', '--disk='] as $arg) {
+    foreach (['--bogus', '--max=abc', '--max=0', '--disk=', '--prefixes-file=/nonexistent/x'] as $arg) {
         exec($bin . ' ' . $arg . ' 2>&1', $out, $code);
         eq(1, $code, $arg);
     }
 });
 
-exec('rm -rf ' . escapeshellarg($tmp));
+exec('rm -rf ' . escapeshellarg($tmp) . ' ' . escapeshellarg($tree));
 echo "\n  Total: " . ($passed + $failed) . "  Passed: {$passed}  Failed: {$failed}\n";
 exit($failed > 0 ? 1 : 0);

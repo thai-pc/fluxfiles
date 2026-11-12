@@ -317,20 +317,34 @@ Expiry warnings, intake digests and document-request reminders are sent by a swe
 nothing runs on its own. On a standalone install, run it hourly from the system cron:
 
 ```cron
-0 * * * *  cd /var/www/fluxfiles && php bin/fluxfiles notify:run --disk=local
+0 * * * *  cd /var/www/fluxfiles && php bin/fluxfiles notify:run --disk=local --discover
 ```
 
 ```bash
-php bin/fluxfiles notify:run [--disk=local] [--prefix=] [--dry-run] [--max=50]
+php bin/fluxfiles notify:run [--disk=local] [--prefix=<p>]... [--prefixes-file=<path>] [--discover] [--dry-run] [--max=50]
 ```
 
 It needs the Intake or Share module (installed and licensed) and a mail transport
-(`FLUXFILES_MAIL_TRANSPORT` plus its settings). There is no JWT, so the claims come from
-server env, used **only** by this command: `FLUXFILES_NOTIFY_TO` (comma list of owner
-recipients), `FLUXFILES_NOTIFY_LOCALE`, `FLUXFILES_NOTIFY_FROM_NAME`,
-`FLUXFILES_NOTIFY_REPLY_TO`, `FLUXFILES_NOTIFY_APP_URL`. `--dry-run` reports what would be
-sent without sending. `--prefix` limits the sweep to one tenant's folder. Exit code 0 is
-success, 1 a usage/config problem (no module, no transport), 2 a failed sweep. The sweep is
-at-most-once, so a missed hour loses no mail and a second run never double-sends.
+(`FLUXFILES_MAIL_TRANSPORT` plus its settings).
+
+**What one run covers.** The sweep reads one tenant store per prefix
+(`<prefix>/_fluxfiles/intakes.json` and `shares.json`) and mails only the recipients sealed
+in each record: it never reads `notify_*` settings, so there is no env var that redirects
+a notice. A run covers exactly the stores you point it at:
+
+- `--prefix=<p>`, repeatable, and `--prefixes-file=<path>` (one prefix per line, `#`
+  comments allowed) name tenants explicitly. This is the way for S3 / SFTP disks.
+- `--discover` (local disks only) walks the disk root for every
+  `*/_fluxfiles/intakes.json` / `shares.json`: depth up to 6, at most 10 000 stores per run,
+  `_fluxfiles/trash` and symlinks skipped. It stops at the cap and says so.
+- With none of these, only the empty prefix is swept, i.e. portals and links created by
+  tokens without a `prefix`. If your tokens carry per-user prefixes, use `--discover` or list
+  them; otherwise their reminders and expiry notices never go out.
+
+`--max` is shared by the whole run. The output reports how many stores were swept.
+`--dry-run` reports what would be sent without sending. Exit code 0 is success, 1 a
+usage/config problem (no module, no transport, short secret, bad option), 2 a failed sweep
+(a storage or unexpected error; a store that fails is named and the others still run). The
+sweep is at-most-once, so a missed hour loses no mail and a second run never double-sends.
 Laravel has `php artisan fluxfiles:notify-run` instead (see the Laravel README) and
 WordPress Pro schedules it itself through WP-cron.

@@ -3,6 +3,7 @@ paths:
   - "packages/core/api/Mail/**"
   - "packages/core/api/NotifyEndpoint.php"
   - "packages/core/api/NotifyProviderInterface.php"
+  - "packages/core/api/NotifyScheduler.php"
   - "packages/intake/**"
   - "packages/share/**"
 ---
@@ -19,4 +20,5 @@ paths:
 - Every once-only mail (`reminder_3d`, `reminder_1d`, `overdue`, `complete`, `request_sent`) claims its `notified` flag under the lock BEFORE sending (at-most-once, no retries). A reminder past its window is skipped, never sent late. Nothing is sent after `complete_at` except the completion mails.
 - Completion rides the digest (`complete: true`) so the owner gets ONE mail; `afterUpload($ctx, $payload, $filled, $completed)` flushes immediately and claims the client's thanks. A checklist with no required item never completes.
 - Client mails go through `mailRequestee()`: 6 h gap (not for the thanks), 3/day per address, 6 per portal. The `item` field is validated against the record's ids; the subfolder is server-derived, never from the request.
-- `IntakeModule::$clock` is the test seam for the sweep. Proxies (Laravel/WordPress) do not yet pass `$mailer`/`$audit` to `createPortal()`, so `send_now` reports `sent:false` there.
+- `IntakeModule::$clock` is the test seam for the sweep. Core, Laravel and WordPress all pass `$mailer`/`$audit` to `createPortal()` (a mailer only for `request.send_now`; the proxies hand over their host transport), so `send_now` works on every host. WordPress grants `intake_request_any_recipient` only to `manage_options` users, never to other roles with Intake.
+- **Schedulers** (`bin/fluxfiles notify:run`, `artisan fluxfiles:notify-run`, WP Pro cron; `NotifyScheduler::sweep()`): the sweep reads ONE store per prefix and mails only sealed recipients, so claims carry just gates/perms/disk/prefix (no `notify_*` env). A run covers exactly the prefixes given (`--prefix` repeatable, `--prefixes-file`, `--discover` = local disks only, depth <= 6, <= 10 000 stores, `_fluxfiles/trash` skipped); default is the empty prefix only. Exit 0 ok / 1 usage-config-gate / 2 storage or unexpected failure.

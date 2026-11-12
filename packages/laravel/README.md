@@ -359,25 +359,38 @@ nothing runs for you. Schedule the command (Laravel 11+, `routes/console.php`):
 ```php
 use Illuminate\Support\Facades\Schedule;
 
-Schedule::command('fluxfiles:notify-run')->hourly();
+Schedule::command('fluxfiles:notify-run --discover')->hourly();
 ```
 
-(On Laravel 10 and older, use `$schedule->command('fluxfiles:notify-run')->hourly();` in
+(On Laravel 10 and older, use `$schedule->command('fluxfiles:notify-run --discover')->hourly();` in
 `app/Console/Kernel.php`.) A scheduler needs the usual `* * * * * php artisan schedule:run`
 cron entry.
 
 ```bash
-php artisan fluxfiles:notify-run [--disk=local] [--prefix=] [--dry-run] [--max=50]
+php artisan fluxfiles:notify-run [--disk=local] [--prefix=<p>]... [--prefixes-file=<path>] [--discover] [--dry-run] [--max=50]
 ```
 
 It needs the Intake or Share module (installed and licensed). Mail goes out the way the
 proxy routes send it: the app's own mailer (`config/mail.php`; `FLUXFILES_LARAVEL_MAILER`
-picks one), unless `FLUXFILES_MAIL_TRANSPORT` is set. A scheduled run has no JWT, so its
-recipients come from `.env`, read through `config('fluxfiles.notify')` and used only by this
-command: `FLUXFILES_NOTIFY_TO` (comma list), `FLUXFILES_NOTIFY_LOCALE`,
-`FLUXFILES_NOTIFY_FROM_NAME`, `FLUXFILES_NOTIFY_REPLY_TO`, `FLUXFILES_NOTIFY_APP_URL`.
-`--dry-run` reports without sending. If you published `config/fluxfiles.php` earlier, run
-`php artisan fluxfiles:doctor`: it lists the new `notify` key to copy over.
+picks one), unless `FLUXFILES_MAIL_TRANSPORT` is set.
+
+**What one run covers.** The sweep reads one tenant store per prefix
+(`<prefix>/_fluxfiles/intakes.json` and `shares.json`) and mails only the recipients sealed
+in each record. It never reads `notify_*` settings, so there is no env var to set. A run
+covers exactly the stores you point it at:
+
+- `--prefix=<p>` (repeatable) and `--prefixes-file=<path>` (one prefix per line) name
+  tenants explicitly; use these for S3 / SFTP disks.
+- `--discover` (local disks only) walks the disk root for every `_fluxfiles/intakes.json` /
+  `shares.json`: depth up to 6, at most 10 000 stores, `_fluxfiles/trash` skipped.
+- With none of these, only the empty prefix is swept, i.e. portals and links created by
+  tokens without a `prefix`. If you mint per-user prefixes (`users/{id}`, as above), add
+  `--discover` or list them, or their reminders and expiry notices never go out.
+
+`--max` is shared by the whole run and the output says how many stores were swept.
+`--dry-run` reports without sending. Exit codes: 0 ok, 1 a usage/config problem (no module,
+a `FLUXFILES_SECRET` shorter than 32 bytes, unknown disk, bad option), 2 a failed sweep (a
+storage or unexpected error; a store that fails is named and the others still run).
 
 ### License Status
 
