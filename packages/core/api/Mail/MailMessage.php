@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles\Mail;
 
+// phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- mail-layer exceptions are reported in the JSON error envelope or the server log, never rendered as HTML
+
 /**
  * One plain-text e-mail, validated at construction so no transport has to.
  *

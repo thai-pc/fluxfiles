@@ -2,6 +2,8 @@
 
 defined('ABSPATH') || exit;
 
+// phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- the MailException message (scrubbed) is reported in the JSON response of /notify/test or the debug log, never rendered as HTML
+
 use FluxFiles\Mail\MailException;
 use FluxFiles\Mail\MailMessage;
 use FluxFiles\Mail\MailTransportInterface;

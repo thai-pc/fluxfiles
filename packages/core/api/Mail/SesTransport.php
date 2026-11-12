@@ -44,6 +44,7 @@ final class SesTransport extends HttpApiTransport
 
     public function endpoint(): string
     {
+        // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- the Amazon SES API the site owner chose to send e-mail notices through (an outbound API call, opt-in via FLUXFILES_MAIL_TRANSPORT=ses); no script, style or image is loaded from it
         return 'https://email.' . $this->region . '.amazonaws.com/v2/email/outbound-emails';
     }
 

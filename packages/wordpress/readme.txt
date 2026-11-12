@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.1.6
+Stable tag: 1.1.7
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -176,6 +176,11 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.1.7 =
+* Bundles FluxFiles core 1.3.0.
+* E-mail notices for upload portals and share links (FluxFiles Pro) are delivered through WordPress's own wp_mail(), so your SMTP plugin sends them. No mail settings are needed in FluxFiles. Developers can swap or disable the transport with the new `fluxfiles_mail_transport` filter, or name a provider with `FLUXFILES_MAIL_TRANSPORT` in wp-config.php.
+* "External services" now lists the e-mail providers that are used only when you configure one.
+
 = 1.1.6 =
 * Bundles FluxFiles core 1.2.4.
 * Internal classes renamed with the plugin's FluxFiles prefix (WordPress.org Plugin Check). No behaviour change.
@@ -268,6 +273,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.1.7 =
+Bundles core 1.3.0. E-mail notices for FluxFiles Pro go through your site's own mail (wp_mail). No change for sites without Pro.
 
 = 1.1.6 =
 Code-naming cleanup requested by the WordPress.org Plugin Check. No behaviour change.
