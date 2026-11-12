@@ -122,6 +122,14 @@ class NotifyRunCommand extends Command
             $report['rate_limited'],
             !empty($report['truncated']) ? ', truncated (raise --max or run again)' : ''
         ));
+        if ($report['dry_run']) {
+            // A dry run is how an operator checks the schedule: say what WOULD go out, one line each.
+            $would = array_values(array_filter($report['items'], static fn ($i) => ($i['result'] ?? '') === 'would_send'));
+            $this->line('Would send ' . count($would) . ' e-mail(s).');
+            foreach ($would as $i) {
+                $this->line(sprintf('  %s  %s  %s', (string) ($i['module'] ?? ''), (string) ($i['event'] ?? ''), (string) ($i['jti'] ?? '')));
+            }
+        }
         if (!empty($report['discovery_truncated'])) {
             $this->warn('Discovery stopped at ' . \FluxFiles\NotifyScheduler::DISCOVER_MAX_STORES . ' stores; list the rest with --prefixes-file.');
         }
