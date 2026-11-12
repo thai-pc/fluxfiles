@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Core + Laravel: scheduled e-mail notices (`docs/design/INTAKE-DOCUMENT-REQUESTS-DESIGN.md` §11). `bin/fluxfiles notify:run [--disk] [--prefix] [--dry-run] [--max]` and `php artisan fluxfiles:notify-run` run the `/notify/run` sweep from a system cron or the Laravel scheduler. A scheduled run has no JWT, so its claims come from the new `FLUXFILES_NOTIFY_TO|LOCALE|FROM_NAME|REPLY_TO|APP_URL` server env (`config('fluxfiles.notify')` on Laravel), which no request ever reads. The Laravel controller and the command share one `MailerResolver`.
+
 ## [1.0.32] — 2026-11-12
 
 > Released: `core-v1.3.0`, `laravel-v1.0.8`, `wordpress-v1.1.7` (bundles core 1.3.0). The paid modules that use it ship from their own repos: intake `v1.6.0`, share `v1.5.0` (both require core `^1.3.0`).
