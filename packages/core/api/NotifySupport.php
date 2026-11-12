@@ -142,7 +142,16 @@ final class NotifySupport
             static fn ($a) => is_string($a) ? MailMessage::validAddress($a) : null,
             $cfg['to']
         )));
-        return $cfg['to'] === [] ? null : $cfg;
+        // Document requests (INTAKE-DOCUMENT-REQUESTS-DESIGN §4): the same blob may carry the
+        // client's address + the portal link. Re-validated here like `to`; a record whose only
+        // recipient is the client has an empty `to`.
+        $requestee = is_string($cfg['requestee'] ?? null) ? MailMessage::validAddress($cfg['requestee']) : null;
+        $cfg['requestee'] = $requestee;
+        if ($requestee === null || !is_string($cfg['url'] ?? null) || !preg_match('#^https?://#i', $cfg['url'])) {
+            unset($cfg['requestee'], $cfg['url']);
+            $requestee = null;
+        }
+        return $cfg['to'] === [] && $requestee === null ? null : $cfg;
     }
 
     /**

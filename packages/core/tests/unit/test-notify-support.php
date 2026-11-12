@@ -68,6 +68,18 @@ test('seal/open: round-trip; wrong secret, info, AAD or a flipped byte → null;
     eq(null, NotifySupport::open($blob, '', 'info-a', '{"jti":"1"}'), 'no secret');
     eq(null, NotifySupport::open(NotifySupport::seal(['v' => 1, 'to' => ['x@[127.0.0.1]']], 's', 'i', 'a'), 's', 'i', 'a'), 'junk address never comes back out');
 });
+test('open(): a document-request seal may carry requestee + url; a client-only record has an empty `to`; junk is dropped', function () {
+    $open = fn (array $c) => NotifySupport::open(NotifySupport::seal($c, 's', 'i', 'a'), 's', 'i', 'a');
+    $both = $open(['v' => 1, 'to' => ['a@b.test'], 'requestee' => 'C@D.test', 'url' => 'https://x.test/p?token=t']);
+    eq(['c@d.test', 'https://x.test/p?token=t'], [$both['requestee'], $both['url']]);
+    $only = $open(['v' => 1, 'to' => [], 'requestee' => 'c@d.test', 'url' => 'https://x.test/p']);
+    eq([], $only['to']);
+    eq(null, $open(['v' => 1, 'to' => [], 'requestee' => 'c@d.test', 'url' => 'javascript:alert(1)']), 'no http(s) link and no owner: nothing to send');
+    eq(null, $open(['v' => 1, 'to' => [], 'requestee' => 'x@[10.0.0.1]', 'url' => 'https://x.test/']), 'address literal');
+    $stripped = $open(['v' => 1, 'to' => ['a@b.test'], 'requestee' => 'c@d.test', 'url' => 'ftp://x']);
+    ok(!isset($stripped['requestee']) && !isset($stripped['url']), 'a bad link drops the requestee, the owner stays');
+    eq(['v' => 1, 'to' => ['a@b.test'], 'events' => []], $open(['v' => 1, 'to' => ['a@b.test'], 'events' => []]), 'a step-1 seal comes back unchanged');
+});
 test('allow(): a bucket of N in a window; keys are independent', function () {
     ok(NotifySupport::allow('t:a', 2, 3600) && NotifySupport::allow('t:a', 2, 3600), 'two allowed');
     eq(false, NotifySupport::allow('t:a', 2, 3600), 'third refused');

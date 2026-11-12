@@ -860,7 +860,16 @@ function routeRequest(
     if ($method === 'POST' && $uri === '/api/fm/intake') {
         $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
-        $res = $module->createPortal($fm, $diskManager, $claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''), $body);
+        // `request.send_now` mails the portal link to the client from inside the create, so it
+        // needs the transport + an audit line; an installed pre-requests module ignores both.
+        $intakeAudit = static function (string $disk, string $key, string $detail) use ($auditLog, $claims): void {
+            try {
+                $auditLog->log($claims->userId, 'notify_sent', $disk, $key, null, null, $detail);
+            } catch (\Throwable $ignored) {
+            }
+        };
+        $res = $module->createPortal($fm, $diskManager, $claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''), $body,
+            is_array($body['request'] ?? null) && !empty($body['request']['send_now']) ? \FluxFiles\Mail\MailTransportFactory::fromEnv() : null, $intakeAudit);
         // The recipient URL, exactly like Share above: the module builds it from
         // `intake_base_url` when the token carries one; otherwise fall back to this
         // request's origin + the core landing page. The token is returned ONCE and
