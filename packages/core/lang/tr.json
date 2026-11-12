@@ -949,7 +949,11 @@
       "muted": "Bu öğe için e-postalar sessize alındı.",
       "unmuted": "Bu öğe için e-postalar yeniden açıldı.",
       "muted_tip": "E-postalar sessizde",
-      "on_tip": "{n} alıcıya e-posta gönderiliyor"
+      "on_tip": "{n} alıcıya e-posta gönderiliyor",
+      "client_tip": "Müşteriye e-posta gönderiliyor",
+      "both_tip": "{n} alıcıya ve müşteriye e-posta gönderiliyor",
+      "mute_client_confirm": "Sessize almak, müşteriye gönderilen hatırlatmaları da durdurur. Devam edilsin mi?",
+      "muted_client": "E-postalar sessize alındı, müşteriye giden hatırlatmalar dahil."
     }
   }
 }

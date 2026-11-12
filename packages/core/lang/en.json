@@ -949,7 +949,11 @@
       "muted": "E-mails muted for this one.",
       "unmuted": "E-mails resumed for this one.",
       "muted_tip": "E-mails muted",
-      "on_tip": "E-mailing {n} recipient(s)"
+      "on_tip": "E-mailing {n} recipient(s)",
+      "client_tip": "E-mailing the client",
+      "both_tip": "E-mailing {n} recipient(s) and the client",
+      "mute_client_confirm": "Muting this also stops the reminders e-mailed to the client. Continue?",
+      "muted_client": "E-mails muted, including the client's reminders."
     }
   }
 }

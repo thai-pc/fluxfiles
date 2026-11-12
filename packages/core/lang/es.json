@@ -949,7 +949,11 @@
       "muted": "Correos silenciados para este elemento.",
       "unmuted": "Correos reanudados para este elemento.",
       "muted_tip": "Correos silenciados",
-      "on_tip": "Se enviará correo a {n} destinatario(s)"
+      "on_tip": "Se enviará correo a {n} destinatario(s)",
+      "client_tip": "Enviando correos al cliente",
+      "both_tip": "Enviando correos a {n} destinatario(s) y al cliente",
+      "mute_client_confirm": "Silenciar esto también detiene los recordatorios enviados al cliente. ¿Continuar?",
+      "muted_client": "Correos silenciados, incluidos los recordatorios al cliente."
     }
   }
 }

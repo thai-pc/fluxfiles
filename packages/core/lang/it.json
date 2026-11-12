@@ -949,7 +949,11 @@
       "muted": "E-mail silenziate per questo elemento.",
       "unmuted": "E-mail riattivate per questo elemento.",
       "muted_tip": "E-mail silenziate",
-      "on_tip": "Invio a {n} destinatario/i"
+      "on_tip": "Invio a {n} destinatario/i",
+      "client_tip": "Invia e-mail al cliente",
+      "both_tip": "Invia e-mail a {n} destinatario/i e al cliente",
+      "mute_client_confirm": "Disattivare le e-mail ferma anche i promemoria inviati al cliente. Continuare?",
+      "muted_client": "E-mail silenziate, compresi i promemoria al cliente."
     }
   }
 }

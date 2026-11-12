@@ -949,7 +949,11 @@
       "muted": "Đã tắt e-mail cho mục này.",
       "unmuted": "Đã bật lại e-mail cho mục này.",
       "muted_tip": "E-mail đã tắt",
-      "on_tip": "Đang gửi e-mail cho {n} người nhận"
+      "on_tip": "Đang gửi e-mail cho {n} người nhận",
+      "client_tip": "Đang gửi e-mail cho khách hàng",
+      "both_tip": "Đang gửi e-mail cho {n} người nhận và khách hàng",
+      "mute_client_confirm": "Tắt thông báo cũng sẽ dừng các lời nhắc gửi cho khách hàng. Tiếp tục?",
+      "muted_client": "Đã tắt e-mail, kể cả lời nhắc gửi cho khách hàng."
     }
   }
 }

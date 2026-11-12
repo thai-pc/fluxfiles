@@ -4646,15 +4646,24 @@ function fluxFilesApp() {
 
         // Bell badge: stop / resume e-mails about one record. The server writes the flag
         // outside the sealed block; the row is updated from its answer.
+        // Bell tooltip: owner recipients, the client of a document request, or both.
+        notifyTip(row) {
+            if (row.notify_muted) return this.t('notify.ui.muted_tip');
+            const n = row.notify_recipients ?? 0;
+            if (!row.notify_client) return this.t('notify.ui.on_tip', { n });
+            return n > 0 ? this.t('notify.ui.both_tip', { n }) : this.t('notify.ui.client_tip');
+        },
         async toggleNotifyMute(row) {
             if (!row || row._muteBusy) return;
-            row._muteBusy = true;
             const want = !row.notify_muted;
+            // Muting a request portal also stops the client's reminders: say so first.
+            if (want && row.notify_client && !window.confirm(this.t('notify.ui.mute_client_confirm'))) return;
+            row._muteBusy = true;
             try {
                 const res = await this.api('POST', '/api/fm/notify/mute',
                     { module: this.linksTab, disk: this.currentDisk, jti: row.jti, muted: want });
                 row.notify_muted = res && typeof res.muted === 'boolean' ? res.muted : want;
-                this.showToast(this.t(row.notify_muted ? 'notify.ui.muted' : 'notify.ui.unmuted'), 'success');
+                this.showToast(this.t(row.notify_muted ? (row.notify_client ? 'notify.ui.muted_client' : 'notify.ui.muted') : 'notify.ui.unmuted'), 'success');
             } catch (e) {
                 this.showToast(e.message || this.t('error.generic'), 'error', 4000);
             } finally {

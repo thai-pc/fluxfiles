@@ -949,7 +949,11 @@
       "muted": "E-Mails für diesen Eintrag stummgeschaltet.",
       "unmuted": "E-Mails für diesen Eintrag wieder aktiviert.",
       "muted_tip": "E-Mails stummgeschaltet",
-      "on_tip": "E-Mail an {n} Empfänger"
+      "on_tip": "E-Mail an {n} Empfänger",
+      "client_tip": "Sendet E-Mails an den Kunden",
+      "both_tip": "Sendet E-Mails an {n} Empfänger und den Kunden",
+      "mute_client_confirm": "Das Stummschalten stoppt auch die Erinnerungen an den Kunden. Fortfahren?",
+      "muted_client": "E-Mails stummgeschaltet, auch die Erinnerungen an den Kunden."
     }
   }
 }

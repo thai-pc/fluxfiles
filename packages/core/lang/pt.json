@@ -949,7 +949,11 @@
       "muted": "E-mails silenciados para este item.",
       "unmuted": "E-mails retomados para este item.",
       "muted_tip": "E-mails silenciados",
-      "on_tip": "Enviando e-mail para {n} destinatário(s)"
+      "on_tip": "Enviando e-mail para {n} destinatário(s)",
+      "client_tip": "Enviando e-mails ao cliente",
+      "both_tip": "Enviando e-mails a {n} destinatário(s) e ao cliente",
+      "mute_client_confirm": "Silenciar isto também interrompe os lembretes enviados ao cliente. Continuar?",
+      "muted_client": "E-mails silenciados, incluindo os lembretes ao cliente."
     }
   }
 }

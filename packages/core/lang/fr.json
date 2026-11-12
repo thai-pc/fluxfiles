@@ -949,7 +949,11 @@
       "muted": "E-mails coupés pour cet élément.",
       "unmuted": "E-mails réactivés pour cet élément.",
       "muted_tip": "E-mails coupés",
-      "on_tip": "E-mail à {n} destinataire(s)"
+      "on_tip": "E-mail à {n} destinataire(s)",
+      "client_tip": "Envoie des e-mails au client",
+      "both_tip": "Envoie des e-mails à {n} destinataire(s) et au client",
+      "mute_client_confirm": "Couper les e-mails arrête aussi les rappels envoyés au client. Continuer ?",
+      "muted_client": "E-mails coupés, y compris les rappels au client."
     }
   }
 }

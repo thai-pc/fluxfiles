@@ -241,3 +241,34 @@ test('intake list: progress, due date, overdue and complete badges render', asyn
   await expect(cell(2)).toContainText('Complete');
   await expect(cell(3)).toContainText('—');
 });
+
+test('intake bell: a client-only portal says it e-mails the client (no "0 recipients") and muting confirms the client reminders stop too', async ({ page }) => {
+  const now = Math.floor(Date.now() / 1000);
+  const calls: any[] = [];
+  const row = (jti: string, n: number, client: boolean) => ({ jti, disk: 'local', path: 'in/' + jti, label: jti, created: 1, expires: now + 86400, received: 0, max_files: 0, allowed_ext: [], has_password: false, has_notify: true, notify_recipients: n, notify_client: client, notify_muted: false, request: null });
+  await page.route('**/api/fm/intake/list*', (r) => r.fulfill(ok([row('clientonly', 0, true), row('both', 2, true), row('owner', 3, false)])));
+  await page.route('**/api/fm/notify/mute', async (r) => {
+    const b = r.request().postDataJSON();
+    calls.push(b);
+    await r.fulfill(ok({ muted: b.muted }));
+  });
+  await openManager(page, mintTokenWithClaims({ allow_intake: true }));
+  await page.locator(LINKS_BTN).click();
+  const bells = page.getByTestId('notify-bell');
+  await expect(bells).toHaveCount(3);
+  await expect(bells.nth(0)).toHaveAttribute('title', 'E-mailing the client');
+  await expect(bells.nth(1)).toHaveAttribute('title', 'E-mailing 2 recipient(s) and the client');
+  await expect(bells.nth(2)).toHaveAttribute('title', 'E-mailing 3 recipient(s)');
+
+  const dialogs: string[] = [];
+  page.on('dialog', async (d) => { dialogs.push(d.message()); await d.dismiss(); });
+  await bells.nth(0).click();
+  await expect.poll(() => dialogs.length).toBe(1);
+  expect(dialogs[0]).toContain('reminders');
+  expect(calls).toEqual([]);   // dismissed: nothing muted
+  page.removeAllListeners('dialog');
+  page.on('dialog', (d) => d.accept());
+  await bells.nth(0).click();
+  await expect(bells.nth(0)).toHaveAttribute('aria-pressed', 'true');
+  expect(calls).toEqual([{ module: 'intake', disk: 'local', jti: 'clientonly', muted: true }]);
+});

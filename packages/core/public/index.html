@@ -1819,7 +1819,7 @@
                                             <button type="button" class="ff-links-bell" x-show="r.has_notify"
                                                     :class="r.notify_muted ? 'is-muted' : ''" :aria-pressed="!!r.notify_muted"
                                                     :aria-label="r.notify_muted ? t('notify.ui.unmute') : t('notify.ui.mute')"
-                                                    :title="(r.notify_muted ? t('notify.ui.muted_tip') : t('notify.ui.on_tip', { n: r.notify_recipients ?? 0 }))"
+                                                    :title="notifyTip(r)"
                                                     @click="toggleNotifyMute(r)" data-testid="notify-bell">
                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/><path class="ff-bell-strike" d="M3 3l18 18"/></svg>
                                             </button>
@@ -1866,7 +1866,7 @@
                                             <button type="button" class="ff-links-bell" x-show="r.has_notify"
                                                     :class="r.notify_muted ? 'is-muted' : ''" :aria-pressed="!!r.notify_muted"
                                                     :aria-label="r.notify_muted ? t('notify.ui.unmute') : t('notify.ui.mute')"
-                                                    :title="(r.notify_muted ? t('notify.ui.muted_tip') : t('notify.ui.on_tip', { n: r.notify_recipients ?? 0 }))"
+                                                    :title="notifyTip(r)"
                                                     @click="toggleNotifyMute(r)" data-testid="notify-bell">
                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/><path class="ff-bell-strike" d="M3 3l18 18"/></svg>
                                             </button>

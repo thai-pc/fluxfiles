@@ -949,7 +949,11 @@
       "muted": "E-mails voor dit item gedempt.",
       "unmuted": "E-mails voor dit item hervat.",
       "muted_tip": "E-mails gedempt",
-      "on_tip": "E-mail naar {n} ontvanger(s)"
+      "on_tip": "E-mail naar {n} ontvanger(s)",
+      "client_tip": "Stuurt e-mails naar de klant",
+      "both_tip": "Stuurt e-mails naar {n} ontvanger(s) en de klant",
+      "mute_client_confirm": "Dempen stopt ook de herinneringen aan de klant. Doorgaan?",
+      "muted_client": "E-mails gedempt, ook de herinneringen aan de klant."
     }
   }
 }
