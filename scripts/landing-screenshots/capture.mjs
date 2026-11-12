@@ -9,11 +9,13 @@
  * to ./out/ (optionally copying them into the landing repo).
  *
  * Paid modules are "installed" the way a customer install lays them out
- * (vendor/fluxfiles/<id>/ in the copy, symlinked to packages/<id>/) and licensed
- * with a local licence minted from the offline signing key, exactly like
- * tests/e2e/test-sso-http.php. No key on this machine → the paid shots are skipped.
+ * (vendor/fluxfiles/<id>/ in the copy, symlinked to packages/<id>/ or a
+ * --module-paths dir) and licensed with a licence signed by a THROWAWAY key that
+ * only the copy's patched LicenseManager trusts (lib/license.php). The vendor
+ * signing key is never needed or read.
  *
  * Usage:  node scripts/landing-screenshots/capture.mjs [--only=a,b] [--copy-to=DIR] [--keep] [--port=N]
+ *           [--modules-root=DIR] [--module-paths=intake=DIR,share=DIR] [--smtp=HOST:PORT --mailpit=URL]
  * See README.md next to this file.
  */
 
@@ -55,6 +57,14 @@ const OUT = typeof args.out === 'string' ? resolve(args.out)
 //   --sftp-port=2222                       an SFTP server on 127.0.0.1 (atmoz/sftp ff:ffpass:::upload)
 const S3_ENDPOINT = typeof args['s3-endpoint'] === 'string' ? args['s3-endpoint'] : null;
 const SFTP_PORT = args['sftp-port'] ? Number(args['sftp-port']) : null;
+// --module-paths=intake=/path/to/checkout,share=/path → install that checkout of a
+// module (e.g. a worktree at its release tag) instead of packages/<id>/.
+const MODULE_PATHS = Object.fromEntries((typeof args['module-paths'] === 'string' ? args['module-paths'] : '')
+  .split(',').filter(Boolean).map((kv) => { const i = kv.indexOf('='); return [kv.slice(0, i), resolve(kv.slice(i + 1))]; }));
+// The notice e-mail shot: the server sends through a local SMTP catcher
+// (--smtp=127.0.0.1:1025) and the shot is taken of Mailpit's web UI (--mailpit=URL).
+const SMTP = typeof args.smtp === 'string' ? args.smtp : null;
+const MAILPIT = typeof args.mailpit === 'string' ? args.mailpit.replace(/\/$/, '') : null;
 
 // Playwright comes from the browser suite's install (packages/core/tests/browser),
 // so this script needs no package.json of its own.
@@ -107,19 +117,23 @@ return $disks;
 // vendor/fluxfiles/<id>/src/). Only modules present in this checkout.
 const ALL_MODULES = ['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr', 'virus', 'backup',
   'c2pa', 'audit-export', 'sso', 'dlp', 'legal-hold'];
+// --modules-root=DIR: where the other modules live (default packages/; a git
+// worktree has none, the private module repos are gitignored).
+const MODULES_ROOT = typeof args['modules-root'] === 'string' ? resolve(args['modules-root']) : join(repoRoot, 'packages');
+const moduleDir = (m) => MODULE_PATHS[m] || join(MODULES_ROOT, m);
 const installed = WPORG ? [] // the free plugin: nothing paid installed
-  : ALL_MODULES.filter((m) => existsSync(join(repoRoot, 'packages', m, 'src')));
+  : ALL_MODULES.filter((m) => existsSync(join(moduleDir(m), 'src')));
 // Start from an empty vendor/fluxfiles/ — whatever a dev checkout has there is not ours.
 rmSync(join(core, 'vendor', 'fluxfiles'), { recursive: true, force: true });
 mkdirSync(join(core, 'vendor', 'fluxfiles'), { recursive: true });
-for (const m of installed) symlinkSync(join(repoRoot, 'packages', m), join(core, 'vendor', 'fluxfiles', m));
+for (const m of installed) symlinkSync(moduleDir(m), join(core, 'vendor', 'fluxfiles', m));
 
 // License every installed module, so unclaimed modules render "hidden" (not a
 // Pro teaser) — the look of a fully licensed deployment.
 const license = installed.length === 0 ? ''
-  : execFileSync('php', [join(here, 'lib', 'license.php'), installed.join(',')]).toString().trim();
+  : execFileSync('php', [join(here, 'lib', 'license.php'), core, installed.join(',')]).toString().trim();
 const licensed = license !== '';
-log(`modules installed: ${installed.length}; licensed: ${licensed ? 'yes' : 'NO (signing key not on this machine)'}`);
+log(`modules installed: ${installed.length}; licensed: ${licensed ? 'yes (throwaway key)' : 'NO (lib/license.php failed: needs PHP sodium)'}`);
 
 // ── 2. Engines ───────────────────────────────────────────────────────────────
 const engines = {
@@ -147,6 +161,9 @@ Object.assign(env, {
   FLUXFILES_RATE_LIMIT_READ: '100000',
   FLUXFILES_RATE_LIMIT_WRITE: '100000',
   ...(licensed ? { FLUXFILES_LICENSE_KEY: license } : {}),
+  ...(SMTP ? { FLUXFILES_MAIL_TRANSPORT: 'smtp', FLUXFILES_SMTP_HOST: SMTP.split(':')[0],
+    FLUXFILES_SMTP_PORT: SMTP.split(':')[1] || '1025', FLUXFILES_SMTP_TLS: 'none',
+    FLUXFILES_MAIL_FROM: 'files@northwind.example', FLUXFILES_MAIL_FROM_NAME: 'Northwind Studio' } : {}),
   // The demo S3/SFTP containers listen on loopback, which the SSRF guard
   // refuses unless the operator allow-lists them (documented in CONFIG.md).
   ...(S3_ENDPOINT || SFTP_PORT ? { FLUXFILES_SSRF_ALLOW_HOSTS: [
@@ -323,6 +340,10 @@ async function seed() {
   for (const d of ['Marketing', 'Photos', 'Contracts', 'Invoices', 'Exports', 'Shared']) {
     await api(maria, 'POST', '/api/fm/mkdir', { disk: 'local', path: d });
   }
+  // Where the Intake portals drop a client's files (recipient-side shots).
+  for (const d of ['Clients', 'Clients/Acme Corp', 'Clients/Acme Corp/Onboarding', 'Clients/Acme Corp/Drops']) {
+    await api(maria, 'POST', '/api/fm/mkdir', { disk: 'local', path: d });
+  }
 
   // Photos
   const teamOffsite = photo('team-offsite.jpg', ['#fde68a', '#f59e0b', '#65a30d', '#365314'], '#fff7ed');
@@ -400,9 +421,12 @@ async function seed() {
   await api(sofia, 'POST', '/api/fm/rename', { disk: 'local', path: 'Marketing/social-cover.jpg', name: 'social-cover-2026.jpg' });
 
   // A legal hold on one of the old invoices (the retention preview skips it).
-  await pause(1100);
-  await api(james, 'POST', '/api/fm/hold', { disk: 'local', path: 'Invoices/INV-2018-0921.pdf',
-    reason: 'FY2018 tax audit — retain until the review closes' });
+  // Only with the legal-hold module installed (a --only run of other shots may not have it).
+  if (installed.includes('legal-hold')) {
+    await pause(1100);
+    await api(james, 'POST', '/api/fm/hold', { disk: 'local', path: 'Invoices/INV-2018-0921.pdf',
+      reason: 'FY2018 tax audit — retain until the review closes' });
+  }
 
   // ── Filesystem touch-ups (storage-resident bookkeeping only) ──
   for (const [n, date] of Object.entries(old)) {
@@ -415,7 +439,7 @@ async function seed() {
   }
   // Spread the MSA's versions over the past days (seeding made them seconds apart).
   const vdir = join(uploads, '_fluxfiles', 'versions');
-  for (const d of readdirSync(vdir)) {
+  for (const d of existsSync(vdir) ? readdirSync(vdir) : []) {
     const mf = join(vdir, d, 'manifest.json');
     if (!existsSync(mf)) continue;
     const m = JSON.parse(readFileSync(mf, 'utf8'));
@@ -553,7 +577,183 @@ const SHOTS = {
     await page.waitForFunction(() => [...document.querySelectorAll('.file-card img')].every((i) => i.complete && i.naturalWidth > 0));
     return null;
   } },
+
+  // ── Recipient side of Share / Intake (the public pages a client opens) ──
+  'share-recipient': { paid: ['share'], async run(page) {
+    await brandAssets(page);
+    const share = await api(operatorToken(), 'POST', '/api/fm/share', { disk: 'local', path: 'Marketing/hero-banner.jpg',
+      ttl: 14 * 86400, label: 'Final hero image for the Aurora launch, approved for web and print.' });
+    await page.goto(share.url);
+    await page.locator('#view:not(.hidden)').waitFor({ timeout: 15000 });
+    await page.locator('#preview img').waitFor({ state: 'visible', timeout: 15000 });
+    await page.waitForFunction(() => { const i = document.querySelector('#preview img'); return i && i.complete && i.naturalWidth > 0; });
+    await page.locator('#brandView img').waitFor({ state: 'visible' });
+    return page.locator('.card');
+  } },
+
+  'intake-portal': { paid: ['intake'], async run(page) {
+    await brandAssets(page);
+    const portal = await api(operatorToken(), 'POST', '/api/fm/intake', { disk: 'local', path: 'Clients/Acme Corp',
+      ttl: 14 * 86400, label: 'Send files to Northwind Studio', max_files: 25, max_mb: 50,
+      allowed_ext: ['pdf', 'jpg', 'png', 'zip'] });
+    await dropIntoPortal(page, portal.url);
+    return page.locator('.card');
+  } },
+
+  'intake-request': { paid: ['intake'], async run(page) {
+    await brandAssets(page);
+    const portal = await api(operatorToken(), 'POST', '/api/fm/intake', { disk: 'local', path: 'Clients/Acme Corp/Onboarding',
+      ttl: 21 * 86400, label: 'Brand refresh: onboarding documents', max_mb: 50,
+      request: {
+        items: [
+          { label: 'Signed statement of work', required: true, ext: ['pdf'] },
+          { label: 'Logo files (vector)', required: true, ext: ['pdf', 'eps', 'zip'] },
+          { label: 'Brand guidelines in use today', required: true, ext: ['pdf'] },
+          { label: 'Product photos', required: false, ext: ['jpg', 'png', 'zip'] },
+        ],
+        due_at: Math.floor(Date.now() / 1000) + 9 * 86400,
+        message: 'Hi Ana, to kick off the brand refresh we need a few things from your team. '
+          + 'Upload each one below; the bar shows what we still need.',
+      } });
+    await page.goto(portal.url);
+    await page.locator('.rq-item').nth(3).waitFor({ timeout: 15000 });
+    const uploads = [[0, 'statement-of-work-signed.pdf', A.sow], [1, 'acme-logo-pack.zip', A.logoZip],
+      [3, 'product-shoot-01.jpg', A.shoot1], [3, 'product-shoot-02.jpg', A.shoot2]];
+    for (const [i, name, buffer] of uploads) {
+      await page.locator('.rq-item').nth(i).locator('input[type=file]')
+        .setInputFiles({ name, mimeType: mimeOf(name), buffer });
+      await page.locator('.list .row', { hasText: name }).locator('.st-ok').waitFor({ timeout: 20000 });
+    }
+    await page.getByText('2 of 3 required documents received').waitFor({ timeout: 10000 });
+    // The per-file progress rows under the checklist repeat what the ✓ counts
+    // already say and push the card past the fold; the shot is the checklist.
+    await page.locator('#list').evaluate((el) => { el.style.display = 'none'; });
+    return page.locator('.card');
+  } },
+
+  // The owner's "files received" digest, sent for real through the portal page's
+  // drop (one e-mail per drop) into a local SMTP catcher. The shot is a plain
+  // mail-reader card filled VERBATIM from the caught message (From, To, Subject,
+  // Date, text body via Mailpit's API): nothing in it is written by this script.
+  'notice-email': { paid: ['intake'], needsMail: true, async run(page) {
+    await fetch(`${MAILPIT}/api/v1/messages`, { method: 'DELETE' });
+    await brandAssets(page);
+    const portal = await api(operatorToken({ notify_to: ['hello@northwind.example'], notify_from_name: 'Northwind Studio',
+      notify_locale: 'en' }), 'POST', '/api/fm/intake', { disk: 'local', path: 'Clients/Acme Corp/Drops',
+      ttl: 14 * 86400, label: 'Send files to Northwind Studio', allowed_ext: ['pdf', 'jpg', 'png', 'zip'] });
+    await dropIntoPortal(page, portal.url);
+    let msg = null;
+    for (let i = 0; i < 60 && !msg; i++) {
+      const j = await (await fetch(`${MAILPIT}/api/v1/messages`)).json();
+      msg = (j.messages || [])[0] || null;
+      if (!msg) await pause(500);
+    }
+    if (!msg) throw new Error('no notice e-mail reached the SMTP catcher');
+    const m = await (await fetch(`${MAILPIT}/api/v1/message/${msg.ID}`)).json();
+    if (m.HTML) throw new Error('the notice has an HTML part now: shoot it as HTML instead');
+    await page.unroute('https://northwind.example/**');
+    await page.setContent(mailCard(m));
+    return page.locator('.mail');
+  } },
 };
+
+/** A neutral mail-reader card for one caught message (all text escaped, verbatim). */
+function mailCard(m) {
+  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const addr = (a) => (a.Name ? `${esc(a.Name)} <span class="a">&lt;${esc(a.Address)}&gt;</span>` : esc(a.Address));
+  const from = m.From || {};
+  const date = new Date(m.Date).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:#f5f5f7;
+           font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color:#1b1b22; }
+    .mail { width:760px; background:#fff; border:1px solid rgba(0,0,0,.1); border-radius:14px; box-shadow:0 10px 40px rgba(0,0,0,.10); overflow:hidden; }
+    .hd { padding:24px 28px 18px; border-bottom:1px solid rgba(0,0,0,.08); }
+    h1 { font-size:20px; margin:0 0 16px; line-height:1.35; }
+    .row { display:flex; align-items:center; gap:12px; }
+    .av { width:40px; height:40px; border-radius:50%; background:#0f766e; color:#fff; display:flex; align-items:center; justify-content:center;
+          font-weight:700; font-size:17px; flex:none; }
+    .who { flex:1; font-size:14px; line-height:1.5; }
+    .who b { font-weight:600; } .a, .to, .dt { color:#6b7280; } .dt { font-size:13px; white-space:nowrap; }
+    .bd { padding:22px 28px 28px; font-size:15px; line-height:1.6; white-space:pre-wrap; overflow-wrap:break-word; } .nw { white-space:nowrap; }
+  </style></head><body><div class="mail">
+    <div class="hd"><h1>${esc(m.Subject)}</h1>
+      <div class="row"><div class="av">${esc((from.Name || from.Address || '?').trim()[0].toUpperCase())}</div>
+        <div class="who"><b>${addr(from)}</b><div class="to">to ${(m.To || []).map(addr).join(', ')}</div></div>
+        <div class="dt">${esc(date)}</div></div></div>
+    <div class="bd">${esc(String(m.Text || '').replace(/\s+$/, ''))
+    // Layout only: keep a timestamp on one line (the browser would break it at a hyphen).
+    .replace(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})? UTC/g, (t) => `<span class="nw">${t}</span>`)}</div>
+  </div></body></html>`;
+}
+
+/** An operator token that may create shares/portals, with Northwind Studio's branding. */
+function operatorToken(extra = {}) {
+  const brand = { name: 'Northwind Studio', logo_url: 'https://northwind.example/logo.png',
+    color: '#0f766e', link_url: 'https://northwind.example/' };
+  return tokenFor(UI_USER, { allow_share: true, allow_intake: true, perms: ['read', 'write', 'delete'],
+    share_brand_name: brand.name, share_brand_logo_url: brand.logo_url, share_brand_color: brand.color, share_brand_link_url: brand.link_url,
+    intake_brand_name: brand.name, intake_brand_logo_url: brand.logo_url, intake_brand_color: brand.color, intake_brand_link_url: brand.link_url,
+    ...extra });
+}
+
+// The demo brand's logo, served to the browser for https://northwind.example/logo.png
+// (a fictional host: the request never leaves Playwright).
+let logoPng = null;
+async function brandAssets(page) {
+  if (!logoPng) {
+    const out = join(assets, 'northwind-logo.png');
+    magick('-size', '96x96', 'xc:none', '-fill', '#0f766e', '-draw', 'roundrectangle 0,0 95,95 20,20',
+      '-font', FONT_BOLD, '-fill', 'white', '-pointsize', '60', '-gravity', 'center', '-annotate', '+0+2', 'N', out);
+    logoPng = read(out);
+  }
+  await page.route('https://northwind.example/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: logoPng }));
+}
+
+const mimeOf = (n) => ({ pdf: 'application/pdf', jpg: 'image/jpeg', png: 'image/png', zip: 'application/zip' })[n.split('.').pop()];
+
+/** Client-side files for the portal shots, generated once. */
+const A = {
+  get sow() { return this._sow ??= docPdf('statement-of-work-signed.pdf', 'Statement of Work', 'Signed · Acme Corp', '#047857'); },
+  get brief() { return this._brief ??= docPdf('acme-brand-brief.pdf', 'Brand Brief', 'Acme Corp · 2027 refresh', '#b45309', { cover: true }); },
+  get shoot1() { return this._s1 ??= photo('product-shoot-01.jpg', ['#e0f2fe', '#38bdf8', '#0c4a6e', '#082f49'], '#f0f9ff'); },
+  get shoot2() { return this._s2 ??= photo('product-shoot-02.jpg', ['#fce7f3', '#f472b6', '#831843', '#500724']); },
+  get logoZip() {
+    if (!this._zip) {
+      // A real (stored, uncompressed) zip with one file, so the extension check
+      // and any content sniffing see a genuine archive.
+      const name = Buffer.from('acme-logo.eps');
+      const data = Buffer.from('%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EOF\n');
+      const crc = crc32(data);
+      const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt32LE(crc, 14);
+      lh.writeUInt32LE(data.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(name.length, 26);
+      const ch = Buffer.alloc(46); ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6);
+      ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(data.length, 20); ch.writeUInt32LE(data.length, 24); ch.writeUInt16LE(name.length, 28);
+      const cdOff = lh.length + name.length + data.length;
+      const eo = Buffer.alloc(22); eo.writeUInt32LE(0x06054b50, 0); eo.writeUInt16LE(1, 8); eo.writeUInt16LE(1, 10);
+      eo.writeUInt32LE(ch.length + name.length, 12); eo.writeUInt32LE(cdOff, 16);
+      this._zip = Buffer.concat([lh, name, data, ch, name, eo]);
+    }
+    return this._zip;
+  },
+};
+function crc32(buf) {
+  let c, crc = 0xffffffff;
+  for (const b of buf) { c = (crc ^ b) & 0xff; for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1; crc = (crc >>> 8) ^ c; }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+/** Open a portal and drop three files into it through the page, as a client would. */
+async function dropIntoPortal(page, url) {
+  await page.goto(url);
+  await page.locator('#form:not(.hidden)').waitFor({ timeout: 15000 });
+  await page.locator('#file:not([disabled])').waitFor({ state: 'attached', timeout: 10000 });
+  const files = [['acme-brand-brief.pdf', A.brief], ['product-shoot-01.jpg', A.shoot1], ['product-shoot-02.jpg', A.shoot2]];
+  await page.locator('#file').setInputFiles(files.map(([name, buffer]) => ({ name, mimeType: mimeOf(name), buffer })));
+  for (const [name] of files) {
+    await page.locator('.list .row', { hasText: name }).locator('.st-ok').waitFor({ timeout: 20000 });
+  }
+  await page.waitForLoadState('networkidle');
+}
 
 // ── 7b. WordPress.org plugin-page shots (--set=wporg) ───────────────────────
 // Free features only: the server has no paid module and no licence, and every
@@ -701,6 +901,9 @@ try {
     if (missing.length) { results.push([file, `skipped — missing ${missing.join(', ')}`]); continue; }
     if (shot.paid && !(licensed && shot.paid.every((m) => installed.includes(m)))) {
       results.push([file, 'skipped — paid module not installed/licensed here']); continue;
+    }
+    if (shot.needsMail && !(SMTP && MAILPIT)) {
+      results.push([file, 'skipped — needs --smtp and --mailpit (see README)']); continue;
     }
     const ctx = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1,
       locale: 'en-US', colorScheme: shot.theme || 'light' });
