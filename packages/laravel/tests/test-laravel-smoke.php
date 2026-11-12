@@ -1927,6 +1927,7 @@ if (interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
         public function from($a, $n = null) { $this->d["from"] = [$a, $n]; return $this; } public function replyTo($a) { $this->d["reply_to"] = $a; return $this; }
         public function getSymfonyMessage() { $o = $this; return new class($o) { public function __construct(private object $o) {} public function getHeaders() { $o = $this->o; return new class($o) { public function __construct(private object $o) {} public function addTextHeader($k, $v) { $this->o->d["headers"][$k] = $v; } }; } }; } } }');
     require_once __DIR__ . '/../src/LaravelMailTransport.php';
+    require_once __DIR__ . '/../src/MailerResolver.php';
 
     test('notices: Laravel transport sends through Mail::raw with recipients, subject, Reply-To, auto headers, the display name', function () {
         \Illuminate\Support\Facades\Mail::$sent = [];
@@ -1967,6 +1968,71 @@ if (interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
         $notify = substr($src, strpos($src, 'private function notify('), 2500);
         assertEqual(0, substr_count($notify, 'MailTransportFactory::fromEnv'), 'notify routes go through mailer()');
     });
+
+    // fluxfiles:notify-run (design INTAKE-DOCUMENT-REQUESTS §11). Needs a core that ships the sweep.
+    if (class_exists(\FluxFiles\NotifyEndpoint::class) && interface_exists(\FluxFiles\NotifyProviderInterface::class)) {
+        require_once __DIR__ . '/../src/Console/NotifyRunCommand.php';
+        eval('namespace FluxFiles\Laravel\Tests; final class FakeNotifyIntake implements \FluxFiles\ModuleInterface, \FluxFiles\NotifyProviderInterface {
+            public static array $seen = [];
+            public static function id(): string { return "intake"; }
+            public static function claim(): string { return "allow_intake"; }
+            public function runNotify(\FluxFiles\DiskManager $dm, \FluxFiles\Claims $c, string $disk, ?\FluxFiles\Mail\MailTransportInterface $m, bool $dry, int $max, string $secret, ?callable $audit = null): array {
+                self::$seen = ["claims" => $c, "disk" => $disk, "dry" => $dry, "max" => $max, "mailer" => $m !== null ? $m->name() : null];
+                return ["sent" => $dry ? 0 : 3, "coalesced" => 1, "rate_limited" => 0, "truncated" => false, "items" => []];
+            }
+            public function mute(\FluxFiles\DiskManager $dm, \FluxFiles\Claims $c, string $disk, string $jti, bool $muted): array { return []; }
+        }');
+        $notifyRun = function (array $opts, array $cfg = []) use ($ffTmp): array {
+            $root = $ffTmp . '/notify-disk';
+            @mkdir($root, 0775, true);
+            $base = [
+                'fluxfiles.disks' => ['local' => ['driver' => 'local', 'root' => $root]],
+                'fluxfiles.notify' => ['to' => 'Boss@Acme.com, ops@acme.com', 'locale' => 'de', 'from_name' => 'Acme', 'reply_to' => 'help@acme.com', 'app_url' => 'https://files.acme.com'],
+            ];
+            \Illuminate\Console\Command::$opts = $opts + ['disk' => 'local', 'prefix' => '', 'dry-run' => false, 'max' => '50'];
+            \FluxFiles\ModuleRegistry::register('intake', \FluxFiles\Laravel\Tests\FakeNotifyIntake::class);
+            \FluxFiles\ModuleRegistry::setLicenseResolver(static fn () => new class implements \FluxFiles\LicenseCheckInterface {
+                public function licensed(string $module): bool { return true; }
+                public function status(): string { return 'active'; }
+                public function info(): array { return []; }
+            });
+            try {
+                $cmd = new \FluxFiles\Laravel\Console\NotifyRunCommand();
+                $code = withConfig($cfg + $base, fn () => $cmd->handle());
+                return [$code, $cmd->out];
+            } finally {
+                \FluxFiles\ModuleRegistry::reset();
+                \FluxFiles\ModuleRegistry::setLicenseResolver(null);
+            }
+        };
+        test('notify-run: registered, claims built from config(fluxfiles.notify), mail through the shared resolver', function () use ($notifyRun) {
+            assertTrue(str_contains((string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php'), 'Console\NotifyRunCommand::class'), 'registered in the provider');
+            [$code, $out] = $notifyRun(['prefix' => '/t1/', 'max' => '7']);
+            assertEqual(0, $code, implode("\n", $out));
+            $seen = \FluxFiles\Laravel\Tests\FakeNotifyIntake::$seen;
+            assertEqual(['boss@acme.com', 'ops@acme.com'], $seen['claims']->notifyTo);
+            assertEqual('de', $seen['claims']->notifyLocale);
+            assertEqual('https://files.acme.com', $seen['claims']->notifyAppUrl);
+            assertEqual('t1', $seen['claims']->pathPrefix);
+            assertEqual(7, $seen['max']);
+            assertEqual('laravel_mail', $seen['mailer']);
+            assertTrue(str_contains(implode("\n", $out), 'sent 3'), implode("\n", $out));
+        });
+        test('notify-run: --dry-run sends nothing; a bad --max or unknown disk fails fast', function () use ($notifyRun) {
+            [$code, $out] = $notifyRun(['dry-run' => true]);
+            assertEqual(0, $code); assertEqual(true, \FluxFiles\Laravel\Tests\FakeNotifyIntake::$seen['dry']);
+            assertTrue(str_contains(implode("\n", $out), 'Dry run'), implode("\n", $out));
+            assertEqual(1, $notifyRun(['max' => 'abc'])[0]);
+            assertEqual(1, $notifyRun(['disk' => 'nope'])[0]);
+        });
+        test('notify-run: no module installed is a clean failure, not a crash', function () use ($notifyRun, $ffTmp) {
+            \Illuminate\Console\Command::$opts = ['disk' => 'local', 'prefix' => '', 'dry-run' => false, 'max' => '50'];
+            \FluxFiles\ModuleRegistry::reset();
+            $cmd = new \FluxFiles\Laravel\Console\NotifyRunCommand();
+            $code = withConfig(['fluxfiles.disks' => ['local' => ['driver' => 'local', 'root' => $ffTmp . '/notify-disk']]], fn () => $cmd->handle());
+            assertEqual(1, $code, implode("\n", $cmd->out));
+        });
+    }
 }
 
 

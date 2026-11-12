@@ -351,6 +351,34 @@ FLUXFILES_LICENSE_FILE=/var/www/app/storage/app/fluxfiles-license.json
 `FLUXFILES_LICENSE_FILE` must be an absolute path (use `storage_path('app/fluxfiles-license.json')`
 to compute it when generating the `.env`). `FLUXFILES_LICENSE_REFRESH=false` disables the automatic call.
 
+### Scheduled e-mail notices
+
+Expiry warnings, intake digests and document-request reminders are sent by a sweep that
+nothing runs for you. Schedule the command (Laravel 11+, `routes/console.php`):
+
+```php
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('fluxfiles:notify-run')->hourly();
+```
+
+(On Laravel 10 and older, use `$schedule->command('fluxfiles:notify-run')->hourly();` in
+`app/Console/Kernel.php`.) A scheduler needs the usual `* * * * * php artisan schedule:run`
+cron entry.
+
+```bash
+php artisan fluxfiles:notify-run [--disk=local] [--prefix=] [--dry-run] [--max=50]
+```
+
+It needs the Intake or Share module (installed and licensed). Mail goes out the way the
+proxy routes send it: the app's own mailer (`config/mail.php`; `FLUXFILES_LARAVEL_MAILER`
+picks one), unless `FLUXFILES_MAIL_TRANSPORT` is set. A scheduled run has no JWT, so its
+recipients come from `.env`, read through `config('fluxfiles.notify')` and used only by this
+command: `FLUXFILES_NOTIFY_TO` (comma list), `FLUXFILES_NOTIFY_LOCALE`,
+`FLUXFILES_NOTIFY_FROM_NAME`, `FLUXFILES_NOTIFY_REPLY_TO`, `FLUXFILES_NOTIFY_APP_URL`.
+`--dry-run` reports without sending. If you published `config/fluxfiles.php` earlier, run
+`php artisan fluxfiles:doctor`: it lists the new `notify` key to copy over.
+
 ### License Status
 
 `FluxFiles::licenseInfo()` returns the same shape as `GET /api/fm/license`

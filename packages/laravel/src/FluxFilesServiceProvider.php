@@ -33,6 +33,7 @@ class FluxFilesServiceProvider extends ServiceProvider
                 Console\SeedMetadataCommand::class,
                 Console\MigrateJsonToDbCommand::class,
                 Console\DoctorCommand::class,
+                Console\NotifyRunCommand::class,
             ]);
 
             // `php artisan about` section (no-op on Laravel versions without AboutCommand)

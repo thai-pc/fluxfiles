@@ -310,3 +310,27 @@ The server warns before this becomes a problem. When the index passes
 `FLUXFILES_INDEX_WARN_MB` (default 5), it logs a warning at most once an hour
 per disk. The usage dashboard also shows operators (tokens with no `prefix`) a
 banner.
+
+## Scheduled e-mail notices (cron)
+
+Expiry warnings, intake digests and document-request reminders are sent by a sweep, and
+nothing runs on its own. On a standalone install, run it hourly from the system cron:
+
+```cron
+0 * * * *  cd /var/www/fluxfiles && php bin/fluxfiles notify:run --disk=local
+```
+
+```bash
+php bin/fluxfiles notify:run [--disk=local] [--prefix=] [--dry-run] [--max=50]
+```
+
+It needs the Intake or Share module (installed and licensed) and a mail transport
+(`FLUXFILES_MAIL_TRANSPORT` plus its settings). There is no JWT, so the claims come from
+server env, used **only** by this command: `FLUXFILES_NOTIFY_TO` (comma list of owner
+recipients), `FLUXFILES_NOTIFY_LOCALE`, `FLUXFILES_NOTIFY_FROM_NAME`,
+`FLUXFILES_NOTIFY_REPLY_TO`, `FLUXFILES_NOTIFY_APP_URL`. `--dry-run` reports what would be
+sent without sending. `--prefix` limits the sweep to one tenant's folder. Exit code 0 is
+success, 1 a usage/config problem (no module, no transport), 2 a failed sweep. The sweep is
+at-most-once, so a missed hour loses no mail and a second run never double-sends.
+Laravel has `php artisan fluxfiles:notify-run` instead (see the Laravel README) and
+WordPress Pro schedules it itself through WP-cron.
