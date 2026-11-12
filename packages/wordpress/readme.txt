@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.1.8
+Stable tag: 1.1.9
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -176,6 +176,10 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.1.9 =
+* Bundles FluxFiles core 1.4.1.
+* E-mail notices (FluxFiles Pro) read "1 file" or "3 files" instead of "file(s)", and a drop that arrives within one minute shows a single time instead of "between 16:36 and 16:36".
+
 = 1.1.8 =
 * Bundles FluxFiles core 1.4.0.
 * Operator screen: an "E-mail me" switch and recipient picker when you create a share link or upload portal, a bell to mute or resume e-mails per link, and a "Send test e-mail" button (e-mail notices need FluxFiles Pro).
@@ -278,6 +282,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.1.9 =
+Bundles core 1.4.1: clearer wording in the FluxFiles Pro notice e-mails. No change for sites without Pro.
 
 = 1.1.8 =
 Bundles core 1.4.0: e-mail notice controls on the file manager screen and document requests for FluxFiles Pro. No change for sites without Pro.
