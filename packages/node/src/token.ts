@@ -277,6 +277,7 @@ function applyTenantOverrides(
   if (opts.notifyBatchWindow !== undefined) payload.notify_batch_window = Math.trunc(Number(opts.notifyBatchWindow));
   if (opts.notifyIncludeNames !== undefined) payload.notify_include_names = !!opts.notifyIncludeNames;
   if (opts.intakeNotifyReceipt !== undefined) payload.intake_notify_receipt = !!opts.intakeNotifyReceipt;
+  if (opts.intakeRequestAnyRecipient !== undefined) payload.intake_request_any_recipient = !!opts.intakeRequestAnyRecipient;
   // Intake portal branding — mirrors shareBrand* above, same sanitizing on decode.
   if (opts.intakeBrandName) payload.intake_brand_name = String(opts.intakeBrandName);
   if (opts.intakeBrandLogoUrl) payload.intake_brand_logo_url = String(opts.intakeBrandLogoUrl);

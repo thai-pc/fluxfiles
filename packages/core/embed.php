@@ -464,7 +464,7 @@ function fluxfiles_apply_media_claims(array &$payload, array $media): void
  *        watermark_type, watermark_text, watermark_logo_path, watermark_position,
  *        watermark_opacity, watermark_font_size, share_brand_* / intake_brand_*
  *        (name/logo_url/color/link_url), intake_analytics, pro_hints, notify_* /
- *        intake_notify_receipt (e-mail notices)
+ *        intake_notify_receipt / intake_request_any_recipient (e-mail notices, document requests)
  */
 function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
 {
@@ -567,7 +567,7 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (array_key_exists('notify_batch_window', $webp)) {
         $payload['notify_batch_window'] = (int) $webp['notify_batch_window'];
     }
-    foreach (['notify_include_names', 'intake_notify_receipt'] as $nk) {
+    foreach (['notify_include_names', 'intake_notify_receipt', 'intake_request_any_recipient'] as $nk) {
         if (array_key_exists($nk, $webp)) {
             $payload[$nk] = (bool) $webp[$nk];
         }

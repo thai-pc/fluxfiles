@@ -372,7 +372,7 @@ def _apply_tenant_overrides(
             payload[_n] = str(extras[_n])
     if extras.get("notify_batch_window") is not None:
         payload["notify_batch_window"] = int(extras["notify_batch_window"])
-    for _n in ("notify_include_names", "intake_notify_receipt"):
+    for _n in ("notify_include_names", "intake_notify_receipt", "intake_request_any_recipient"):
         if extras.get(_n) is not None:
             payload[_n] = bool(extras[_n])
     # Intake portal branding — mirrors share_brand_* above, same decode-time
@@ -619,6 +619,7 @@ def create_token(
     notify_batch_window: int | None = None,
     notify_include_names: bool | None = None,
     intake_notify_receipt: bool | None = None,
+    intake_request_any_recipient: bool | None = None,
     intake_brand_name: str | None = None,
     intake_brand_logo_url: str | None = None,
     intake_brand_color: str | None = None,
@@ -772,6 +773,7 @@ def create_token(
         notify_batch_window=notify_batch_window,
         notify_include_names=notify_include_names,
         intake_notify_receipt=intake_notify_receipt,
+        intake_request_any_recipient=intake_request_any_recipient,
         intake_brand_name=intake_brand_name,
         intake_brand_logo_url=intake_brand_logo_url,
         intake_brand_color=intake_brand_color,
@@ -899,6 +901,7 @@ def create_byob_token(
     notify_batch_window: int | None = None,
     notify_include_names: bool | None = None,
     intake_notify_receipt: bool | None = None,
+    intake_request_any_recipient: bool | None = None,
     intake_brand_name: str | None = None,
     intake_brand_logo_url: str | None = None,
     intake_brand_color: str | None = None,
@@ -1073,6 +1076,7 @@ def create_byob_token(
         notify_batch_window=notify_batch_window,
         notify_include_names=notify_include_names,
         intake_notify_receipt=intake_notify_receipt,
+        intake_request_any_recipient=intake_request_any_recipient,
         intake_brand_name=intake_brand_name,
         intake_brand_logo_url=intake_brand_logo_url,
         intake_brand_color=intake_brand_color,

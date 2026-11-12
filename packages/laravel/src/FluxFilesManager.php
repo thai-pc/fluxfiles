@@ -414,7 +414,7 @@ class FluxFilesManager
         if (array_key_exists('notify_batch_window', $overrides)) {
             $payload['notify_batch_window'] = (int) $overrides['notify_batch_window'];
         }
-        foreach (['notify_include_names', 'intake_notify_receipt'] as $nk) {
+        foreach (['notify_include_names', 'intake_notify_receipt', 'intake_request_any_recipient'] as $nk) {
             if (array_key_exists($nk, $overrides)) {
                 $payload[$nk] = (bool) $overrides[$nk];
             }
