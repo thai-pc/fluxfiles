@@ -8,14 +8,15 @@ services:
   core:
     <<: *app
     build: .
-    ports: ["8190:8190"]
+    ports: ["8190:8190", "8191:8191"]   # 8191 = ff-idp, which lives in this network namespace
     env_file: .stage/core.env
-    depends_on: [ff-idp, ff-ai, ff-hooks, localstack, ff-presidio]
-  ff-idp:            # OIDC IdP for the SSO module (browser + core both use http://ff-idp:8191)
+    depends_on: [ff-ai, ff-hooks, localstack, ff-presidio]
+  ff-idp:            # OIDC IdP for the SSO module (browser + core both use http://localhost:8191)
     <<: *app
     command: ["php", "-S", "0.0.0.0:8191", "/fixtures/idp.php"]
     environment: { IDP_CLIENT_ID: fluxfiles-live }
-    ports: ["8191:8191"]
+    network_mode: "service:core"   # core reaches it on loopback (http is allowed only there)
+    depends_on: [core]
   ff-ai:             # self-hosted image-model stand-in for the AI Vision module (provider=http)
     <<: *app
     command: ["php", "-S", "0.0.0.0:8192", "/fixtures/ai.php"]

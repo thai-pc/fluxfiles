@@ -12,7 +12,7 @@ test('sso: sign in through the IdP and use the minted token', async ({ page }) =
   await expect(signIn).toBeVisible({ timeout: 20_000 });
   await signIn.click();
 
-  await expect(page).toHaveURL(/^http:\/\/ff-idp:8191\/authorize\?/);
+  await expect(page).toHaveURL(/^http:\/\/localhost:8191\/authorize\?/);
   const authorize = new URL(page.url());
   expect(authorize.searchParams.get('code_challenge_method')).toBe('S256');
   expect(authorize.searchParams.get('code_challenge')).toBeTruthy();

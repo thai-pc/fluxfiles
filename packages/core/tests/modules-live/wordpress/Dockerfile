@@ -10,6 +10,7 @@ RUN docker-php-ext-install -j"$(nproc)" mysqli pdo_mysql \
     && mkdir -p /var/www/html && WP_CLI_ALLOW_ROOT=1 wp core download --path=/var/www/html --version=latest --quiet
 
 COPY fixtures/ /wpfixtures/
+COPY .stage/LicenseManager.php /wpfixtures/LicenseManager.php
 COPY .stage/plugin/ /var/www/html/wp-content/plugins/fluxfiles/
 WORKDIR /var/www/html
 ENV WP_CLI_ALLOW_ROOT=1 PHP_CLI_SERVER_WORKERS=8

@@ -12,8 +12,8 @@ export default defineConfig({
   globalTeardown: './global-teardown.ts',
   use: {
     baseURL: 'http://localhost:8190',
-    // The OIDC issuer is http://ff-idp:8191 for core (compose DNS) AND the browser.
-    launchOptions: { args: ['--host-resolver-rules=MAP ff-idp 127.0.0.1'] },
+    // The OIDC issuer is http://localhost:8191 for core (ff-idp shares its network
+    // namespace) AND the browser (the port is published on core).
   },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
 });

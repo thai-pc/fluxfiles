@@ -41,9 +41,10 @@ license. Without the key the run stops at staging, so this is a **local** suite,
 
 `stage.sh` copies core + the module sources into `.stage/app` (never the dev `.env`,
 never runtime storage) and writes `.stage/core.env`; the image is built from that copy.
-Ports on the host: 8190 (core), 8191 (IdP), 8193 (webhook receiver). The browser
-reaches the IdP as `http://ff-idp:8191` via a host-resolver rule, the same URL core
-uses inside the compose network, so the issuer matches on both sides.
+Ports on the host: 8190 (core), 8191 (IdP), 8193 (webhook receiver). `ff-idp`
+runs in core's network namespace, so both core and the browser reach it as
+`http://localhost:8191` and the issuer matches on both sides (core accepts a plain-http
+issuer only on loopback since core-v1.1.9).
 
 **Through the Laravel proxy:** `laravel/` runs the same modules and engines behind a
 real Laravel app with `fluxfiles/laravel` in proxy mode — see `laravel/README.md`

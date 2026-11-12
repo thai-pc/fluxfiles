@@ -1,10 +1,12 @@
 # Paid modules, live, through the WordPress plugin
 
-> **Out of date since wordpress-v1.1.0.** The free plugin no longer runs paid modules (the
-> WordPress.org split ships `api/NoLicense.php`, not `LicenseManager`), so this rig cannot
-> license them. On WordPress, paid modules ship only in FluxFiles Pro (Share + Intake), whose
-> real-WordPress e2e is `packages/wordpress-pro/e2e/run.sh`. Keep this rig for reference
-> until it is ported to Pro or removed.
+> **Since wordpress-v1.1.0 the free plugin runs no paid module on its own.** Licence,
+> edition presets and module discovery come from FluxFiles Pro through three filters
+> (`fluxfiles_license`, `fluxfiles_edition_presets`, `fluxfiles_module_paths`), and the free zip
+> ships no `LicenseManager`. This rig's mu-plugin (`fixtures/fluxfiles-live.php`) answers those
+> filters the way Pro does, so all 13 modules still run behind the real WordPress proxy, which is
+> what this rig guards. Customers get only Share + Intake on WordPress, through Pro;
+> `packages/wordpress-pro/e2e/run.sh` drives that real path.
 
 The same idea as the standalone rig one level up (real modules, a real licence,
 real engines, nothing mocked), but every request goes through the **WordPress
@@ -17,12 +19,13 @@ What is real, and how it is configured (the operator's way, not the test's):
 | Piece | How the rig sets it up |
 |---|---|
 | Plugin | `scripts/build-wordpress.sh`, run in a **staged copy** of the repo (`.stage/repo`), so it never touches the repo's `build/` (wp-env mounts that) |
-| Modules | each module dir zipped like `pack-modules.php` does (`composer.json`, `LICENSE`, `README.md`, `src/`) and installed with core's own `UpdateClient::install()` into `<plugin>/vendor/fluxfiles/<id>/`, which is where `docs/guides/ACTIVATE.md` tells a WordPress customer to unzip them. Built from the module **worktrees**, not their tags |
-| Licence | pasted into the `fluxfiles_license_key` **option** (Settings → FluxFiles → Licence). `FLUXFILES_LICENSE_KEY` is deliberately not in the container env, and `proxy.spec.ts` asserts that |
+| Modules | each module dir zipped like `pack-modules.php` does (`composer.json`, `LICENSE`, `README.md`, `src/`, `public/`) and installed with core's own `UpdateClient::install()` into `<plugin>/vendor/fluxfiles/<id>/`, registered through `fluxfiles_module_paths`. Built from the module **worktrees**, not their tags |
+| Licence | the `fluxfiles_license_key` option, verified by a `LicenseManager` copied from the staged core (`.stage/LicenseManager.php`) and returned from the `fluxfiles_license` filter, as Pro does. `FLUXFILES_LICENSE_KEY` is deliberately not in the container env |
 | Module claims | `fixtures/fluxfiles-live.php`, an mu-plugin on the `fluxfiles_token_overrides` filter (the only supported way: the plugin has no settings UI for module claims). It uses `edition: enterprise` plus tuning from `fixtures/overrides.json` |
-| `audit` permission | ticked in Settings → FluxFiles → Default Permissions **through the real settings form** (`grantAuditViaSettings()`) |
+| `audit` permission | ticked in Settings → FluxFiles → **Access** tab → Default Permissions **through the real settings form** (`grantAuditViaSettings()`) |
 | Second disk (Backup) | the plugin's S3 options, pointed at LocalStack |
-| Module engine config | the plugin's `fluxfiles_module_env` option (Settings → FluxFiles → Module engines; `fixtures/module-env.json`, written by the entrypoint): AI Vision provider/endpoint, DLP endpoint, webhook allow-internal. `FLUXFILES_C2PA_MANIFEST` stays a real container env var to prove env and option coexist (`proxy.spec.ts`) |
+| Module engine config | real container env vars (`.stage/wp.env`): AI Vision provider/endpoint, DLP endpoint, webhook allow-internal, C2PA manifest. The free plugin has no engine-settings option any more |
+| Versioning | saves are overwriting uploads (`upload_collision: overwrite`): the plugin forces `allow_code_edit` off (1.1.3), so `PUT /content` is refused on WordPress by design |
 
 WordPress runs on `ff-live-wp:latest` = `ff-modules-live:latest` (PHP 8.2 + ClamAV
 clamd + Tesseract + c2patool + Ghostscript) + mysqli + wp-cli, served by `php -S`

@@ -25,6 +25,13 @@ foreach ($mods as $id) {
     foreach ($it as $file) {
         $zip->addFile($file->getPathname(), 'src/' . substr($file->getPathname(), strlen("$src/src/")));
     }
+    // public/ = the recipient pages (share.html / intake.html) since core-v1.1.0; the Pro pack ships it.
+    if (is_dir("$src/public")) {
+        $pit = new RecursiveIteratorIterator(new RecursiveDirectoryIterator("$src/public", FilesystemIterator::SKIP_DOTS));
+        foreach ($pit as $file) {
+            $zip->addFile($file->getPathname(), 'public/' . substr($file->getPathname(), strlen("$src/public/")));
+        }
+    }
     $zip->close();
     $client->install((string) file_get_contents($zipPath), "$plugin/vendor/fluxfiles/$id");
     if (!is_dir("$plugin/vendor/fluxfiles/$id/src")) { fwrite(STDERR, "install of $id produced no src/\n"); exit(3); }

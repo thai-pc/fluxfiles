@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createHmac } from 'node:crypto';
 import { promises as fs } from 'node:fs';
-import { loginAdmin, openFiles, uploadAndSee, cardByName, pngFile, textFile, api, apiTry, hookEvents, HOOKS, BASE_OVERRIDES, grantAuditViaSettings } from './helpers';
+import { loginAdmin, openFiles, upload, uploadAndSee, cardByName, pngFile, textFile, api, apiTry, hookEvents, HOOKS, BASE_OVERRIDES, grantAuditViaSettings, setOverrides } from './helpers';
 
 // Versioning, Webhooks, Legal hold, Audit export — real modules behind the WP proxy.
 // Legal hold / retention / audit export need the `audit` permission, granted the
@@ -12,13 +12,20 @@ test.beforeAll(async ({ browser }) => {
   await page.close();
 });
 
-test('versioning: every proxied save is kept; restoring v1 brings its bytes back', async ({ page }) => {
+test.afterEach(() => setOverrides());
+
+test('versioning: every proxied overwrite is kept; restoring v1 brings its bytes back', async ({ page }) => {
+  // WordPress forces allow_code_edit off (plugin 1.1.3), so PUT /content is refused there:
+  // the saves are overwriting uploads, the way a WordPress user replaces a file.
+  setOverrides({ upload_collision: 'overwrite' });
   await loginAdmin(page);
   const m = await openFiles(page);
   const f = textFile(`notes-${Date.now()}.txt`, 'v1\n');
   await uploadAndSee(m, f);
-  await api(m, 'PUT', '/api/fm/content', { disk: 'local', path: f.name, content: 'v2\n' });
-  await api(m, 'PUT', '/api/fm/content', { disk: 'local', path: f.name, content: 'v3\n' });
+  for (const v of ['v2\n', 'v3\n']) {
+    await upload(m, textFile(f.name, v));
+    await expect.poll(async () => ((await api(m, 'GET', `/api/fm/content?disk=local&path=${f.name}`)) as { content: string }).content, { timeout: 15_000 }).toBe(v);
+  }
 
   await cardByName(m.fm, f.name).click();
   await m.fm.getByRole('button', { name: 'Version history', exact: true }).click();
