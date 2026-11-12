@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Core: notice strings `notify.intake_received_intro_{one,at,range}` and `notify.intake_receipt_intro_{one,many}` in all 16 locales, so the Intake digest and receipt can say "1 file" / "N files" and "at {time}" instead of "file(s)" and "between T and T". The original keys stay for Intake ≤ 1.7.0.
+
 ## [1.0.33] — 2026-11-12
 
 > Released: `core-v1.4.0`, `laravel-v1.0.9`, `wordpress-v1.1.8` (bundles core 1.4.0). From their own repos: Intake `v1.7.0` (requires core `^1.4.0`) and FluxFiles Pro `1.2.0`. Share is unchanged (`v1.5.0`).
