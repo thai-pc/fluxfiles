@@ -759,7 +759,34 @@
     "empty": "Aucun portail de dépôt pour le moment.",
     "col_received": "Reçus",
     "revoke_confirm": "Révoquer ce portail de dépôt ? Plus personne ne pourra y envoyer de fichiers.",
-    "pro_teaser": "Laissez vos contacts vous envoyer des fichiers sans compte — directement dans votre stockage."
+    "pro_teaser": "Laissez vos contacts vous envoyer des fichiers sans compte — directement dans votre stockage.",
+    "request": {
+      "title": "Demander des documents",
+      "items_hint": "Listez les documents dont vous avez besoin. La personne qui reçoit le lien voit cette liste et associe chaque envoi à un élément.",
+      "item_ph": "p. ex. Passeport (page de la photo)",
+      "item_label": "Nom du document",
+      "required": "Obligatoire",
+      "remove": "Retirer",
+      "add_item": "Ajouter un document",
+      "due": "Date limite (facultatif)",
+      "client_email": "E-mail du client (facultatif)",
+      "client_hint": "Utilisé uniquement pour cette demande. Jamais affiché sur la page d’envoi.",
+      "send_now": "Envoyer maintenant le lien à mon client par e-mail",
+      "message": "Message au client (facultatif)",
+      "err_label": "Chaque nom de document peut contenir 80 caractères au maximum.",
+      "err_unique": "Les noms des documents doivent être différents.",
+      "err_items": "Ajoutez de 1 à 20 documents.",
+      "err_due": "Choisissez une date limite à plus d’une heure d’ici et avant l’expiration du lien.",
+      "err_email": "Saisissez une adresse e-mail de client valide.",
+      "err_message": "Le message peut contenir 1000 caractères au maximum.",
+      "sent": "Demande envoyée à {to}",
+      "not_sent": "L’e-mail de la demande n’a pas pu être envoyé. Copiez le lien et envoyez-le vous-même.",
+      "col": "Demande",
+      "progress": "{done}/{total} documents",
+      "due_on": "Échéance : {date}",
+      "overdue": "En retard",
+      "complete": "Terminé"
+    }
   },
   "compliance": {
     "title": "Conformité",
@@ -886,6 +913,22 @@
     "open_app": "Ouvrir dans votre gestionnaire de fichiers : {url}",
     "unlimited": "illimité",
     "footer": "Vous recevez cet e-mail car les notifications sont activées pour cet élément. Pour les arrêter, mettez-le en sourdine dans votre gestionnaire de fichiers.",
-    "receipt_footer": "Ceci est un accusé de réception automatique."
+    "receipt_footer": "Ceci est un accusé de réception automatique.",
+    "ui": {
+      "email_me": "M’avertir par e-mail à ce sujet",
+      "add_address": "Ajouter une adresse",
+      "add_hint": "Vous pouvez aussi ajouter des adresses de : {domains}",
+      "err_address": "Cette adresse e-mail n’est pas valide.",
+      "err_none": "Choisissez au moins un destinataire.",
+      "test_btn": "Envoyer un e-mail de test",
+      "test_sent": "E-mail de test envoyé ({transport}).",
+      "test_failed": "Échec de l’e-mail de test ({transport}) : {error}",
+      "mute": "Couper les e-mails pour cet élément",
+      "unmute": "Réactiver les e-mails pour cet élément",
+      "muted": "E-mails coupés pour cet élément.",
+      "unmuted": "E-mails réactivés pour cet élément.",
+      "muted_tip": "E-mails coupés",
+      "on_tip": "E-mail à {n} destinataire(s)"
+    }
   }
 }

@@ -4370,6 +4370,98 @@ function fluxFilesApp() {
         linkCopied: false,
         linkTarget: null,           // the file/folder the modal was opened for
         linkForm: { label: '', ttl: 0, password: '', max_downloads: '', max_files: '', max_mb: '', allowed_ext: '' },
+        linkFormError: '',          // retryable, in-form validation message (client or 400/403 from the server)
+        linkSentTo: '',             // masked client address when the request mail went out (done screen)
+        linkSendFailed: false,      // send_now was asked for but the server reported sent:false
+
+        // ── E-mail notices + document requests (create modal) ───────────────
+        // Recipients the operator vouched for in the token (`notify_to`, array or comma string).
+        get notifyAddrs() {
+            const v = this._tokenPayload().notify_to;
+            const a = Array.isArray(v) ? v : String(v || '').split(',');
+            return a.map((x) => String(x).trim().toLowerCase()).filter(Boolean);
+        },
+        get notifyDomains() {
+            const v = this._tokenPayload().notify_recipient_domains;
+            return Array.isArray(v) ? v.map((x) => String(x).trim().toLowerCase()).filter(Boolean) : [];
+        },
+        get notifyAvailable() { return this.notifyAddrs.length > 0 || this.notifyDomains.length > 0; },
+        _isEmail(v) { return /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(v) && v.length <= 254; },
+        _maskEmail(v) {
+            const i = String(v).indexOf('@');
+            return i < 1 ? '' : String(v).charAt(0) + '***' + String(v).slice(i);
+        },
+        _notifyFormDefaults() {
+            return {
+                notifyOn: this.notifyAddrs.length > 0,
+                notifyTo: this.notifyAddrs.slice(),
+                notifyExtra: '',
+                reqOpen: false,
+                reqItems: [{ label: '', required: true }],
+                reqDue: '',
+                reqEmail: '',
+                reqSendNow: true,
+                reqMessage: '',
+            };
+        },
+        addReqItem() {
+            if (this.linkForm.reqItems.length < 20) this.linkForm.reqItems.push({ label: '', required: true });
+        },
+        removeReqItem(i) {
+            this.linkForm.reqItems.splice(i, 1);
+            if (!this.linkForm.reqItems.length) this.linkForm.reqItems.push({ label: '', required: true });
+        },
+        // Returns { body } fragments or { error } — the server stays authoritative.
+        _buildNotify() {
+            const f = this.linkForm;
+            const addrs = this.notifyAddrs;
+            if (!this.notifyAvailable) return {};
+            if (!f.notifyOn) return addrs.length ? { notify: { enabled: false } } : {};
+            const extra = String(f.notifyExtra || '').split(/[,\s;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+            if (extra.some((x) => !this._isEmail(x))) return { error: this.t('notify.ui.err_address') };
+            const to = f.notifyTo.filter((x) => addrs.includes(x)).concat(extra.filter((x) => !addrs.includes(x)));
+            if (!to.length) return { error: this.t('notify.ui.err_none') };
+            const all = to.length === addrs.length && addrs.every((x) => to.includes(x));
+            if (all) return {};      // the server default
+            return { notify: addrs.length ? { to } : { enabled: true, to } };
+        },
+        _buildRequest(ttl) {
+            const f = this.linkForm;
+            if (!f.reqOpen) return {};
+            const R = (k, p) => this.t('intake.request.' + k, p || {});
+            const seen = new Set();
+            const items = [];
+            for (const it of f.reqItems) {
+                const label = String(it.label || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+                if (!label) continue;
+                if (label.length > 80) return { error: R('err_label') };
+                const k = label.toLowerCase();
+                if (seen.has(k)) return { error: R('err_unique') };
+                seen.add(k);
+                items.push({ label, required: !!it.required });
+            }
+            if (!items.length) return { error: R('err_items') };
+            if (items.length > 20) return { error: R('err_items') };
+            const req = { items };
+            if (f.reqDue) {
+                const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(f.reqDue);
+                if (!m) return { error: R('err_due') };
+                const due = Math.floor(new Date(+m[1], +m[2] - 1, +m[3], 23, 59, 59).getTime() / 1000);
+                const now = Math.floor(Date.now() / 1000);
+                if (due <= now + 3600 || (ttl && due > now + ttl)) return { error: R('err_due') };
+                req.due_at = due;
+            }
+            const email = String(f.reqEmail || '').trim().toLowerCase();
+            if (email) {
+                if (!this._isEmail(email)) return { error: R('err_email') };
+                req.requestee = email;
+                if (f.reqSendNow) req.send_now = true;
+            }
+            const msg = String(f.reqMessage || '').trim();
+            if (msg.length > 1000) return { error: R('err_message') };
+            if (msg) req.message = msg;
+            return { request: req };
+        },
 
         // TTL choices differ per feature; values are seconds and the module clamps anyway.
         get linkTtlChoices() {
@@ -4392,7 +4484,11 @@ function fluxFilesApp() {
             this.linkForm = {
                 label: '', password: '', max_downloads: '', max_files: '', max_mb: '', allowed_ext: '',
                 ttl: 604800,   // 7d — offered by both choice lists, so the <select> always matches
+                ...this._notifyFormDefaults(),
             };
+            this.linkFormError = '';
+            this.linkSentTo = '';
+            this.linkSendFailed = false;
         },
 
         closeLinkModal() {
@@ -4431,9 +4527,22 @@ function fluxFilesApp() {
                     .split(/[,\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
                 if (ext.length) body.allowed_ext = ext;
             }
+            this.linkFormError = '';
+            const nt = this._buildNotify();
+            const rq = kind === 'intake' ? this._buildRequest(parseInt(this.linkForm.ttl, 10) || 0) : {};
+            if (nt.error || rq.error) {
+                this.linkFormError = nt.error || rq.error;
+                this.linkBusy = false;
+                return;
+            }
+            if (nt.notify) body.notify = nt.notify;
+            if (rq.request) body.request = rq.request;
             try {
                 const res = await this.api('POST', kind === 'share' ? '/api/fm/share' : '/api/fm/intake', body);
                 this.linkResult = res || {};
+                this.linkSentTo = (rq.request && rq.request.send_now && res && res.request && res.request.sent)
+                    ? this._maskEmail(rq.request.requestee) : '';
+                this.linkSendFailed = !!(rq.request && rq.request.send_now && !this.linkSentTo);
                 this.linkStage = 'done';
                 this.showToast(this.t(kind === 'share' ? 'share.created' : 'intake.created'), 'success');
                 // Never emit the token or the url — a host that wants the link asks the API.
@@ -4442,6 +4551,12 @@ function fluxFilesApp() {
                     jti: res && res.jti, expires: res && res.expires, has_password: !!(res && res.has_password),
                 });
             } catch (e) {
+                // A bad recipient / request is the operator's to fix: keep the form open.
+                if (['notify_recipient_denied', 'notify_invalid_address', 'intake_request_invalid',
+                    'intake_request_no_url'].includes(e.code)) {
+                    this.linkFormError = e.message || this.t('error.generic');
+                    return;
+                }
                 // 501/402/403 are terminal, not retryable — render them in the modal body
                 // and hide submit, rather than as a transient toast.
                 this.linkStage = 'error';
@@ -4527,6 +4642,52 @@ function fluxFilesApp() {
             } catch (e) {
                 this.showToast(e.message || this.t('error.generic'), 'error', 4000);
             }
+        },
+
+        // Bell badge: stop / resume e-mails about one record. The server writes the flag
+        // outside the sealed block; the row is updated from its answer.
+        async toggleNotifyMute(row) {
+            if (!row || row._muteBusy) return;
+            row._muteBusy = true;
+            const want = !row.notify_muted;
+            try {
+                const res = await this.api('POST', '/api/fm/notify/mute',
+                    { module: this.linksTab, disk: this.currentDisk, jti: row.jti, muted: want });
+                row.notify_muted = res && typeof res.muted === 'boolean' ? res.muted : want;
+                this.showToast(this.t(row.notify_muted ? 'notify.ui.muted' : 'notify.ui.unmuted'), 'success');
+            } catch (e) {
+                this.showToast(e.message || this.t('error.generic'), 'error', 4000);
+            } finally {
+                row._muteBusy = false;
+            }
+        },
+
+        get canNotifyTest() { return this.notifyAddrs.length > 0; },
+        notifyTestBusy: false,
+        async sendNotifyTest() {
+            if (this.notifyTestBusy) return;
+            this.notifyTestBusy = true;
+            try {
+                const res = await this.api('POST', '/api/fm/notify/test', {}) || {};
+                if (res.sent) {
+                    this.showToast(this.t('notify.ui.test_sent', { transport: res.transport || '' }), 'success', 4000);
+                } else {
+                    this.showToast(this.t('notify.ui.test_failed', { transport: res.transport || '', error: res.error || '' }), 'error', 6000);
+                }
+            } catch (e) {
+                this.showToast(e.message || this.t('error.generic'), 'error', 5000);
+            } finally {
+                this.notifyTestBusy = false;
+            }
+        },
+
+        // Intake request column: "2/3 documents" + due date + overdue / complete badges.
+        requestProgress(r) {
+            const q = r && r.request;
+            if (!q) return '';
+            const total = q.items_required > 0 ? q.items_required : q.items_total;
+            const done = q.items_required > 0 ? q.items_done_required : 0;
+            return this.t('intake.request.progress', { done, total });
         },
 
         // An entry past its expiry still lists (revoking it is harmless and clears it).

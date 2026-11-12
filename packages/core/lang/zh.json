@@ -759,7 +759,34 @@
     "empty": "还没有上传门户。",
     "col_received": "已接收",
     "revoke_confirm": "撤销此上传门户？将无人能再向其发送文件。",
-    "pro_teaser": "让别人无需账号即可向你发送文件——直接进入你的存储。"
+    "pro_teaser": "让别人无需账号即可向你发送文件——直接进入你的存储。",
+    "request": {
+      "title": "请求文件",
+      "items_hint": "列出您需要的文件。收到链接的人会看到此清单，并将每次上传对应到一项。",
+      "item_ph": "例如：护照（照片页）",
+      "item_label": "文件名称",
+      "required": "必填",
+      "remove": "移除",
+      "add_item": "添加文件",
+      "due": "截止日期（可选）",
+      "client_email": "客户电子邮件（可选）",
+      "client_hint": "仅用于本次请求，绝不会显示在上传页面上。",
+      "send_now": "立即通过电子邮件把链接发给我的客户",
+      "message": "给客户的留言（可选）",
+      "err_label": "每个文件名称最多 80 个字符。",
+      "err_unique": "文件名称不能重复。",
+      "err_items": "请添加 1 到 20 个文件。",
+      "err_due": "请选择一个距现在超过一小时且早于链接过期时间的日期。",
+      "err_email": "请输入有效的客户电子邮件地址。",
+      "err_message": "留言最多 1000 个字符。",
+      "sent": "请求已发送至 {to}",
+      "not_sent": "无法发送请求邮件。请复制链接并自行发送。",
+      "col": "请求",
+      "progress": "{done}/{total} 份文件",
+      "due_on": "截止 {date}",
+      "overdue": "已逾期",
+      "complete": "已完成"
+    }
   },
   "compliance": {
     "title": "合规性",
@@ -886,6 +913,22 @@
     "open_app": "在您的文件管理器中打开：{url}",
     "unlimited": "不限",
     "footer": "您收到这封邮件，是因为此项目已开启通知。如需停止，请在文件管理器中将其静音。",
-    "receipt_footer": "这是一封自动回执。"
+    "receipt_footer": "这是一封自动回执。",
+    "ui": {
+      "email_me": "通过电子邮件通知我",
+      "add_address": "添加地址",
+      "add_hint": "还可以添加以下域名的地址：{domains}",
+      "err_address": "这不是有效的电子邮件地址。",
+      "err_none": "请至少选择一位收件人。",
+      "test_btn": "发送测试邮件",
+      "test_sent": "测试邮件已发送（{transport}）。",
+      "test_failed": "测试邮件发送失败（{transport}）：{error}",
+      "mute": "停止此项的邮件通知",
+      "unmute": "恢复此项的邮件通知",
+      "muted": "已关闭此项的邮件通知。",
+      "unmuted": "已恢复此项的邮件通知。",
+      "muted_tip": "邮件通知已关闭",
+      "on_tip": "将通知 {n} 位收件人"
+    }
   }
 }

@@ -759,7 +759,34 @@
     "empty": "Henüz yükleme portalı yok.",
     "col_received": "Alınan",
     "revoke_confirm": "Bu yükleme portalı iptal edilsin mi? Kimse buraya dosya gönderemez.",
-    "pro_teaser": "Hesap açmadan size dosya göndermelerini sağlayın — doğrudan depolama alanınıza."
+    "pro_teaser": "Hesap açmadan size dosya göndermelerini sağlayın — doğrudan depolama alanınıza.",
+    "request": {
+      "title": "Belge iste",
+      "items_hint": "İhtiyacınız olan belgeleri listeleyin. Bağlantıyı alan kişi bu listeyi görür ve yüklediği her dosyayı bir maddeyle eşleştirir.",
+      "item_ph": "örn. Pasaport (fotoğraf sayfası)",
+      "item_label": "Belge adı",
+      "required": "Zorunlu",
+      "remove": "Kaldır",
+      "add_item": "Belge ekle",
+      "due": "Son tarih (isteğe bağlı)",
+      "client_email": "Müşterinin e-postası (isteğe bağlı)",
+      "client_hint": "Yalnızca bu istek için kullanılır. Yükleme sayfasında asla gösterilmez.",
+      "send_now": "Bağlantıyı şimdi müşterime e-postayla gönder",
+      "message": "Müşteriye mesaj (isteğe bağlı)",
+      "err_label": "Her belge adı en fazla 80 karakter olabilir.",
+      "err_unique": "Belge adları birbirinden farklı olmalıdır.",
+      "err_items": "1 ile 20 arasında belge ekleyin.",
+      "err_due": "Şu andan bir saatten sonra ve bağlantının süresi dolmadan önce bir tarih seçin.",
+      "err_email": "Geçerli bir müşteri e-posta adresi girin.",
+      "err_message": "Mesaj en fazla 1000 karakter olabilir.",
+      "sent": "İstek {to} adresine gönderildi",
+      "not_sent": "İstek e-postası gönderilemedi. Bağlantıyı kopyalayıp kendiniz gönderin.",
+      "col": "İstek",
+      "progress": "{done}/{total} belge",
+      "due_on": "Son tarih: {date}",
+      "overdue": "Gecikmiş",
+      "complete": "Tamamlandı"
+    }
   },
   "compliance": {
     "title": "Uyumluluk",
@@ -886,6 +913,22 @@
     "open_app": "Dosya yöneticinizde açın: {url}",
     "unlimited": "sınırsız",
     "footer": "Bu öğe için bildirimler açık olduğundan bu e-postayı alıyorsunuz. Durdurmak için dosya yöneticinizde sessize alın.",
-    "receipt_footer": "Bu otomatik bir makbuzdur."
+    "receipt_footer": "Bu otomatik bir makbuzdur.",
+    "ui": {
+      "email_me": "Bununla ilgili bana e-posta gönder",
+      "add_address": "Adres ekle",
+      "add_hint": "Şu alan adlarından da adres ekleyebilirsiniz: {domains}",
+      "err_address": "Bu geçerli bir e-posta adresi değil.",
+      "err_none": "En az bir alıcı seçin.",
+      "test_btn": "Test e-postası gönder",
+      "test_sent": "Test e-postası gönderildi ({transport}).",
+      "test_failed": "Test e-postası başarısız ({transport}): {error}",
+      "mute": "Bu öğe için e-postaları sessize al",
+      "unmute": "Bu öğe için e-postaları yeniden aç",
+      "muted": "Bu öğe için e-postalar sessize alındı.",
+      "unmuted": "Bu öğe için e-postalar yeniden açıldı.",
+      "muted_tip": "E-postalar sessizde",
+      "on_tip": "{n} alıcıya e-posta gönderiliyor"
+    }
   }
 }

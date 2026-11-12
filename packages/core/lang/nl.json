@@ -759,7 +759,34 @@
     "empty": "Nog geen uploadportalen.",
     "col_received": "Ontvangen",
     "revoke_confirm": "Dit uploadportaal intrekken? Niemand kan er dan nog bestanden naartoe sturen.",
-    "pro_teaser": "Laat anderen jou bestanden sturen zonder account — rechtstreeks in je opslag."
+    "pro_teaser": "Laat anderen jou bestanden sturen zonder account — rechtstreeks in je opslag.",
+    "request": {
+      "title": "Documenten opvragen",
+      "items_hint": "Noem de documenten die u nodig hebt. Wie de link ontvangt ziet deze checklist en koppelt elke upload aan een onderdeel.",
+      "item_ph": "bijv. Paspoort (fotopagina)",
+      "item_label": "Documentnaam",
+      "required": "Verplicht",
+      "remove": "Verwijderen",
+      "add_item": "Document toevoegen",
+      "due": "Uiterste datum (optioneel)",
+      "client_email": "E-mailadres van de klant (optioneel)",
+      "client_hint": "Alleen gebruikt voor dit verzoek. Wordt nooit op de uploadpagina getoond.",
+      "send_now": "Link nu per e-mail naar mijn klant sturen",
+      "message": "Bericht aan de klant (optioneel)",
+      "err_label": "Elke documentnaam mag maximaal 80 tekens hebben.",
+      "err_unique": "Documentnamen moeten verschillend zijn.",
+      "err_items": "Voeg 1 tot 20 documenten toe.",
+      "err_due": "Kies een datum die meer dan een uur vooruit ligt en vóór het verlopen van de link.",
+      "err_email": "Voer een geldig e-mailadres van de klant in.",
+      "err_message": "Het bericht mag maximaal 1000 tekens hebben.",
+      "sent": "Verzoek verzonden naar {to}",
+      "not_sent": "De e-mail met het verzoek kon niet worden verzonden. Kopieer de link en verstuur hem zelf.",
+      "col": "Verzoek",
+      "progress": "{done}/{total} documenten",
+      "due_on": "Uiterlijk {date}",
+      "overdue": "Te laat",
+      "complete": "Compleet"
+    }
   },
   "compliance": {
     "title": "Compliance",
@@ -886,6 +913,22 @@
     "open_app": "Openen in je bestandsbeheer: {url}",
     "unlimited": "onbeperkt",
     "footer": "Je ontvangt deze e-mail omdat meldingen voor dit item zijn ingeschakeld. Om ze te stoppen, demp je het item in je bestandsbeheer.",
-    "receipt_footer": "Dit is een automatische ontvangstbevestiging."
+    "receipt_footer": "Dit is een automatische ontvangstbevestiging.",
+    "ui": {
+      "email_me": "Mail mij hierover",
+      "add_address": "Adres toevoegen",
+      "add_hint": "U kunt ook adressen toevoegen van: {domains}",
+      "err_address": "Dit is geen geldig e-mailadres.",
+      "err_none": "Kies minstens één ontvanger.",
+      "test_btn": "Test-e-mail versturen",
+      "test_sent": "Test-e-mail verzonden ({transport}).",
+      "test_failed": "Test-e-mail mislukt ({transport}): {error}",
+      "mute": "E-mails voor dit item dempen",
+      "unmute": "E-mails voor dit item hervatten",
+      "muted": "E-mails voor dit item gedempt.",
+      "unmuted": "E-mails voor dit item hervat.",
+      "muted_tip": "E-mails gedempt",
+      "on_tip": "E-mail naar {n} ontvanger(s)"
+    }
   }
 }
