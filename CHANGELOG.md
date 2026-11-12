@@ -5,8 +5,12 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.33] — 2026-11-12
+
+> Released: `core-v1.4.0`, `laravel-v1.0.9`, `wordpress-v1.1.8` (bundles core 1.4.0). From their own repos: Intake `v1.7.0` (requires core `^1.4.0`) and FluxFiles Pro `1.2.0`. Share is unchanged (`v1.5.0`).
+
 ### Added
-- Intake **document requests** (`docs/design/INTAKE-DOCUMENT-REQUESTS-DESIGN.md`, step 2 of e-mail notices; the logic ships in the Intake module, which needs the core release after 1.3.0). A portal can carry a checklist with a due date: required items, optional per-item file types, and per-item subfolders. The client gets an e-mail with the portal link (on create when `request.send_now`, plus reminders 3 days and 1 day before the due date and an overdue notice); the operator gets one mail when everything has arrived, and the client a thank-you. The portal page shows the checklist and each item's progress. Needs the `intake_base_url` claim and mail configured; the client address and link are sealed in the record like the owner recipients.
+- Intake **document requests** (`docs/design/INTAKE-DOCUMENT-REQUESTS-DESIGN.md`, step 2 of e-mail notices; the logic ships in the Intake module, which needs core 1.4.0). A portal can carry a checklist with a due date: required items, optional per-item file types, and per-item subfolders. The client gets an e-mail with the portal link (on create when `request.send_now`, plus reminders 3 days and 1 day before the due date and an overdue notice); the operator gets one mail when everything has arrived, and the client a thank-you. The portal page shows the checklist and each item's progress. Needs the `intake_base_url` claim and mail configured; the client address and link are sealed in the record like the owner recipients.
 - Core: claim `intake_request_any_recipient` (default `false`, documented in `docs/reference/CONFIG.md`): lets the token e-mail a document request to any client address, instead of only `notify_to` and `notify_recipient_domains`. Forwarded by `embed.php`, the Node and Python SDKs, Laravel (`$overrides`) and WordPress.
 - Core: four new notice events in `Claims::NOTIFY_EVENTS` (and the `notify_events` filter): `intake_request`, `intake_reminder`, `intake_overdue`, `intake_complete`, with mail templates and error codes in all 16 languages.
 - Core: operator UI for notices and requests. An **E-mail me** toggle and recipient picker when creating a share link or intake portal, a bell on each row to mute or unmute its notices, **Send test e-mail** in the notices settings, **Request documents** (checklist, due date, message, client address, send now) in the portal dialog, and a **progress** column (received / required) in the portals list.
