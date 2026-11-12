@@ -1913,6 +1913,63 @@ test('About::register() is a no-op without AboutCommand and the provider calls i
     assertTrue(strpos(file_get_contents(__DIR__ . '/../src/About.php'), 'class_exists(\\Illuminate\\Foundation\\Console\\AboutCommand::class)') !== false, 'guarded by class_exists');
 });
 
+// ── E-mail notices on Laravel: the app's own mailer (Mail::raw) by default ──
+if (interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
+    eval('namespace Illuminate\Support\Facades; if (!class_exists(Mail::class, false)) { final class Mail {
+        public static array $sent = []; public static ?string $failWith = null; public static array $mailers = [];
+        public static function getFacadeRoot(): object { return new MailFake(null); }
+        public static function mailer(string $name): object { self::$mailers[] = $name; return new MailFake($name); }
+    } final class MailFake { public function __construct(private ?string $mailer) {}
+        public function raw(string $text, callable $cb): void { if (Mail::$failWith !== null) { throw new \RuntimeException(Mail::$failWith); }
+            $m = new MailMsg(); $cb($m); Mail::$sent[] = ["mailer" => $this->mailer, "text" => $text] + $m->d; } }
+    final class MailMsg { public array $d = ["headers" => []];
+        public function to($a) { $this->d["to"] = $a; return $this; } public function subject($s) { $this->d["subject"] = $s; return $this; }
+        public function from($a, $n = null) { $this->d["from"] = [$a, $n]; return $this; } public function replyTo($a) { $this->d["reply_to"] = $a; return $this; }
+        public function getSymfonyMessage() { $o = $this; return new class($o) { public function __construct(private object $o) {} public function getHeaders() { $o = $this->o; return new class($o) { public function __construct(private object $o) {} public function addTextHeader($k, $v) { $this->o->d["headers"][$k] = $v; } }; } }; } } }');
+    require_once __DIR__ . '/../src/LaravelMailTransport.php';
+
+    test('notices: Laravel transport sends through Mail::raw with recipients, subject, Reply-To, auto headers, the display name', function () {
+        \Illuminate\Support\Facades\Mail::$sent = [];
+        $GLOBALS['LARAVEL_CONFIG']['mail.from.address'] = 'app@acme.test';
+        (new \FluxFiles\Laravel\LaravelMailTransport())->send(new \FluxFiles\Mail\MailMessage(['ops@acme.test'], 'New files', 'a.pdf', 'Acme', 'help@acme.test'));
+        $m = \Illuminate\Support\Facades\Mail::$sent[0];
+        assertEqual(['ops@acme.test'], $m['to']);
+        assertEqual('New files', $m['subject']);
+        assertEqual('a.pdf', $m['text']);
+        assertEqual(['app@acme.test', 'Acme'], $m['from'], 'the app mail.from address, the notice display name');
+        assertEqual('help@acme.test', $m['reply_to']);
+        assertEqual('auto-generated', $m['headers']['Auto-Submitted'] ?? null);
+        assertEqual(null, $m['mailer'], 'the default mailer');
+    });
+    test('notices: FLUXFILES_LARAVEL_MAILER picks a named mailer; a mailer error becomes a scrubbed MailException', function () {
+        \Illuminate\Support\Facades\Mail::$sent = [];
+        (new \FluxFiles\Laravel\LaravelMailTransport('ses'))->send(new \FluxFiles\Mail\MailMessage(['ops@acme.test'], 's', 't'));
+        assertEqual('ses', \Illuminate\Support\Facades\Mail::$sent[0]['mailer']);
+        \Illuminate\Support\Facades\Mail::$failWith = 'Connection refused for user ops@acme.test with key ' . 'sk_' . 'live_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345';   // built at runtime: a fake key, kept out of push scanners
+        try {
+            (new \FluxFiles\Laravel\LaravelMailTransport())->send(new \FluxFiles\Mail\MailMessage(['ops@acme.test'], 's', 't'));
+            throw new \RuntimeException('expected MailException');
+        } catch (\FluxFiles\Mail\MailException $e) {
+            assertTrue(str_contains($e->getMessage(), 'laravel_mail') && !str_contains($e->getMessage(), 'ops@acme.test') && !str_contains($e->getMessage(), 'sk_live_ABCDEFGH'), $e->getMessage());
+        } finally {
+            \Illuminate\Support\Facades\Mail::$failWith = null;
+        }
+    });
+    test('notices: the controller picks Laravel mail by default, an explicit FLUXFILES_MAIL_TRANSPORT wins, and the public routes get it', function () {
+        $ref = new \ReflectionMethod(\FluxFiles\Laravel\Http\Controllers\FluxFilesController::class, 'mailer');
+        $ref->setAccessible(true);
+        $ctrl = (new \ReflectionClass(\FluxFiles\Laravel\Http\Controllers\FluxFilesController::class))->newInstanceWithoutConstructor();
+        assertEqual('laravel_mail', $ref->invoke($ctrl)->name());
+        $_ENV['FLUXFILES_MAIL_TRANSPORT'] = 'log';
+        try { assertEqual('log', $ref->invoke($ctrl)->name()); } finally { unset($_ENV['FLUXFILES_MAIL_TRANSPORT']); }
+        $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+        assertTrue(str_contains($src, "fn () => \$this->mailer()\n        );") || str_contains($src, "fn () => \$this->mailer()\n"), 'publicContext() injects a lazy resolver');
+        $notify = substr($src, strpos($src, 'private function notify('), 2500);
+        assertEqual(0, substr_count($notify, 'MailTransportFactory::fromEnv'), 'notify routes go through mailer()');
+    });
+}
+
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

@@ -79,6 +79,14 @@ Only when an administrator selects a provider and enters its API key, and the to
 = URL import =
 Only when the token allows it: FluxFiles makes an HTTP GET to the URL a user asks it to import. Requests to private and reserved addresses are refused.
 
+= E-mail delivery providers =
+E-mail notices (an upload-portal drop, a share-link download, a test e-mail) go through WordPress's own `wp_mail()` by default, so whatever mail setup the site already has delivers them and FluxFiles contacts no one itself. Only when a site owner sets `FLUXFILES_MAIL_TRANSPORT` (in `wp-config.php` or the environment) to one of the providers below does FluxFiles send each notice directly to that provider's API: the recipient addresses, the sender and reply-to addresses, the subject, the plain-text body (which can name the uploaded or downloaded files and the portal or share label) and your API key or AWS signature. Each provider is under its own terms:
+
+* Resend: [Terms](https://resend.com/legal/terms-of-service), [Privacy Policy](https://resend.com/legal/privacy-policy)
+* Postmark: [Terms](https://postmarkapp.com/terms-of-service), [Privacy Policy](https://postmarkapp.com/privacy-policy)
+* Mailgun: [Terms](https://www.mailgun.com/legal/terms/), [Privacy Policy](https://www.mailgun.com/legal/privacy-policy/)
+* Amazon SES: [Service Terms](https://aws.amazon.com/service-terms/), [Privacy Notice](https://aws.amazon.com/privacy/)
+
 = Operator-run embeds =
 Only when a developer sets `pdf_tools_url`, `office_url` or `esign_url`: the UI loads your own instance (Stirling-PDF, Collabora/OnlyOffice, DocuSeal) in an iframe. `office_url` and `esign_url` may receive the selected file's URL.
 

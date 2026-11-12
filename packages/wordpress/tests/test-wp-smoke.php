@@ -1022,8 +1022,9 @@ test('public routes delegate to the module dispatcher rather than reimplementing
     // none of the files.
     assertTrue(strpos($api, '$this->diskManager,') !== false && strpos($api, 'FluxFilesPlugin::diskConfigs(),') !== false,
         'the WP DiskManager is injected');
-    assertTrue(strpos($api, "FluxFilesPlugin::license(),\n            true\n") !== false,
+    assertTrue(strpos($api, "FluxFilesPlugin::license(),\n            true,\n") !== false,
         'the option-aware licence is passed and the context is host-injected');
+    assertTrue(strpos($api, "fn () => \$this->mailer()\n        ));") !== false, 'the site mail transport is injected as a lazy, final resolver');
 });
 
 test('FluxFilesHttpTransport maps core requests onto wp_remote_request and never throws', function () {
@@ -3783,6 +3784,109 @@ test('1.1.3: archive extraction cannot produce php/phtml/.htaccess/.user.ini (co
         $GLOBALS['WP_CAPS'] = $keepCaps;
     }
 });
+
+// ── E-mail notices on WordPress: wp_mail by default ────────────────────────
+if (interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
+    if (!function_exists('remove_action')) { function remove_action(...$a) { return true; } }
+    if (!function_exists('remove_filter')) { function remove_filter($tag, $cb, $prio = 10) { foreach ($GLOBALS['WP_FILTERS'][$tag] ?? [] as $i => $f) { if ($f === $cb) { unset($GLOBALS['WP_FILTERS'][$tag][$i]); } } return true; } }
+    if (!function_exists('wp_mail')) {
+        function wp_mail($to, $subject, $message, $headers = '', $attachments = []) {
+            // Like the real one: the From display name goes through the filter.
+            $name = apply_filters('wp_mail_from_name', 'WordPress');
+            $GLOBALS['WP_MAILS'][] = compact('to', 'subject', 'message', 'headers', 'name');
+            return $GLOBALS['WP_MAIL_RESULT'] ?? true;
+        }
+    }
+
+    test('notices: the default transport is wp_mail (no FluxFiles mail settings needed)', function () {
+        $api = new FluxFilesApi();
+        $why = null;
+        $t = $api->mailer($why);
+        assertTrue($t instanceof FluxFilesMailTransport, 'wp_mail transport');
+        assertEqual('wp_mail', $t->name());
+        assertEqual(null, $why);
+    });
+
+    test('notices: wp_mail gets the recipients, plain text, Reply-To, auto-reply suppression; the display name only for this send', function () {
+        $GLOBALS['WP_MAILS'] = []; $GLOBALS['WP_MAIL_RESULT'] = true;
+        (new FluxFilesMailTransport())->send(new \FluxFiles\Mail\MailMessage(['ops@acme.test', 'boss@acme.test'], 'New files', "a.pdf\nb.pdf", 'Công ty Acme', 'help@acme.test'));
+        $m = $GLOBALS['WP_MAILS'][0];
+        assertEqual(['ops@acme.test', 'boss@acme.test'], $m['to']);
+        assertEqual("a.pdf\nb.pdf", $m['message']);
+        assertTrue(in_array('Content-Type: text/plain; charset=UTF-8', $m['headers'], true), 'plain text');
+        assertTrue(in_array('Reply-To: help@acme.test', $m['headers'], true), 'reply-to');
+        assertTrue(in_array('Auto-Submitted: auto-generated', $m['headers'], true), 'auto-submitted');
+        assertTrue(!preg_grep('/^From:/', $m['headers']), 'From left to WordPress / the SMTP plugin');
+        assertEqual('Công ty Acme', $m['name'], 'display name applied');
+        assertEqual('WordPress', apply_filters('wp_mail_from_name', 'WordPress'), 'filter removed after the send');
+    });
+
+    test('notices: FLUXFILES_MAIL_FROM → a bare-address From header; the name always goes through the filter (FROM_NAME is the fallback)', function () {
+        $GLOBALS['WP_MAILS'] = []; $GLOBALS['WP_MAIL_RESULT'] = true;
+        $t = new FluxFilesMailTransport('Notify@Acme.test', "Acme <Files>\r\nBcc: x@evil.test");
+        $t->send(new \FluxFiles\Mail\MailMessage(['ops@acme.test'], 's', 't', 'Công ty Acme'));
+        $t->send(new \FluxFiles\Mail\MailMessage(['ops@acme.test'], 's', 't'));
+        [$a, $b] = $GLOBALS['WP_MAILS'];
+        assertEqual(['From: notify@acme.test'], array_values(preg_grep('/^From:/', $a['headers'])), 'bare address, no folded/encoded name');
+        assertEqual('Công ty Acme', $a['name'], 'the notice name wins');
+        assertEqual('Acme <Files> Bcc: x@evil.test', $b['name'], 'FROM_NAME fallback, CR/LF flattened');
+        assertTrue(!preg_grep('/Bcc/i', $b['headers']), 'nothing injected as a header');
+        (new FluxFilesMailTransport('not an address'))->send(new \FluxFiles\Mail\MailMessage(['ops@acme.test'], 's', 't'));
+        assertTrue(!preg_grep('/^From:/', $GLOBALS['WP_MAILS'][2]['headers']), 'an invalid FLUXFILES_MAIL_FROM is ignored');
+        assertEqual('WordPress', $GLOBALS['WP_MAILS'][2]['name'], 'no name anywhere → the site default');
+    });
+
+    test('notices: FLUXFILES_MAIL_FROM as a real env var reaches the wp_mail transport even with $_ENV empty', function () {
+        putenv('FLUXFILES_MAIL_FROM=envfrom@acme.test');
+        try {
+            $GLOBALS['WP_MAILS'] = [];
+            (new FluxFilesApi())->mailer()->send(new \FluxFiles\Mail\MailMessage(['ops@acme.test'], 's', 't'));
+            assertTrue(in_array('From: envfrom@acme.test', $GLOBALS['WP_MAILS'][0]['headers'], true), json_encode($GLOBALS['WP_MAILS'][0]['headers']));
+        } finally {
+            putenv('FLUXFILES_MAIL_FROM');
+        }
+    });
+
+    test('notices: a failed wp_mail becomes a MailException (reported by /notify/test, never a fatal)', function () {
+        $GLOBALS['WP_MAIL_RESULT'] = false;
+        try {
+            (new FluxFilesMailTransport())->send(new \FluxFiles\Mail\MailMessage(['a@acme.test'], 's', 't'));
+            throw new \RuntimeException('expected a MailException');
+        } catch (\FluxFiles\Mail\MailException $e) {
+            assertTrue(str_contains($e->getMessage(), 'wp_mail'), $e->getMessage());
+        } finally {
+            $GLOBALS['WP_MAIL_RESULT'] = true;
+        }
+    });
+
+    test('notices: an explicit provider in env / wp-config wins; the filter can replace or disable', function () {
+        $api = new FluxFilesApi();
+        $_ENV['FLUXFILES_MAIL_TRANSPORT'] = 'log';
+        try {
+            assertEqual('log', $api->mailer()->name(), 'explicit provider');
+        } finally {
+            unset($_ENV['FLUXFILES_MAIL_TRANSPORT']);
+        }
+        $keep = $GLOBALS['WP_FILTERS']['fluxfiles_mail_transport'] ?? null;
+        $GLOBALS['WP_FILTERS']['fluxfiles_mail_transport'] = [fn () => null];
+        try {
+            $why = null;
+            assertEqual(null, $api->mailer($why), 'disabled');
+            assertTrue(str_contains((string) $why, 'filter'), (string) $why);
+            $GLOBALS['WP_FILTERS']['fluxfiles_mail_transport'] = [fn () => 'junk'];
+            assertTrue($api->mailer() instanceof FluxFilesMailTransport, 'junk from a filter falls back');
+        } finally {
+            if ($keep === null) { unset($GLOBALS['WP_FILTERS']['fluxfiles_mail_transport']); } else { $GLOBALS['WP_FILTERS']['fluxfiles_mail_transport'] = $keep; }
+        }
+    });
+
+    test('notices: the notify routes and the public routes use the site transport, never the env-only factory', function () {
+        $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+        $notify = substr($api, strpos($api, 'private function notify('), 2500);
+        assertEqual(0, substr_count($notify, 'MailTransportFactory::fromEnv'), 'no env-only factory in the notify routes');
+        assertEqual(2, substr_count($notify, '$this->mailer('), 'both test and run use mailer()');
+    });
+}
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
