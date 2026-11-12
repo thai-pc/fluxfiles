@@ -14,6 +14,17 @@ open over the dimmed app). Re-run it whenever the UI changes.
 | `retention` | Retention dialog with a dry-run preview (one file skipped by a legal hold) | `legal-hold` module |
 | `duplicates` | Usage dashboard duplicate finder with three groups | free core |
 | `posters` | Grid with PDF and video poster thumbnails | free core + `gs` + `ffmpeg` |
+| `share-recipient` | The branded public share page a recipient opens (image preview, Download) | `share` module |
+| `intake-portal` | The branded upload portal after a client dropped three files | `intake` module |
+| `intake-request` | A document request: checklist, message, due date, 2 of 3 required received | `intake` module (≥ 1.7.0) |
+| `notice-email` | The owner's "new files" digest for a drop, sent for real through SMTP | `intake` module + an SMTP catcher (`--smtp`, `--mailpit`) |
+
+The four recipient-side shots brand their pages as the fictional "Northwind Studio"
+(`share_brand_*` / `intake_brand_*` claims); the logo URL is on `northwind.example`
+and Playwright answers it locally, so nothing leaves the machine. `notice-email` is
+a plain mail-reader card filled verbatim from the message Mailpit caught (From, To,
+Subject, Date, text body): the notices are plain text, and the script writes none
+of their content.
 
 ## Run
 
@@ -27,7 +38,18 @@ node scripts/landing-screenshots/capture.mjs --copy-to=../fluxfiles-landing/publ
 ```
 
 Options: `--only=a,b` · `--copy-to=DIR` (copies each successful shot) · `--port=N`
-(default 8140) · `--keep` (keep the temp work dir for debugging).
+(default 8140) · `--keep` (keep the temp work dir for debugging) ·
+`--modules-root=DIR` (where the private modules live, default `packages/`; a git
+worktree has none) · `--module-paths=intake=DIR,share=DIR` (a specific checkout of
+a module, e.g. a worktree at its release tag) · `--smtp=HOST:PORT --mailpit=URL`
+(the notice e-mail shot; skipped without them).
+
+```bash
+# notice-email: a local SMTP catcher (under Colima, Mailpit needs MP_SMTP_DISABLE_RDNS=true)
+docker run -d --name ff-shots-mailpit -e MP_SMTP_DISABLE_RDNS=true -p 127.0.0.1:1025:1025 -p 127.0.0.1:8025:8025 axllent/mailpit
+node scripts/landing-screenshots/capture.mjs --only=notice-email --smtp=127.0.0.1:1025 --mailpit=http://127.0.0.1:8025
+docker rm -f ff-shots-mailpit
+```
 
 ### WordPress.org plugin page (`--set=wporg`)
 
@@ -65,14 +87,16 @@ Look at every PNG before you publish it. A shot that fails is saved as
    `storage/`, no `.env` and a throwaway `FLUXFILES_SECRET`, so your real `.env`,
    uploads and rate-limit state are never read or touched. Its `config/disks.php`
    adds a second local disk, `archive`, used by the Backup shot.
-2. Installs every private module found in `packages/<id>/` as
-   `vendor/fluxfiles/<id>` (symlinks), the layout `modules-autoload.php` resolves
-   for a real install, and licenses them with a 365-day local licence from
-   `scripts/license-gen.php` + `docs/license-signing-key.SECRET.txt`, the same
-   way `tests/e2e/test-sso-http.php` does (`lib/license.php` prints only the
-   token). If the signing key isn't on this machine, the paid shots are skipped.
+2. Installs every private module found in `packages/<id>/` (or `--modules-root` /
+   `--module-paths`) as `vendor/fluxfiles/<id>` (symlinks), the layout
+   `modules-autoload.php` resolves for a real install, and licenses them with a
+   THROWAWAY key: `lib/license.php` generates a fresh Ed25519 keypair, rewrites the
+   copy's `api/LicenseManager.php` so its `k1` public key is the throwaway one, and
+   signs a 365-day licence with `scripts/license-gen.php`. The vendor signing key
+   (`docs/license-signing-key.SECRET.txt`) is never read, and the licence is useless
+   against any real install. It prints only the token.
 3. Starts `php -S` on the copy and seeds demo content through the real HTTP API
-   as four users: Marketing, Photos, Contracts, Invoices, Exports and Shared,
+   as four users: Marketing, Photos, Contracts, Invoices, Exports, Shared and Clients,
    with generated photos, cover PDFs, short MP4s (ImageMagick + ffmpeg) and an
    OCR-able invoice scan. Afterwards it backdates a few things, touching only the
    copy's storage: invoice and export mtimes (for the retention preview) and the
