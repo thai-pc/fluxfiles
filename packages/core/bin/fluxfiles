@@ -326,12 +326,79 @@ if ($command === 'update') {
     exit(0);
 }
 
+// `notify:run` — the e-mail notice sweep from a system cron (hourly), the standalone
+// counterpart of `POST /api/fm/notify/run`. Claims come from FLUXFILES_NOTIFY_* env, mail
+// from FLUXFILES_MAIL_*; needs the Intake or Share module installed + licensed.
+//   fluxfiles notify:run [--disk=local] [--prefix=] [--dry-run] [--max=50]
+// Exit: 0 ok, 1 usage/config/gate, 2 the sweep itself failed.
+if ($command === 'notify:run') {
+    $nOpts = ['disk' => 'local', 'prefix' => '', 'max' => 50, 'dry_run' => false];
+    foreach (array_slice($argv, 2) as $arg) {
+        if ($arg === '--dry-run') { $nOpts['dry_run'] = true; }
+        elseif (preg_match('/^--(disk|prefix|max)=(.*)$/s', $arg, $m)) {
+            if ($m[1] === 'max') {
+                if (!ctype_digit($m[2]) || (int) $m[2] < 1) {
+                    fwrite(STDERR, "Option --max needs a positive number.\n");
+                    exit(1);
+                }
+                $nOpts['max'] = (int) $m[2];
+            } elseif ($m[1] === 'disk' && $m[2] === '') {
+                fwrite(STDERR, "Option --disk is empty (an unset shell variable?). Omit it to use 'local'.\n");
+                exit(1);
+            } else {
+                $nOpts[$m[1]] = $m[2];
+            }
+        } else {
+            fwrite(STDERR, "Usage: fluxfiles notify:run [--disk=local] [--prefix=] [--dry-run] [--max=50]\n");
+            exit(1);
+        }
+    }
+    \FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
+    try {
+        $nDisks = \FluxFiles\DiskConfig::load(__DIR__ . '/../config/disks.php');
+    } catch (\FluxFiles\ApiException $e) {
+        fwrite(STDERR, ($e instanceof \FluxFiles\DiskConfigException ? $e->getDetail() : $e->getMessage()) . "\n");
+        exit(1);
+    }
+    if (!isset($nDisks[$nOpts['disk']])) {
+        fwrite(STDERR, "Disk '{$nOpts['disk']}' is not configured.\n");
+        exit(1);
+    }
+    $nDm = new DiskManager($nDisks);
+    $nMeta = null;
+    if (($_ENV['FLUXFILES_STORAGE_BACKEND'] ?? 'json') === 'db') {
+        $nMeta = new \FluxFiles\Db\DbMetadataHandler(\FluxFiles\Db\Connection::fromEnv(), $nDm);
+    }
+    $nWhy = null;
+    $nMailer = \FluxFiles\Mail\MailTransportFactory::fromEnv(null, null, $nWhy);
+    try {
+        $report = \FluxFiles\NotifyScheduler::run($_ENV, $nOpts, $nDm, $nMailer, $nMeta);
+    } catch (\FluxFiles\ApiException $e) {
+        fwrite(STDERR, $e->getMessage() . ($nMailer === null && $nWhy !== null ? " ({$nWhy})" : '') . "\n");
+        exit(1);
+    } catch (\Throwable $e) {
+        fwrite(STDERR, 'Notify sweep failed (' . get_class($e) . ")\n");
+        exit(2);
+    }
+    fwrite(STDOUT, sprintf(
+        "%s: sent %d, coalesced %d, rate-limited %d%s.\n",
+        $report['dry_run'] ? 'Dry run' : 'Done',
+        $report['sent'], $report['coalesced'], $report['rate_limited'],
+        !empty($report['truncated']) ? ', truncated (raise --max or run again)' : ''
+    ));
+    foreach ($report['skipped'] as $sk) {
+        fwrite(STDERR, "Skipped {$sk['module']}: {$sk['reason']} (update the module).\n");
+    }
+    exit(0);
+}
+
 if (!in_array($command, ['index', 'seed'], true)) {
     fwrite(STDERR, "Usage:\n"
         . "  fluxfiles serve [--host=127.0.0.1] [--port=8080]\n"
         . "  fluxfiles about [--json]\n"
         . "  fluxfiles update <module> [--check] [--force] [--no-refresh]\n"
         . "  fluxfiles license refresh [--check|--print] [--json]\n"
+        . "  fluxfiles notify:run [--disk=local] [--prefix=] [--dry-run] [--max=50]\n"
         . "  fluxfiles index --disk=local [--path=prefix] [--owner=user-id] [--readonly] [--overwrite] [--dry-run] [--hash] [--variants] [--persist-metadata]\n");
     exit(1);
 }
