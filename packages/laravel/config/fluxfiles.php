@@ -166,25 +166,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | E-mail notice scheduler
-    |--------------------------------------------------------------------------
-    |
-    | Used ONLY by `php artisan fluxfiles:notify-run` (the hourly sweep for expiry
-    | warnings, digests and document-request reminders). There is no JWT on a
-    | scheduled run, so the sweep's notify_* claims come from here; a request never
-    | reads these. `to` is a comma list of owner recipients.
-    |
-    */
-    'notify' => [
-        'to'        => env('FLUXFILES_NOTIFY_TO', ''),
-        'locale'    => env('FLUXFILES_NOTIFY_LOCALE', ''),
-        'from_name' => env('FLUXFILES_NOTIFY_FROM_NAME', ''),
-        'reply_to'  => env('FLUXFILES_NOTIFY_REPLY_TO', ''),
-        'app_url'   => env('FLUXFILES_NOTIFY_APP_URL', ''),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
     | Storage Path
     |--------------------------------------------------------------------------
     |

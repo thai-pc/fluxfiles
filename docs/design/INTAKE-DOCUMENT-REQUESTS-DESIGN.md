@@ -162,15 +162,10 @@ Each row adds `request: {items_total, items_required, items_done_required, due_a
 
 ## 11. Schedulers for Laravel and standalone
 
-- **Laravel:** `php artisan fluxfiles:notify-run {--disk=local} {--prefix=} {--dry-run} {--max=50}`.
-  - It builds claims from `config('fluxfiles')` the way the controller's server-side paths do: perms `read`/`write`, the prefix, `notify_*` from the new `config('fluxfiles.notify')` keys (env `FLUXFILES_NOTIFY_TO`, …).
-  - Then it calls `NotifyEndpoint::run()` with the controller's `mailer()` logic, extracted into a small shared resolver class.
-  - Documented with `Schedule::command('fluxfiles:notify-run')->hourly()`.
-- **Standalone:** `bin/fluxfiles notify:run [--disk] [--prefix] [--dry-run] [--max]`.
-  - Reads `FLUXFILES_NOTIFY_TO` and the related env vars to build the claims.
-  - Uses `MailTransportFactory::fromEnv()`.
-  - Documented as an hourly system cron.
-- New server env vars, all in CONFIG.md §4: `FLUXFILES_NOTIFY_TO`, `FLUXFILES_NOTIFY_LOCALE`, `FLUXFILES_NOTIFY_FROM_NAME`, `FLUXFILES_NOTIFY_REPLY_TO`, `FLUXFILES_NOTIFY_APP_URL`. They are used **only** by these scheduler commands; a request never reads them as claims.
+- The sweep reads **one tenant store per prefix** (`<prefix>/_fluxfiles/{intakes,shares}.json`) and mails only the recipients sealed in each record. Its claims carry just the module gates, perms, disk and prefix; no `notify_*` setting can change who is mailed, so there are no scheduler env vars. `NotifyScheduler::sweep()` loops the stores and shares one `max` across the run.
+- **Which stores a run covers:** every `--prefix` (repeatable), every line of `--prefixes-file`, and with `--discover` every store found under a **local** disk root (`*/_fluxfiles/intakes.json` or `shares.json`, depth <= 6, at most 10 000 stores, `_fluxfiles/trash` and symlinks skipped). With none of these, only the empty prefix. Discovery on S3/SFTP is refused: list the prefixes instead. The report says how many stores were swept; a store whose storage fails is listed and the others still run.
+- **Laravel:** `php artisan fluxfiles:notify-run {--disk=local} {--prefix=*} {--prefixes-file=} {--discover} {--dry-run} {--max=50}`, with the controller's `mailer()` logic extracted into a shared resolver class. Documented with `Schedule::command('fluxfiles:notify-run --discover')->hourly()`.
+- **Standalone:** `bin/fluxfiles notify:run` with the same options, using `MailTransportFactory::fromEnv()`. Documented as an hourly system cron. Exit codes: 0 ok, 1 usage/config/gate, 2 a storage or unexpected failure.
 
 ## 12. Security notes
 

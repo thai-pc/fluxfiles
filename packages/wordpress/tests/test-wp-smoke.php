@@ -528,6 +528,7 @@ test('generateToken forwards the share/intake gates and their config', function 
         'notify_to'        => ['ops@acme.com'],
         'notify_batch_window' => 300,
         'intake_notify_receipt' => true,
+        'intake_request_any_recipient' => true,
     ]);
     $p = \FluxFiles\JwtCompat::decode($token, $secret);
     assertEqual(true, $p->allow_share ?? null, 'share gate forwarded');
@@ -541,6 +542,14 @@ test('generateToken forwards the share/intake gates and their config', function 
     assertEqual(['ops@acme.com'], $p->notify_to ?? null, 'notify_to forwarded');
     assertEqual(300, $p->notify_batch_window ?? null, 'notify_batch_window forwarded');
     assertEqual(true, $p->intake_notify_receipt ?? null, 'intake_notify_receipt forwarded');
+    assertEqual(true, $p->intake_request_any_recipient ?? null, 'intake_request_any_recipient forwarded');
+    $none = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(58, ['allow_intake' => true]), $secret);
+    assertTrue(!isset($none->intake_request_any_recipient), 'not set unless asked for');
+    // createPortal: a mailer only for request.send_now, plus an audit callback.
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    $call = substr($apiSrc, (int) strpos($apiSrc, '$mod->createPortal('), 700);
+    assertTrue(str_contains($call, "!empty(\$body['request']['send_now']) ? \$this->mailer() : null"), 'mailer only for send_now');
+    assertTrue(str_contains($call, "logAuditQuiet(\$claims, 'notify_sent'"), 'audit callback writes notify_sent');
 
     // The edition preset (registered by an add-on via fluxfiles_edition_presets) enables both gates.
     $GLOBALS['WP_FILTERS']['fluxfiles_edition_presets'] = [fn () => require __DIR__ . '/fixtures/edition-presets.php'];
