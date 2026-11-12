@@ -7,6 +7,7 @@ namespace FluxFiles;
 use FluxFiles\Mail\MailTransportInterface;
 
 // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment (not user input); core is a WordPress-independent library
+// phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- CLI/cron exceptions: the message goes to STDERR or a scheduler report, never rendered as HTML
 
 /**
  * The standalone scheduler for e-mail notices (`bin/fluxfiles notify:run`): the same
