@@ -10,6 +10,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
 > Released: `core-v1.4.2`, `wordpress-v1.1.10` (bundles core 1.4.2). Laravel, Share, Intake and FluxFiles Pro are unchanged.
 
 ### Fixed
+- Dependencies: `phpseclib/phpseclib` 3.0.57 → 3.0.58 in the core, Laravel and WordPress locks (GHSA-w3p9-g4p2-h3rr, unbounded PBKDF iteration count when parsing an encrypted key). The WordPress zip bundles the fixed version.
 - Core: `REMOTE_ADDR`, `User-Agent` and `?lang` are read through the new `RequestInput` helper (IP validated with `FILTER_VALIDATE_IP`, User-Agent stripped of control characters and capped at 512 bytes). `?lang[]=x` no longer throws a `TypeError`.
 - WordPress: changes asked for by the WordPress.org plugin review. Admin scripts are enqueued files, settings use named sanitize callbacks, and the two admin notices are dismissible and limited to the Plugins and FluxFiles screens. Denied-request audit input is sanitized, and the readme's External services section is completed.
 

@@ -180,7 +180,7 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 == Changelog ==
 
 = 1.1.10 =
-* Bundles FluxFiles core 1.4.2.
+* Bundles FluxFiles core 1.4.2 and phpseclib 3.0.58 (security fix for encrypted SFTP keys).
 * WordPress.org review fixes: the admin notices' and secret-field scripts are now enqueued files instead of inline `<script>` tags, and the settings use named sanitize callbacks.
 * The nginx-storage and "no secret key" notices show only to administrators, only on the Plugins screen and the FluxFiles settings page, and can be dismissed (remembered per user).
 * Request data is read through sanitizing helpers, and the HTTP calls go through WordPress's own HTTP API where possible.
