@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.1.9
+Stable tag: 1.1.10
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -180,6 +180,7 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 == Changelog ==
 
 = 1.1.10 =
+* Bundles FluxFiles core 1.4.2.
 * WordPress.org review fixes: the admin notices' and secret-field scripts are now enqueued files instead of inline `<script>` tags, and the settings use named sanitize callbacks.
 * The nginx-storage and "no secret key" notices show only to administrators, only on the Plugins screen and the FluxFiles settings page, and can be dismissed (remembered per user).
 * Request data is read through sanitizing helpers, and the HTTP calls go through WordPress's own HTTP API where possible.

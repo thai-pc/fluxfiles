@@ -5,6 +5,18 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.35] — 2026-11-13
+
+> Released: `core-v1.4.2`, `wordpress-v1.1.10` (bundles core 1.4.2). Laravel, Share, Intake and FluxFiles Pro are unchanged.
+
+### Fixed
+- Core: `REMOTE_ADDR`, `User-Agent` and `?lang` are read through the new `RequestInput` helper (IP validated with `FILTER_VALIDATE_IP`, User-Agent stripped of control characters and capped at 512 bytes). `?lang[]=x` no longer throws a `TypeError`.
+- WordPress: changes asked for by the WordPress.org plugin review. Admin scripts are enqueued files, settings use named sanitize callbacks, and the two admin notices are dismissible and limited to the Plugins and FluxFiles screens. Denied-request audit input is sanitized, and the readme's External services section is completed.
+
+### Changed
+- Core: URL import and the bucket doctor's pinned BYOB fetch go through a new `UrlFetcherInterface`. Core keeps its cURL implementation (`CurlUrlFetcher`). `SsrfGuard::assertConnectedIpSafe()` takes the connected IP as a string.
+- WordPress: URL import uses the WordPress HTTP API (`wp_remote_get`), with the DNS pin and protocol limits set through a request-scoped `http_api_curl` hook and the connected IP re-checked afterwards. It fails closed when the cURL transport is unavailable. The build no longer ships `CurlTransport.php`/`CurlUrlFetcher.php`, and `check-wp-dist.php` forbids raw cURL outside `vendor/`.
+
 ## [1.0.34] — 2026-11-12
 
 > Released: `core-v1.4.1`, `wordpress-v1.1.9` (bundles core 1.4.1). From their own repos: Intake `v1.7.1` (requires core `^1.4.0`) and FluxFiles Pro `1.2.1`. Laravel and Share are unchanged (`laravel-v1.0.9`, Share `v1.5.0`).
