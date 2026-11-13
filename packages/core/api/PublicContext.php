@@ -209,7 +209,6 @@ final class PublicContext
                 // invalid / expired / wrong key → the per-IP bucket below
             }
         }
-        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- only hashed into a rate-limit key, never output; core is a WordPress-independent library (no wp_unslash)
-        return substr(hash('sha256', 'unverified|' . (string) ($_SERVER['REMOTE_ADDR'] ?? '')), 0, 24);
+        return substr(hash('sha256', 'unverified|' . RequestInput::remoteIp()), 0, 24);
     }
 }

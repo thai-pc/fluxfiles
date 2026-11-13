@@ -35,10 +35,8 @@ class AuditLogStorage
         $context = [
             'user_id'   => $userId,
             'file_key'  => $fileKey,
-            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- audit-log metadata stored as data, never output; core is a WordPress-independent library (no wp_unslash)
-            'ip'        => $ip ?? ($_SERVER['REMOTE_ADDR'] ?? ''),
-            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- audit-log metadata stored as data, never output; core is a WordPress-independent library (no wp_unslash)
-            'user_agent' => $userAgent ?? ($_SERVER['HTTP_USER_AGENT'] ?? ''),
+            'ip'        => $ip ?? RequestInput::remoteIp(),
+            'user_agent' => $userAgent ?? RequestInput::userAgent(),
         ];
         // Free-form extra context (e.g. the `jti` of a revoked share link) —
         // the audit file_key convention doesn't fit every action.
