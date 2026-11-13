@@ -153,7 +153,7 @@ $movedFunctions = [
     'handleSharePublic' => 'share',
     'handleIntakePublic' => 'intake',
 ];
-$curlOk = ['api/UrlImporter.php', 'api/CurlTransport.php', 'api/BucketDoctor.php'];
+$curlOk = ['api/UrlImporter.php', 'api/CurlTransport.php', 'api/BucketDoctor.php', 'api/CurlUrlFetcher.php', 'api/SsrfGuard.php'];
 $socketOk = ['api/SsrfGuard.php', 'api/UrlImporter.php', 'api/CurlTransport.php', 'api/BucketDoctor.php'];
 
 foreach ($files as $rel => $abs) {
