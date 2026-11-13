@@ -45,7 +45,8 @@ final class RequestInput
             return '';
         }
         $value = (string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', $value);
-        return substr(trim($value), 0, self::USER_AGENT_MAX);
+        $value = trim($value);
+        return function_exists('mb_strcut') ? mb_strcut($value, 0, self::USER_AGENT_MAX, 'UTF-8') : substr($value, 0, self::USER_AGENT_MAX);
     }
 
     /** A scalar-string query value, or null when absent or an array. */

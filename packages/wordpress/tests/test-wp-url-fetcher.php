@@ -10,7 +10,10 @@
  *   - a redirect hop is re-validated through SsrfGuard,
  *   - a private connected address is refused,
  *   - a non-cURL transport (hook never fires / use_curl_transport=false) fails closed,
- *   - the hook is scoped to one request and removed afterwards.
+ *   - the hook is scoped to one request and removed afterwards,
+ *   - WordPress' kses rewrite of the URL (upper-case scheme), Requests' redirect re-entry (the
+ *     hook firing twice), a hook URL for a different host and a rejected cURL option each end
+ *     in NO request (curl_exec never runs).
  *
  * Usage: php packages/wordpress/tests/test-wp-url-fetcher.php
  */
@@ -35,6 +38,9 @@ $GLOBALS['WP_ACTIONS'] = [];
 $GLOBALS['WP_FILTER_CURL'] = true;
 $GLOBALS['WP_FIRE_HOOK'] = true;
 $GLOBALS['WP_LAST_REQUEST'] = null;
+$GLOBALS['WP_EXEC_COUNT'] = 0;
+$GLOBALS['WP_HOOK_URL'] = null;   // ?callable(string): string -- the URL the hook is told about
+$GLOBALS['WP_REENTER'] = null;    // ?string -- a second http_api_curl firing (redirect hop) with this URL
 
 class WP_Error { public function __construct(public string $code = '', public string $message = '') {} }
 function is_wp_error($x) { return $x instanceof WP_Error; }
@@ -44,11 +50,20 @@ function remove_action($tag, $cb, $prio = 10) {
     return true;
 }
 function apply_filters($tag, $value, ...$a) { return $tag === 'use_curl_transport' ? $GLOBALS['WP_FILTER_CURL'] : $value; }
+function wp_allowed_protocols() { return ['http', 'https']; }
+/** Like WP's kses: strips NULs and lower-cases an allowed scheme; '' for a disallowed one. */
+function wp_kses_bad_protocol($s, $allowed)
+{
+    $s = str_replace("\0", '', (string) $s);
+    if (!preg_match('~^([A-Za-z][A-Za-z0-9+.-]*):(.*)$~s', $s, $m)) { return $s; }
+    return in_array(strtolower($m[1]), $allowed, true) ? strtolower($m[1]) . ':' . $m[2] : '';
+}
 function wp_remote_retrieve_response_code($r) { return $r['response']['code'] ?? 0; }
 function wp_remote_retrieve_header($r, $h) { return $r['headers'][strtolower($h)] ?? ''; }
 function wp_remote_get($url, $args = [])
 {
     $GLOBALS['WP_LAST_REQUEST'] = [$url, $args];
+    $url = wp_kses_bad_protocol($url, wp_allowed_protocols());   // WP_Http::request() rewrites the URL first
     $fh = fopen($args['filename'], 'w');
     $headers = [];
     $limit = (int) ($args['limit_response_size'] ?? 0);
@@ -68,8 +83,13 @@ function wp_remote_get($url, $args = [])
         },
     ]);
     if ($GLOBALS['WP_FIRE_HOOK']) {
-        foreach ($GLOBALS['WP_ACTIONS']['http_api_curl'] ?? [] as $cb) { $cb($ch, $args, $url); }
+        $hookUrl = $GLOBALS['WP_HOOK_URL'] ? ($GLOBALS['WP_HOOK_URL'])($url) : $url;
+        foreach ($GLOBALS['WP_ACTIONS']['http_api_curl'] ?? [] as $cb) { $cb($ch, $args, $hookUrl); }
+        if ($GLOBALS['WP_REENTER'] !== null) {
+            foreach ($GLOBALS['WP_ACTIONS']['http_api_curl'] ?? [] as $cb) { $cb($ch, $args, $GLOBALS['WP_REENTER']); }
+        }
     }
+    $GLOBALS['WP_EXEC_COUNT']++;
     $ok = curl_exec($ch);
     fclose($fh);
     if ($ok === false) { return new WP_Error('http_request_failed', curl_error($ch)); }
@@ -178,6 +198,58 @@ test('the redirect Location is handed back, not followed', function () use ($fet
     [$res] = $fetch("http://127.0.0.1:{$port}/redirect-ok", ['127.0.0.1'], ['127.0.0.1']);
     assertEqual(302, $res['status']);
     assertEqual("http://127.0.0.1:{$port}/png", $res['redirect_url']);
+});
+
+test('an upper-case scheme is normalised, so the hook still matches and pins', function () use ($fetch, $port) {
+    [$res] = $fetch("HTTP://pin-fixture.invalid:{$port}/png", ['127.0.0.1'], ['127.0.0.1']);
+    assertEqual(200, $res['status']);
+    assertEqual("http://pin-fixture.invalid:{$port}/png", $GLOBALS['WP_LAST_REQUEST'][0]);
+});
+
+test('hook URL matching ignores host case', function () use ($fetch, $port) {
+    $GLOBALS['WP_HOOK_URL'] = static fn (string $u): string => str_replace('pin-fixture.invalid', 'PIN-Fixture.INVALID', $u);
+    try { [$res] = $fetch("http://pin-fixture.invalid:{$port}/png", ['127.0.0.1'], ['127.0.0.1']); }
+    finally { $GLOBALS['WP_HOOK_URL'] = null; }
+    assertEqual(200, $res['status']);
+});
+
+/** Run a fetch that must be refused with $code before curl_exec ever runs. */
+$noRequest = static function (callable $fn, string $code) {
+    $before = $GLOBALS['WP_EXEC_COUNT'];
+    assertCode($fn, $code);
+    assertEqual($before, $GLOBALS['WP_EXEC_COUNT'], 'curl_exec must not have run (no socket opened)');
+    assertEqual([], $GLOBALS['WP_ACTIONS']['http_api_curl'] ?? [], 'hook removed');
+};
+
+test('SECURITY: the hook told about a different host throws before curl_exec', function () use ($fetch, $port, $noRequest) {
+    $GLOBALS['WP_HOOK_URL'] = static fn (string $u): string => "http://rebind.example:{$GLOBALS['port_']}/png";
+    $GLOBALS['port_'] = $port;
+    try { $noRequest(fn () => $fetch("http://pin-fixture.invalid:{$port}/png", ['127.0.0.1'], ['127.0.0.1']), 'ssrf_blocked'); }
+    finally { $GLOBALS['WP_HOOK_URL'] = null; }
+});
+
+test('SECURITY: a different port throws before curl_exec', function () use ($fetch, $port, $noRequest) {
+    $GLOBALS['WP_HOOK_URL'] = static fn (string $u): string => str_replace(":{$GLOBALS['port_']}", ':' . ($GLOBALS['port_'] + 1), $u);
+    $GLOBALS['port_'] = $port;
+    try { $noRequest(fn () => $fetch("http://pin-fixture.invalid:{$port}/png", ['127.0.0.1'], ['127.0.0.1']), 'ssrf_blocked'); }
+    finally { $GLOBALS['WP_HOOK_URL'] = null; }
+});
+
+test('SECURITY: a second http_api_curl firing (redirect re-entry) throws before curl_exec', function () use ($fetch, $port, $noRequest) {
+    $GLOBALS['WP_REENTER'] = "http://pin-fixture.invalid:{$port}/png";   // even for the same URL: we asked for redirection => 0
+    try { $noRequest(fn () => $fetch("http://pin-fixture.invalid:{$port}/png", ['127.0.0.1'], ['127.0.0.1']), 'ssrf_blocked'); }
+    finally { $GLOBALS['WP_REENTER'] = null; }
+});
+
+test('SECURITY: a URL kses would rewrite (NUL byte) is refused before any request', function () use ($fetch, $port) {
+    $GLOBALS['WP_LAST_REQUEST'] = null;
+    assertCode(fn () => $fetch("http://pin-fixture.invalid:{$port}/p\0ng", ['127.0.0.1'], ['127.0.0.1']), 'fetch_failed');
+    assertEqual(null, $GLOBALS['WP_LAST_REQUEST'], 'no request issued');
+});
+
+test('SECURITY: a rejected cURL option (pin not applied) throws before curl_exec', function () use ($fetch, $port, $noRequest) {
+    // A negative CURLOPT_MAXFILESIZE makes curl_setopt_array() return false.
+    $noRequest(fn () => $fetch("http://pin-fixture.invalid:{$port}/png", ['127.0.0.1'], ['127.0.0.1'], -5), 'ssrf_blocked');
 });
 
 echo "UrlImporter + FluxFilesUrlFetcher\n";

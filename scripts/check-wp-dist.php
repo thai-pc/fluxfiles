@@ -157,7 +157,7 @@ $movedFunctions = [
 // Our own code makes no raw cURL requests (curl_exec/curl_init/curl_multi_*: use the WordPress HTTP API).
 // The one exception is configuring WordPress' OWN request handle from its `http_api_curl` action
 // (DNS pin + size cap for URL import), so only the option/info calls are allowed there.
-$curlHandleOk = ['includes/FluxFilesUrlFetcher.php'];
+$curlHandleOk = ['includes/FluxFilesUrlFetcher.php', 'api/SsrfGuard.php'];   // SsrfGuard only reads CURLINFO_PRIMARY_IP of a handle it is given
 $socketOk = ['api/SsrfGuard.php', 'api/UrlImporter.php', 'api/BucketDoctor.php'];
 
 foreach ($files as $rel => $abs) {

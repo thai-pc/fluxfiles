@@ -439,12 +439,16 @@ final class SsrfGuard
      * switched the rebinding backstop off globally — one allowlisted private
      * SFTP host disarmed it for every tenant's outbound fetch.
      *
-     * @param string $ip The address the HTTP client reported it connected to
-     *                   (cURL: CURLINFO_PRIMARY_IP); '' = nothing to check.
+     * @param \CurlHandle|string $chOrIp The address the HTTP client reported it connected to
+     *                   (cURL: CURLINFO_PRIMARY_IP); '' = nothing to check. A cURL handle is
+     *                   still accepted (the released Webhooks module passes one): its
+     *                   CURLINFO_PRIMARY_IP is read here.
      * @param string[]|null $allowedIps Addresses this fetch was pinned to.
      */
-    public static function assertConnectedIpSafe(string $ip, ?array $allowedIps = null): void
+    public static function assertConnectedIpSafe(\CurlHandle|string $chOrIp, ?array $allowedIps = null): void
     {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- reads the connected IP of a handle the caller made (SSRF backstop); no request is made here
+        $ip = $chOrIp instanceof \CurlHandle ? (string) curl_getinfo($chOrIp, CURLINFO_PRIMARY_IP) : $chOrIp;
         if ($ip === '') {
             return;
         }

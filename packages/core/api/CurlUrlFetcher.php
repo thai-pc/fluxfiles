@@ -18,8 +18,11 @@ final class CurlUrlFetcher implements UrlFetcherInterface
         }
         $disposition = '';
         $ch = curl_init($url);
-        curl_setopt_array($ch, SsrfGuard::curlOptionsForIps($url, $pinIps));
-        curl_setopt_array($ch, [
+        if (!curl_setopt_array($ch, SsrfGuard::curlOptionsForIps($url, $pinIps))) {
+            fclose($fh);
+            throw new ApiException('Could not pin the connection address', 422, 'ssrf_blocked');   // never fetch unpinned
+        }
+        $set = curl_setopt_array($ch, [
             CURLOPT_FOLLOWLOCATION  => false,             // the caller follows manually to re-validate
             CURLOPT_FILE            => $fh,
             CURLOPT_CONNECTTIMEOUT  => 10,
@@ -39,6 +42,10 @@ final class CurlUrlFetcher implements UrlFetcherInterface
             CURLOPT_USERAGENT       => 'FluxFiles-URLImport/1.0',
             CURLOPT_ACCEPT_ENCODING => '',                // let curl handle gzip transparently
         ]);
+        if (!$set) {
+            fclose($fh);
+            throw new ApiException('Could not configure the download', 422, 'fetch_failed');
+        }
 
         $ok = curl_exec($ch);
         $errno = curl_errno($ch);

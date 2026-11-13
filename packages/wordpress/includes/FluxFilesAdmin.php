@@ -377,7 +377,6 @@ class FluxFilesAdmin
         register_setting('fluxfiles', 'fluxfiles_s3_endpoint', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeUrlOption']]);
         register_setting('fluxfiles', 'fluxfiles_s3_visibility', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeVisibility']]);
         register_setting('fluxfiles', 'fluxfiles_s3_public_url', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeUrlOption']]);
-        register_setting('fluxfiles', 'fluxfiles_s3_secret', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeS3Secret']]);
 
         // R2 section
         add_settings_section(
@@ -402,7 +401,6 @@ class FluxFilesAdmin
         register_setting('fluxfiles', 'fluxfiles_r2_secret', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeR2Secret']]);
         register_setting('fluxfiles', 'fluxfiles_r2_visibility', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeVisibility']]);
         register_setting('fluxfiles', 'fluxfiles_r2_public_url', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeUrlOption']]);
-        register_setting('fluxfiles', 'fluxfiles_r2_secret', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeR2Secret']]);
 
         // Extension point: add-ons (FluxFiles Pro) register their own sections and
         // settings on this page; $group is the settings_fields()/register_setting group.
@@ -507,7 +505,19 @@ class FluxFilesAdmin
     private static function noticeDismissed(string $id): bool
     {
         $done = get_user_meta(get_current_user_id(), 'fluxfiles_dismissed_notices', true);
-        return is_array($done) && in_array($id, $done, true);
+        return is_array($done) && in_array(self::noticeKey($id), $done, true);
+    }
+
+    /**
+     * What is stored for a dismissal. The nginx notice is worded differently once private
+     * storage is on, so a dismissal only holds for the mode it was made in.
+     */
+    private static function noticeKey(string $id): string
+    {
+        if ($id === 'nginx') {
+            return 'nginx:' . (get_option('fluxfiles_local_private', false) ? 'private' : 'public');
+        }
+        return $id;
     }
 
     private function enqueueNoticeDismiss(): void
@@ -532,8 +542,9 @@ class FluxFilesAdmin
         }
         $done = get_user_meta(get_current_user_id(), 'fluxfiles_dismissed_notices', true);
         $done = is_array($done) ? $done : [];
-        if (!in_array($id, $done, true)) {
-            $done[] = $id;
+        $key = self::noticeKey($id);
+        if (!in_array($key, $done, true)) {
+            $done[] = $key;
             update_user_meta(get_current_user_id(), 'fluxfiles_dismissed_notices', $done);
         }
         wp_send_json_success();

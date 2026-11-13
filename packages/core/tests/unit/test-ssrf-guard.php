@@ -227,6 +227,29 @@ test('the allow-list reaches every SFTP and S3 check, honouring the port', funct
     }
 });
 
+test('assertConnectedIpSafe accepts a string IP and (for the released Webhooks module) a CurlHandle', function () {
+    $refused = static function (callable $f, string $label): void {
+        try { $f(); } catch (ApiException $e) { if ($e->getErrorCode() === 'ssrf_blocked') { return; } }
+        throw new \RuntimeException("expected ssrf_blocked: {$label}");
+    };
+    SsrfGuard::assertConnectedIpSafe('93.184.216.34');
+    SsrfGuard::assertConnectedIpSafe('');
+    $refused(fn () => SsrfGuard::assertConnectedIpSafe('10.0.0.1'), 'private string IP');
+    // A handle that never connected reports an empty PRIMARY_IP: nothing to check, like ''.
+    $ch = curl_init('http://example.invalid/');
+    SsrfGuard::assertConnectedIpSafe($ch);
+    SsrfGuard::assertConnectedIpSafe($ch, ['10.0.0.1']);
+    // A handle that really connected to loopback (local listener, no request needed beyond connect).
+    $srv = stream_socket_server('tcp://127.0.0.1:0');
+    $addr = stream_socket_get_name($srv, false);
+    $ch = curl_init('http://' . $addr . '/');
+    curl_setopt_array($ch, [CURLOPT_TIMEOUT => 1, CURLOPT_RETURNTRANSFER => true]);
+    curl_exec($ch);
+    fclose($srv);
+    $refused(fn () => SsrfGuard::assertConnectedIpSafe($ch), 'handle connected to loopback');
+    SsrfGuard::assertConnectedIpSafe($ch, ['127.0.0.1']);
+});
+
 echo "{$cyan}──────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);
