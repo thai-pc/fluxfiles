@@ -113,6 +113,7 @@ foreach ($files as $rel => $_) {
         '#^config/#' => 'standalone disk config',
         '#^public/(share|intake)\.html$#' => 'recipient pages belong to the paid modules',
         '#^api/helpers\.php$#' => 'only the standalone api/index.php requires it',
+        '#^api/Curl(Transport|UrlFetcher)\.php$#' => 'raw cURL: the plugin fetches through the WordPress HTTP API',
         '#^api/(LicenseManager|LicenseKeyFile|LicenseRefresh|UpdateClient|OidcDiscovery|SsoStateToken|SsoBootToken|DemoMode|TusServer)\.php$#' => 'core file the plugin never runs',
         '#^assets/vendor/codemirror/#' => 'WordPress ships CodeMirror (guideline 13)',
         '#(^|/)tests?/#i' => 'tests',
@@ -153,8 +154,11 @@ $movedFunctions = [
     'handleSharePublic' => 'share',
     'handleIntakePublic' => 'intake',
 ];
-$curlOk = ['api/UrlImporter.php', 'api/CurlTransport.php', 'api/BucketDoctor.php', 'api/CurlUrlFetcher.php', 'api/SsrfGuard.php'];
-$socketOk = ['api/SsrfGuard.php', 'api/UrlImporter.php', 'api/CurlTransport.php', 'api/BucketDoctor.php'];
+// Our own code makes no raw cURL requests (curl_exec/curl_init/curl_multi_*: use the WordPress HTTP API).
+// The one exception is configuring WordPress' OWN request handle from its `http_api_curl` action
+// (DNS pin + size cap for URL import), so only the option/info calls are allowed there.
+$curlHandleOk = ['includes/FluxFilesUrlFetcher.php', 'api/SsrfGuard.php'];   // SsrfGuard only reads CURLINFO_PRIMARY_IP of a handle it is given
+$socketOk = ['api/SsrfGuard.php', 'api/UrlImporter.php', 'api/BucketDoctor.php'];
 
 foreach ($files as $rel => $abs) {
     if (str_starts_with($rel, 'vendor/') || preg_match($binary, $rel) === 1) {
@@ -179,8 +183,11 @@ foreach ($files as $rel => $abs) {
         $fail("$rel: defines class LicenseManager");
     }
     if (str_ends_with($rel, '.php')) {
-        if (preg_match('/\bcurl_(?:exec|multi_init|init)\s*\(/', $src) === 1 && !in_array($rel, $curlOk, true)) {
-            $fail("$rel: curl_* call outside " . implode(', ', $curlOk));
+        if (preg_match('/\bcurl_(?:exec|multi_\w+|init|share_\w+|copy_handle|reset)\s*\(/', $src) === 1) {
+            $fail("$rel: raw cURL request (curl_exec/curl_init/...): use the WordPress HTTP API");
+        }
+        if (preg_match('/\bcurl_\w+\s*\(/', $src) === 1 && !in_array($rel, $curlHandleOk, true)) {
+            $fail("$rel: curl_* call outside " . implode(', ', $curlHandleOk));
         }
         if (preg_match('/\b(?:fsockopen|pfsockopen|stream_socket_client)\s*\(/', $src) === 1 && !in_array($rel, $socketOk, true)) {
             $fail("$rel: raw socket call outside " . implode(', ', $socketOk));

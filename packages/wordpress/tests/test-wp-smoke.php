@@ -113,6 +113,16 @@ if (!function_exists('rest_url')) {
             : 'http://wp.test/?rest_route=/' . ltrim($path, '/');
     }
 }
+if (!defined('FLUXFILES_PLUGIN_URL')) { define('FLUXFILES_PLUGIN_URL', 'http://wp.test/wp-content/plugins/fluxfiles/'); }
+if (!defined('FLUXFILES_VERSION')) { define('FLUXFILES_VERSION', '0.0.0-test'); }
+if (!function_exists('wp_enqueue_script')) {
+    function wp_enqueue_script($h, $src = '', $deps = [], $ver = false, $foot = false) { $GLOBALS['WP_ENQUEUED'][$h] = $src; }
+    function wp_localize_script($h, $name, $data) { $GLOBALS['WP_LOCALIZED'][$h] = [$name, $data]; return true; }
+}
+if (!function_exists('get_user_meta')) {
+    function get_user_meta($u, $k, $single = false) { return $GLOBALS['WP_USER_META'][$u][$k] ?? ''; }
+    function update_user_meta($u, $k, $v) { $GLOBALS['WP_USER_META'][$u][$k] = $v; return true; }
+}
 if (!function_exists('get_current_user_id')) {
     function get_current_user_id() { return (int) ($GLOBALS['WP_OPTIONS']['_test_user_id'] ?? 0); }
 }
@@ -1036,6 +1046,16 @@ test('public routes delegate to the module dispatcher rather than reimplementing
     assertTrue(strpos($api, "fn () => \$this->mailer()\n        ));") !== false, 'the site mail transport is injected as a lazy, final resolver');
 });
 
+test('every outbound fetch in the plugin goes through the WordPress HTTP API (no cURL transport/fetcher left to default to)', function () {
+    require_once __DIR__ . '/../includes/FluxFilesUrlFetcher.php';
+    $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($api, 'new UrlImporter($claims, $fm, new \\FluxFilesUrlFetcher())') !== false, 'URL import gets the wp fetcher');
+    assertTrue(strpos($api, 'new BucketDoctor($this->diskManager, self::httpTransport(), new \\FluxFilesUrlFetcher())') !== false, 'bucket doctor gets the wp transport + fetcher');
+    assertEqual(0, substr_count($api, 'CurlTransport'), 'no direct CurlTransport use');
+    assertTrue((new FluxFilesUrlFetcher()) instanceof \FluxFiles\UrlFetcherInterface, 'fetcher implements core\'s interface');
+    assertTrue(strpos((string) file_get_contents(__DIR__ . '/../../../scripts/build-wordpress.sh'), 'api/CurlTransport.php') !== false, 'the build drops CurlTransport');
+});
+
 test('FluxFilesHttpTransport maps core requests onto wp_remote_request and never throws', function () {
     require_once __DIR__ . '/../includes/FluxFilesHttpTransport.php';
     $GLOBALS['WP_REMOTE'] = null;
@@ -1185,6 +1205,7 @@ if (!class_exists('WP_REST_Response')) {
 require_once __DIR__ . '/../includes/FluxFilesDbSchema.php';
 require_once __DIR__ . '/../includes/FluxFilesRateLimiterStorage.php';
 require_once __DIR__ . '/../includes/FluxFilesHttpTransport.php';
+require_once __DIR__ . '/../includes/FluxFilesUrlFetcher.php';
 require_once __DIR__ . '/../includes/FluxFilesMediaEndpoint.php';
 require_once __DIR__ . '/../includes/FluxFilesApi.php';
 
@@ -2782,8 +2803,13 @@ test('settings: the stored secrets are never echoed into the page; a blank save 
         $GLOBALS['WP_OPTIONS']['fluxfiles_secret'] = '';
         $keepCaps = $GLOBALS['WP_CAPS'];
         $GLOBALS['WP_CAPS'] = ['manage_options' => true];
+        $keepPage = $GLOBALS['pagenow'] ?? null;
+        $GLOBALS['pagenow'] = 'index.php';
+        ob_start(); $admin->renderUnconfiguredNotice(); assertEqual('', (string) ob_get_clean(), 'not shown on the dashboard');
+        $GLOBALS['pagenow'] = 'plugins.php';
         ob_start(); $admin->renderUnconfiguredNotice(); $n = (string) ob_get_clean();
-        assertTrue(strpos($n, 'page=fluxfiles') !== false, 'admin notice links to the settings page');
+        $GLOBALS['pagenow'] = $keepPage;
+        assertTrue(strpos($n, 'page=fluxfiles') !== false && strpos($n, 'is-dismissible') !== false, 'admin notice links to the settings page and is dismissible');
         $GLOBALS['WP_CAPS'] = ['upload_files' => true];
         ob_start(); $admin->renderUnconfiguredNotice(); assertEqual('', (string) ob_get_clean(), 'not shown to non-admins');
         $GLOBALS['WP_CAPS'] = $keepCaps;
@@ -2840,7 +2866,7 @@ test('nginx notice: loads with the warning + a background check; a verified resu
         $GLOBALS['WP_TRANSIENTS'] = [];
         $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
         ob_start(); $admin->renderNginxStorageNotice(); $out = (string) ob_get_clean();
-        assertTrue(strpos($out, 'id="fluxfiles-nginx-notice"') !== false && strpos($out, 'fluxfiles_nginx_probe') !== false, 'warning renders at once and wires the background probe');
+        assertTrue(strpos($out, 'id="fluxfiles-nginx-notice"') !== false && isset($GLOBALS['WP_ENQUEUED']['fluxfiles-nginx-notice']) && ($GLOBALS['WP_LOCALIZED']['fluxfiles-nginx-notice'][1]['nonce'] ?? '') !== '', 'warning renders at once and enqueues the background probe script with its nonce');
         // A previous successful check (cached) → no warning on plugins.php.
         $r = FluxFilesAdmin::probeNginxProtection('/wp-content/uploads/fluxfiles/uploads/', 'http://wp.test/wp-content/uploads/fluxfiles', '/wp-content/uploads/fluxfiles/uploads/', false, true);
         add_filter('fluxfiles_nginx_probe', function () { return ['state' => 'ok', 'missing' => []]; }, 10, 3);
@@ -2883,6 +2909,22 @@ test('Plugin Check: the settings template enqueues, never prints a <script> tag 
     $tpl = (string) file_get_contents(__DIR__ . '/../templates/settings.php');
     assertTrue(stripos($tpl, '<script') === false, 'templates/settings.php must not contain a literal <script> tag, not even in a code sample');
     assertTrue(strpos($tpl, 'wp_add_inline_script') !== false, 'the theme sample shows the enqueue way');
+});
+
+test('Plugin Check: FluxFilesAdmin enqueues its scripts and names every sanitize_callback', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesAdmin.php');
+    assertTrue(stripos($src, '<script') === false && stripos($src, '<style') === false, 'no inline <script>/<style> in FluxFilesAdmin.php');
+    foreach (['nginx-notice.js', 'secret-field.js', 'notice-dismiss.js'] as $f) {
+        assertTrue(is_file(__DIR__ . '/../assets/' . $f), "assets/$f exists");
+        assertTrue(strpos($src, "assets/$f") !== false, "assets/$f is enqueued");
+    }
+    assertTrue(strpos($src, '$opt ===') === false && strpos($src, 'fieldSanitizer') === false, 'no dynamic sanitize_callback');
+    assertTrue(substr_count($src, 'register_setting(') === substr_count($src, "'sanitize_callback'"), 'every register_setting declares a sanitize_callback');
+    assertTrue(substr_count($src, "'type' => 'string'") + substr_count($src, "'type' => 'integer'") + substr_count($src, "'type' => 'array'") >= substr_count($src, 'register_setting('), 'every register_setting declares a type');
+    assertEqual('private', FluxFilesAdmin::sanitizeVisibility('x'), 'visibility falls back to private');
+    assertEqual('public', FluxFilesAdmin::sanitizeVisibility('public'), 'visibility public kept');
+    assertEqual('https://x.test/a', FluxFilesAdmin::sanitizeUrlOption(' https://x.test/a '), 'http(s) URL kept, trimmed');
+    assertEqual('', FluxFilesAdmin::sanitizeUrlOption('   '), 'blank URL stays blank');
 });
 
 test('Plugin Check prefixing: every global class the plugin declares starts with FluxFiles', function () {

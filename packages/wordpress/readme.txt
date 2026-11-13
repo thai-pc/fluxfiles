@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.1.9
+Stable tag: 1.1.10
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -53,13 +53,16 @@ The plugin is free and open source (MIT). Everything in this plugin works withou
 
 == External services ==
 
-FluxFiles has no telemetry, and it makes no update or licence calls. It contacts an outside service only when an administrator or developer configures one, as listed here.
+FluxFiles has no telemetry, and it makes no calls to any FluxFiles or vendor server (no update checks, no licence checks, no analytics). It contacts an outside service only when an administrator or developer configures one, as listed here.
 
 = Amazon S3 =
 When an administrator configures an S3 disk, FluxFiles sends the files you upload, their object keys and metadata tags to the S3 endpoint you set (and reads them back). The Bucket Doctor tool, run from the UI, sends small probe objects, a CORS check and a presign test to the same bucket. Amazon Web Services: [Service Terms](https://aws.amazon.com/service-terms/), [Privacy Notice](https://aws.amazon.com/privacy/).
 
 = Cloudflare R2 =
 When an administrator configures an R2 disk, the same data as for S3 goes to the R2 endpoint you set. Cloudflare: [Terms](https://www.cloudflare.com/terms/), [Privacy Policy](https://www.cloudflare.com/privacypolicy/).
+
+= S3-compatible storage (MinIO, DigitalOcean Spaces, Wasabi, Backblaze B2 and similar) =
+When an administrator sets a custom endpoint on the S3 disk, the same data as for Amazon S3 goes to that endpoint. The provider you chose is under its own terms and privacy policy.
 
 = Your SFTP server =
 Only when a developer mints a BYOB token for an SFTP server. File bytes and paths go to that server, which you operate.
@@ -176,6 +179,13 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.1.10 =
+* Bundles FluxFiles core 1.4.2 and phpseclib 3.0.58 (security fix for encrypted SFTP keys).
+* WordPress.org review fixes: the admin notices' and secret-field scripts are now enqueued files instead of inline `<script>` tags, and the settings use named sanitize callbacks.
+* The nginx-storage and "no secret key" notices show only to administrators, only on the Plugins screen and the FluxFiles settings page, and can be dismissed (remembered per user).
+* Request data is read through sanitizing helpers, and the HTTP calls go through WordPress's own HTTP API where possible.
+* "External services" lists S3-compatible endpoints and states that the plugin calls no FluxFiles server.
+
 = 1.1.9 =
 * Bundles FluxFiles core 1.4.1.
 * E-mail notices (FluxFiles Pro) read "1 file" or "3 files" instead of "file(s)", and a drop that arrives within one minute shows a single time instead of "between 16:36 and 16:36".
@@ -282,6 +292,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.1.10 =
+Review fixes: scripts are enqueued, admin notices are dismissible and limited to relevant screens. No change to your files or settings.
 
 = 1.1.9 =
 Bundles core 1.4.1: clearer wording in the FluxFiles Pro notice e-mails. No change for sites without Pro.

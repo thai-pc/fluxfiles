@@ -94,6 +94,10 @@ rm -f "$PLUGIN_DIR/public/share.html" "$PLUGIN_DIR/public/intake.html"
 # The raw SMTP client: on WordPress, notice mail goes through wp_mail (the site's SMTP
 # plugin); MailTransportFactory turns `smtp` off with a reason when the class is absent.
 rm -f "$PLUGIN_DIR/api/Mail/SmtpTransport.php"
+# Raw cURL (WP.org: use the HTTP API). Every consumer is handed a wp_remote_* implementation
+# (includes/FluxFilesHttpTransport.php, includes/FluxFilesUrlFetcher.php); core's defaults go
+# through HttpTransports, which tolerates these classes being absent.
+rm -f "$PLUGIN_DIR/api/CurlTransport.php" "$PLUGIN_DIR/api/CurlUrlFetcher.php"
 
 # The UI page is read from disk by the REST route and served through it with a CSP +
 # frame protection; it must never be openable directly under wp-content/plugins/. No
