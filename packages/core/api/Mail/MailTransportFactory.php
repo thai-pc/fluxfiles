@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace FluxFiles\Mail;
 
-use FluxFiles\CurlTransport;
 use FluxFiles\HttpTransportInterface;
 use FluxFiles\Log;
 
@@ -50,7 +49,11 @@ final class MailTransportFactory
             return self::off($why, 'FLUXFILES_MAIL_FROM is missing or not a valid address');
         }
         $fromName = MailMessage::cleanLabel($get('FLUXFILES_MAIL_FROM_NAME', 'FluxFiles'), 80);
-        $http ??= new CurlTransport(5);
+        $http ??= \FluxFiles\HttpTransports::curl(5);
+
+        if ($kind !== 'smtp' && $http === null) {
+            return self::off($why, 'no HTTP transport is available in this build');
+        }
 
         try {
             switch ($kind) {

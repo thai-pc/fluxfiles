@@ -1034,19 +1034,45 @@ class FluxFilesApi
     private function auditRefusal(\FluxFiles\Claims $claims, ApiException $e): void
     {
         try {
-            $body = AuditPolicy::decodeBody((string) file_get_contents('php://input'));
+            $body = self::sanitizeAuditInput(AuditPolicy::decodeBody((string) file_get_contents('php://input')));
             $log = new AuditLogStorage($this->metaRepo, $claims->allowedDisks);
-            // phpcs:disable WordPress.Security.NonceVerification -- audit of a request that was REFUSED: the values are only recorded (core redacts them), never acted on
-            AuditPolicy::recordRefusedWrite($log, $claims, $e, $body, $_POST);
+            // phpcs:disable WordPress.Security.NonceVerification -- audit of a request that was REFUSED: the values are sanitized and only recorded, never acted on
+            $post = self::sanitizeAuditInput(wp_unslash($_POST)); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized key by key in sanitizeAuditInput()
+            $get = self::sanitizeAuditInput(wp_unslash($_GET)); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized key by key in sanitizeAuditInput()
+            AuditPolicy::recordRefusedWrite($log, $claims, $e, $body, $post);
             $route = isset($_GET['rest_route']) && is_string($_GET['rest_route'])
-                ? wp_unslash($_GET['rest_route']) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- recorded verbatim in the audit entry (core redacts it), never output or acted on
+                ? sanitize_text_field(wp_unslash($_GET['rest_route']))
                 : (string) (wp_parse_url(isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '', PHP_URL_PATH) ?: '');
             $method = isset($_SERVER['REQUEST_METHOD']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'])) : '';
-            AuditPolicy::recordDenied($log, $claims, $e, $method, $route, $body, $_POST, $_GET);
+            AuditPolicy::recordDenied($log, $claims, $e, $method, $route, $body, $post, $get);
             // phpcs:enable WordPress.Security.NonceVerification
         } catch (\Throwable $ignored) {
             // Auditing must never turn a clean 4xx into a 500.
         }
+    }
+
+    /**
+     * Request values destined for the audit log, sanitized: strings through
+     * sanitize_text_field() (no markup, no control characters, no line breaks), nested
+     * arrays recursed to a small depth, anything that is not a scalar dropped.
+     *
+     * @param array<mixed> $in
+     * @return array<string,mixed>
+     */
+    private static function sanitizeAuditInput(array $in, int $depth = 3): array
+    {
+        $out = [];
+        foreach ($in as $k => $v) {
+            $k = sanitize_text_field((string) $k);
+            if (is_string($v)) {
+                $out[$k] = sanitize_text_field($v);
+            } elseif (is_int($v) || is_float($v) || is_bool($v)) {
+                $out[$k] = $v;
+            } elseif (is_array($v) && $depth > 0) {
+                $out[$k] = self::sanitizeAuditInput($v, $depth - 1);
+            }
+        }
+        return $out;
     }
 
     /**
@@ -1351,7 +1377,7 @@ class FluxFilesApi
             }
 
             $disk = (string) ($body['disk'] ?? 'local');
-            $result = (new UrlImporter($claims, $fm))->import($disk, $url, [
+            $result = (new UrlImporter($claims, $fm, new \FluxFilesUrlFetcher()))->import($disk, $url, [
                 'path'      => (string) ($body['path'] ?? ''),
                 'filename'  => isset($body['filename']) ? (string) $body['filename'] : null,
                 'overwrite' => filter_var($body['overwrite'] ?? false, FILTER_VALIDATE_BOOLEAN),
@@ -2082,7 +2108,7 @@ class FluxFilesApi
 
             $origin = $request->get_header('origin') ?: $request->get_param('origin');
 
-            $report = (new BucketDoctor($this->diskManager, self::httpTransport()))->diagnose($disk, $origin ?: null);
+            $report = (new BucketDoctor($this->diskManager, self::httpTransport(), new \FluxFilesUrlFetcher()))->diagnose($disk, $origin ?: null);
             // It writes and deletes a probe object — logged like any other write.
             $this->logAuditQuiet($claims, 'disk_doctor', $disk, '');
 

@@ -1036,6 +1036,16 @@ test('public routes delegate to the module dispatcher rather than reimplementing
     assertTrue(strpos($api, "fn () => \$this->mailer()\n        ));") !== false, 'the site mail transport is injected as a lazy, final resolver');
 });
 
+test('every outbound fetch in the plugin goes through the WordPress HTTP API (no cURL transport/fetcher left to default to)', function () {
+    require_once __DIR__ . '/../includes/FluxFilesUrlFetcher.php';
+    $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($api, 'new UrlImporter($claims, $fm, new \\FluxFilesUrlFetcher())') !== false, 'URL import gets the wp fetcher');
+    assertTrue(strpos($api, 'new BucketDoctor($this->diskManager, self::httpTransport(), new \\FluxFilesUrlFetcher())') !== false, 'bucket doctor gets the wp transport + fetcher');
+    assertEqual(0, substr_count($api, 'CurlTransport'), 'no direct CurlTransport use');
+    assertTrue((new FluxFilesUrlFetcher()) instanceof \FluxFiles\UrlFetcherInterface, 'fetcher implements core\'s interface');
+    assertTrue(strpos((string) file_get_contents(__DIR__ . '/../../../scripts/build-wordpress.sh'), 'api/CurlTransport.php') !== false, 'the build drops CurlTransport');
+});
+
 test('FluxFilesHttpTransport maps core requests onto wp_remote_request and never throws', function () {
     require_once __DIR__ . '/../includes/FluxFilesHttpTransport.php';
     $GLOBALS['WP_REMOTE'] = null;
@@ -1185,6 +1195,7 @@ if (!class_exists('WP_REST_Response')) {
 require_once __DIR__ . '/../includes/FluxFilesDbSchema.php';
 require_once __DIR__ . '/../includes/FluxFilesRateLimiterStorage.php';
 require_once __DIR__ . '/../includes/FluxFilesHttpTransport.php';
+require_once __DIR__ . '/../includes/FluxFilesUrlFetcher.php';
 require_once __DIR__ . '/../includes/FluxFilesMediaEndpoint.php';
 require_once __DIR__ . '/../includes/FluxFilesApi.php';
 
