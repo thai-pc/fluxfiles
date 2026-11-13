@@ -36,6 +36,7 @@ class FluxFilesUrlFetcher implements UrlFetcherInterface
                 return;   // not our request
             }
             $state->handle = $handle;
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt_array -- options on WordPress' own Requests cURL handle via the http_api_curl hook (DNS pin + protocol/size limits for SSRF safety)
             curl_setopt_array($handle, $pin + [
                 CURLOPT_FOLLOWLOCATION   => false,
                 CURLOPT_PROTOCOLS        => CURLPROTO_HTTP | CURLPROTO_HTTPS,
@@ -72,7 +73,7 @@ class FluxFilesUrlFetcher implements UrlFetcherInterface
 
         $info = static function (int $opt) use ($handle) {
             try {
-                return curl_getinfo($handle, $opt);
+                return curl_getinfo($handle, $opt); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- reads the connected IP / redirect target of WordPress' own handle (SSRF backstop)
             } catch (\Throwable $e) {
                 return null;
             }
@@ -88,7 +89,7 @@ class FluxFilesUrlFetcher implements UrlFetcherInterface
         if (is_wp_error($res)) {
             $errno = 0;
             try {
-                $errno = curl_errno($handle);
+                $errno = curl_errno($handle); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_errno -- distinguishes our size-limit abort on WordPress' own handle
             } catch (\Throwable $e) {
             }
             if ($errno === CURLE_FILESIZE_EXCEEDED || $errno === CURLE_ABORTED_BY_CALLBACK) {
@@ -112,7 +113,9 @@ class FluxFilesUrlFetcher implements UrlFetcherInterface
         if (!extension_loaded('curl')) {
             return false;
         }
-        if (function_exists('apply_filters') && apply_filters('use_curl_transport', true, []) === false) {
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core's own filter, read not defined here
+        $curlAllowed = function_exists('apply_filters') ? apply_filters('use_curl_transport', true, []) : true;
+        if ($curlAllowed === false) {
             return false;
         }
         foreach (['\\WpOrg\\Requests\\Transport\\Curl', '\\Requests_Transport_cURL'] as $cls) {
