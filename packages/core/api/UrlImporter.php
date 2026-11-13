@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
-// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_errno, WordPress.WP.AlternativeFunctions.curl_curl_exec, WordPress.WP.AlternativeFunctions.curl_curl_getinfo, WordPress.WP.AlternativeFunctions.curl_curl_init, WordPress.WP.AlternativeFunctions.curl_curl_setopt_array -- SSRF-guarded outbound fetch: cURL pins the validated IP (CURLOPT_RESOLVE) and caps size and redirects, which wp_remote_* cannot do; core also runs outside WordPress
-// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fclose, WordPress.WP.AlternativeFunctions.file_system_operations_fopen, WordPress.WP.AlternativeFunctions.unlink_unlink -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
+// phpcs:disable WordPress.WP.AlternativeFunctions.unlink_unlink -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
 // phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- core is a WordPress-independent library; wp_parse_url() does not exist outside WordPress
 // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment/server (not user input); core is a WordPress-independent library
 
@@ -21,8 +20,9 @@ namespace FluxFiles;
  *   - Magic-byte MIME (finfo) — never trust the remote Content-Type — plus a hard
  *     deny-list for executable / markup types, and SVG denied unless enabled.
  *
- * Redirects are followed manually (curl's FOLLOWLOCATION can't re-validate each
- * hop's IP in PHP), max 3.
+ * Redirects are followed manually (the HTTP client can't re-validate each hop's IP),
+ * max 3. The socket itself is a {@see UrlFetcherInterface}: cURL by default,
+ * wp_remote_get in the WordPress build.
  */
 final class UrlImporter
 {
@@ -50,7 +50,12 @@ final class UrlImporter
         'application/zip' => 'zip', 'application/json' => 'json',
     ];
 
-    public function __construct(private Claims $claims, private FileManager $fm) {}
+    private ?UrlFetcherInterface $fetcher;
+
+    public function __construct(private Claims $claims, private FileManager $fm, ?UrlFetcherInterface $fetcher = null)
+    {
+        $this->fetcher = $fetcher;
+    }
 
     /**
      * Import $url into $disk. Returns the same record shape as FileManager::upload.
@@ -99,53 +104,11 @@ final class UrlImporter
         for ($hop = 0; ; $hop++) {
             $safeIps = SsrfGuard::assertSafeUrl($current, $allowlist);   // every hop, before connecting
 
-            $fh = fopen($tmpPath, 'w');
-            if ($fh === false) {
-                throw new ApiException('Could not open temp file', 500, 'server_error');
-            }
-            $disposition = '';
-            $ch = curl_init($current);
-            curl_setopt_array($ch, SsrfGuard::curlOptionsForIps($current, $safeIps));
-            curl_setopt_array($ch, [
-                CURLOPT_FOLLOWLOCATION  => false,             // we follow manually to re-validate
-                CURLOPT_FILE            => $fh,
-                CURLOPT_CONNECTTIMEOUT  => 10,
-                CURLOPT_TIMEOUT         => $timeout,
-                CURLOPT_PROTOCOLS       => CURLPROTO_HTTP | CURLPROTO_HTTPS,
-                CURLOPT_MAXFILESIZE     => $maxBytes,         // aborts on a too-big Content-Length
-                CURLOPT_NOPROGRESS      => false,
-                CURLOPT_PROGRESSFUNCTION => static function ($c, $dlTotal, $dlNow) use ($maxBytes) {
-                    return ($dlNow > $maxBytes || $dlTotal > $maxBytes) ? 1 : 0;  // non-zero aborts (chunked cap)
-                },
-                CURLOPT_HEADERFUNCTION  => static function ($c, $line) use (&$disposition) {
-                    if (stripos($line, 'content-disposition:') === 0) {
-                        $disposition = trim(substr($line, 20));
-                    }
-                    return strlen($line);
-                },
-                CURLOPT_USERAGENT       => 'FluxFiles-URLImport/1.0',
-                CURLOPT_ACCEPT_ENCODING => '',                // let curl handle gzip transparently
-            ]);
-
-            $ok = curl_exec($ch);
-            $errno = curl_errno($ch);
-            $code  = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-            $redirectUrl = (string) curl_getinfo($ch, CURLINFO_REDIRECT_URL);
-
-            // DNS-rebinding backstop: the IP curl actually connected to.
-            try {
-                SsrfGuard::assertConnectedIpSafe($ch, $safeIps);
-            } catch (ApiException $e) {
-fclose($fh); throw $e;
-            }
-            fclose($fh);
-
-            if ($ok === false) {
-                if ($errno === CURLE_FILESIZE_EXCEEDED || $errno === CURLE_ABORTED_BY_CALLBACK) {
-                    throw new ApiException('File exceeds the import size limit', 422, 'size_exceeded');
-                }
-                throw new ApiException('Could not download from this URL', 422, 'fetch_failed');
-            }
+            $fetcher = $this->fetcher ??= HttpTransports::urlFetcher();
+            $res = $fetcher->fetch($current, $safeIps, $safeIps, $tmpPath, $maxBytes, $timeout);
+            $code = $res['status'];
+            $redirectUrl = $res['redirect_url'];
+            $disposition = $res['disposition'];
 
             // Redirect — re-validate the next hop.
             if ($code >= 300 && $code < 400 && $redirectUrl !== '') {

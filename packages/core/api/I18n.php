@@ -109,8 +109,7 @@ class I18n
         }
 
         // 2. URL query param ?lang=
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- read-only language picker, validated against the shipped locales by isSupported() before use
-        $lang = $_GET['lang'] ?? null;
+        $lang = RequestInput::queryString('lang'); // string-only: ?lang[]= must not reach isSupported()
         if ($lang !== null && $this->isSupported($lang)) {
             return $this->normalize($lang);
         }
