@@ -18,6 +18,7 @@ class FluxFilesAdmin
         add_action('admin_notices', [$this, 'renderNginxStorageNotice']);
         add_action('wp_ajax_fluxfiles_nginx_probe', [$this, 'ajaxNginxProbe']);
         add_action('wp_ajax_fluxfiles_test_disk', [$this, 'ajaxTestDisk']);
+        add_action('wp_ajax_fluxfiles_dismiss_notice', [$this, 'ajaxDismissNotice']);
         add_action('admin_notices', [$this, 'renderUnconfiguredNotice']);
     }
 
@@ -46,6 +47,7 @@ class FluxFilesAdmin
         );
         wp_enqueue_style('fluxfiles-settings', FLUXFILES_PLUGIN_URL . 'assets/settings.css', ['fluxfiles-admin'], FLUXFILES_VERSION);
         wp_enqueue_script('fluxfiles-settings', FLUXFILES_PLUGIN_URL . 'assets/settings.js', [], FLUXFILES_VERSION, true);
+        wp_enqueue_script('fluxfiles-secret-field', FLUXFILES_PLUGIN_URL . 'assets/secret-field.js', [], FLUXFILES_VERSION, true);
         wp_localize_script('fluxfiles-settings', 'FluxFilesSettings', [
             'ajaxUrl'   => admin_url('admin-ajax.php'),
             'testNonce' => wp_create_nonce('fluxfiles_test_disk'),
@@ -178,7 +180,7 @@ class FluxFilesAdmin
 
         register_setting('fluxfiles', 'fluxfiles_secret', [
             'type' => 'string',
-            'sanitize_callback' => $this->keepSecret('fluxfiles_secret', false, 32),
+            'sanitize_callback' => [$this, 'sanitizeJwtSecret'],
         ]);
         // A blank or 0 would mean "no uploads" / "tokens that expire instantly", so fall back to the
         // defaults instead of saving a value that silently breaks the plugin.
@@ -368,15 +370,14 @@ class FluxFilesAdmin
         $this->addField('fluxfiles_s3_visibility', esc_html__('Visibility', 'fluxfiles'), 'fluxfiles_s3', 'visibility');
         $this->addField('fluxfiles_s3_public_url', esc_html__('Public URL (CDN/custom domain)', 'fluxfiles'), 'fluxfiles_s3', 'url', ['placeholder' => 'https://cdn.example.com']);
 
-        foreach ([
-            'fluxfiles_s3_bucket', 'fluxfiles_s3_region', 'fluxfiles_s3_key', 'fluxfiles_s3_secret',
-            'fluxfiles_s3_endpoint', 'fluxfiles_s3_visibility', 'fluxfiles_s3_public_url',
-        ] as $opt) {
-            register_setting('fluxfiles', $opt, [
-                'type' => 'string',
-                'sanitize_callback' => $opt === 'fluxfiles_s3_secret' ? $this->keepSecret($opt, true) : self::fieldSanitizer($opt),
-            ]);
-        }
+        register_setting('fluxfiles', 'fluxfiles_s3_bucket', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
+        register_setting('fluxfiles', 'fluxfiles_s3_region', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
+        register_setting('fluxfiles', 'fluxfiles_s3_key', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
+        register_setting('fluxfiles', 'fluxfiles_s3_secret', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeS3Secret']]);
+        register_setting('fluxfiles', 'fluxfiles_s3_endpoint', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeUrlOption']]);
+        register_setting('fluxfiles', 'fluxfiles_s3_visibility', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeVisibility']]);
+        register_setting('fluxfiles', 'fluxfiles_s3_public_url', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeUrlOption']]);
+        register_setting('fluxfiles', 'fluxfiles_s3_secret', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeS3Secret']]);
 
         // R2 section
         add_settings_section(
@@ -395,15 +396,13 @@ class FluxFilesAdmin
         $this->addField('fluxfiles_r2_visibility', esc_html__('Visibility', 'fluxfiles'), 'fluxfiles_r2', 'visibility');
         $this->addField('fluxfiles_r2_public_url', esc_html__('Public URL (r2.dev / custom domain)', 'fluxfiles'), 'fluxfiles_r2', 'url', ['placeholder' => 'https://pub-xxxx.r2.dev']);
 
-        foreach ([
-            'fluxfiles_r2_bucket', 'fluxfiles_r2_account_id', 'fluxfiles_r2_key', 'fluxfiles_r2_secret',
-            'fluxfiles_r2_visibility', 'fluxfiles_r2_public_url',
-        ] as $opt) {
-            register_setting('fluxfiles', $opt, [
-                'type' => 'string',
-                'sanitize_callback' => $opt === 'fluxfiles_r2_secret' ? $this->keepSecret($opt, true) : self::fieldSanitizer($opt),
-            ]);
-        }
+        register_setting('fluxfiles', 'fluxfiles_r2_bucket', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
+        register_setting('fluxfiles', 'fluxfiles_r2_account_id', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
+        register_setting('fluxfiles', 'fluxfiles_r2_key', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
+        register_setting('fluxfiles', 'fluxfiles_r2_secret', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeR2Secret']]);
+        register_setting('fluxfiles', 'fluxfiles_r2_visibility', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeVisibility']]);
+        register_setting('fluxfiles', 'fluxfiles_r2_public_url', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeUrlOption']]);
+        register_setting('fluxfiles', 'fluxfiles_r2_secret', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeR2Secret']]);
 
         // Extension point: add-ons (FluxFiles Pro) register their own sections and
         // settings on this page; $group is the settings_fields()/register_setting group.
@@ -462,6 +461,9 @@ class FluxFilesAdmin
             return;
         }
         $onSettings = ($page === 'options-general.php');
+        if (!$onSettings && self::noticeDismissed('nginx')) {
+            return;
+        }
         $verified = esc_html__('nginx protection verified: the storage folder denies _fluxfiles/, dotfiles and PHP files. Nothing to do.', 'fluxfiles');
 
         // A recent successful check: show nothing (a confirmation on the settings page only).
@@ -472,7 +474,7 @@ class FluxFilesAdmin
 
         $private = $ctx['private'];
         printf(
-            '<div id="fluxfiles-nginx-notice" class="notice notice-warning"><p><strong>FluxFiles:</strong> %s</p><pre style="white-space:pre-wrap">%s</pre><p>%s</p><p class="fluxfiles-nginx-status"><em>%s</em></p></div>',
+            '<div id="fluxfiles-nginx-notice" class="notice notice-warning is-dismissible" data-fluxfiles-notice="nginx"><p><strong>FluxFiles:</strong> %s</p><pre style="white-space:pre-wrap">%s</pre><p>%s</p><p class="fluxfiles-nginx-status"><em>%s</em></p></div>',
             $private
                 ? esc_html__('Private local storage is on, but this site runs on nginx, which ignores the .htaccess that denies the FluxFiles folder. Until you deny it in your server block, the files and the _fluxfiles/ bookkeeping (audit log with IP addresses, index, trash) can still be fetched by their plain URL. Add this rule (then reload nginx):', 'fluxfiles')
                 : esc_html__('This site runs on nginx, which ignores the .htaccess protecting the FluxFiles uploads folder. Uploads there are served from the same origin as wp-admin: the folder must never execute PHP and must not serve HTML/SVG/XML as active content, and its _fluxfiles/ bookkeeping must not be public. Add rules like these to your server block (then reload nginx):', 'fluxfiles'),
@@ -494,18 +496,47 @@ class FluxFilesAdmin
             'missing'    => esc_html__('Still missing on this server:', 'fluxfiles'),
             'unknown'    => esc_html__('FluxFiles could not check the rules automatically (the server did not answer a request to itself). If you already added them, you can ignore this; hide it with the fluxfiles_nginx_storage_notice filter.', 'fluxfiles'),
         ];
-        // phpcs:disable WordPress.Security.EscapeOutput -- JSON-encoded config + static script
-        echo '<script>(function(c){var n=document.getElementById("fluxfiles-nginx-notice");if(!n||!window.fetch){return;}'
-            . 'var st=n.querySelector(".fluxfiles-nginx-status em");'
-            . 'var b=new URLSearchParams({action:"fluxfiles_nginx_probe",_wpnonce:c.nonce});'
-            . 'fetch(c.url,{method:"POST",credentials:"same-origin",body:b}).then(function(r){return r.json();}).then(function(j){'
-            . 'var d=j&&j.data||{};var chip=document.getElementById("ff-status-nginx");'
-            . 'if(chip){chip.setAttribute("data-state",d.state==="ok"?"ok":(d.state==="missing"?"bad":"warn"));var v=chip.querySelector(".ff-status-value");if(v){v.textContent=d.state==="ok"?c.chipOk:(d.state==="missing"?c.chipMissing:c.chipUnknown);}}'
-            . 'if(d.state==="ok"){n.parentNode.removeChild(n);}'
-            . 'else if(d.state==="missing"){st.textContent=c.missing+" "+(d.missing||[]).join(", ")+".";}'
-            . 'else{st.textContent=c.unknown;}}).catch(function(){st.textContent=c.unknown;});'
-            . '})(' . wp_json_encode($cfg) . ');</script>';
-        // phpcs:enable
+        wp_enqueue_script('fluxfiles-nginx-notice', FLUXFILES_PLUGIN_URL . 'assets/nginx-notice.js', [], FLUXFILES_VERSION, true);
+        wp_localize_script('fluxfiles-nginx-notice', 'FluxFilesNginx', $cfg);
+        $this->enqueueNoticeDismiss();
+    }
+
+    /** Notices a user may dismiss (and have it remembered) outside the FluxFiles settings page. */
+    private const DISMISSIBLE = ['nginx', 'unconfigured'];
+
+    private static function noticeDismissed(string $id): bool
+    {
+        $done = get_user_meta(get_current_user_id(), 'fluxfiles_dismissed_notices', true);
+        return is_array($done) && in_array($id, $done, true);
+    }
+
+    private function enqueueNoticeDismiss(): void
+    {
+        wp_enqueue_script('fluxfiles-notice-dismiss', FLUXFILES_PLUGIN_URL . 'assets/notice-dismiss.js', [], FLUXFILES_VERSION, true);
+        wp_localize_script('fluxfiles-notice-dismiss', 'FluxFilesNotice', [
+            'url'   => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('fluxfiles_dismiss_notice'),
+        ]);
+    }
+
+    /** AJAX: remember that the current user dismissed one of our notices. */
+    public function ajaxDismissNotice(): void
+    {
+        check_ajax_referer('fluxfiles_dismiss_notice');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(null, 403);
+        }
+        $id = isset($_POST['notice']) ? sanitize_key(wp_unslash($_POST['notice'])) : '';
+        if (!in_array($id, self::DISMISSIBLE, true)) {
+            wp_send_json_error(null, 400);
+        }
+        $done = get_user_meta(get_current_user_id(), 'fluxfiles_dismissed_notices', true);
+        $done = is_array($done) ? $done : [];
+        if (!in_array($id, $done, true)) {
+            $done[] = $id;
+            update_user_meta(get_current_user_id(), 'fluxfiles_dismissed_notices', $done);
+        }
+        wp_send_json_success();
     }
 
     /** AJAX: run the protection probe now (fresh) and report. Admin only. */
@@ -697,45 +728,57 @@ class FluxFilesAdmin
         if (!current_user_can('manage_options') || (string) get_option('fluxfiles_secret', '') !== '') {
             return;
         }
+        $page = (string) ($GLOBALS['pagenow'] ?? '');
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- reads the current admin screen slug to decide where to show a notice; nothing is processed
+        $screen = isset($_GET['page']) ? sanitize_text_field(wp_unslash($_GET['page'])) : '';
+        $onSettings = ($page === 'options-general.php' && $screen === 'fluxfiles');
+        if ($page !== 'plugins.php' && !$onSettings) {
+            return;
+        }
+        if (!$onSettings && self::noticeDismissed('unconfigured')) {
+            return;
+        }
+        $this->enqueueNoticeDismiss();
         printf(
-            '<div class="notice notice-error"><p><strong>FluxFiles:</strong> %s <a href="%s">%s</a></p></div>',
+            '<div class="notice notice-error is-dismissible" data-fluxfiles-notice="unconfigured"><p><strong>FluxFiles:</strong> %s <a href="%s">%s</a></p></div>',
             esc_html__('This site has no secret key yet, so the file manager cannot sign its tokens.', 'fluxfiles'),
             esc_url(admin_url('options-general.php?page=fluxfiles')),
             esc_html__('Open Settings → FluxFiles and save a secret.', 'fluxfiles')
         );
     }
 
-    /** One small inline script (printed once) for the show/hide and generate buttons. */
-    private static function printSecretFieldScript(): void
+    /** Sanitizer for an S3/R2 endpoint or public URL option: http(s) only, blank allowed. */
+    public static function sanitizeUrlOption($v): string
     {
-        static $done = false;
-        if ($done) {
-            return;
-        }
-        $done = true;
-        // phpcs:disable WordPress.Security.EscapeOutput -- static script, no interpolated data
-        echo '<script>document.addEventListener("click",function(e){var b=e.target.closest(".fluxfiles-secret-eye,.fluxfiles-secret-gen");if(!b){return;}'
-            . 'var i=document.getElementById(b.getAttribute("data-target"));if(!i){return;}'
-            . 'if(b.classList.contains("fluxfiles-secret-eye")){var show=i.type==="password";i.type=show?"text":"password";'
-            . 'var l=show?b.getAttribute("data-hide"):b.getAttribute("data-show");b.setAttribute("aria-label",l);b.title=l;b.setAttribute("aria-pressed",show?"true":"false");return;}'
-            . 'var a=new Uint8Array(32);crypto.getRandomValues(a);i.value=Array.prototype.map.call(a,function(x){return("0"+x.toString(16)).slice(-2);}).join("");'
-            . 'i.type="text";var eye=document.querySelector(".fluxfiles-secret-eye[data-target=\""+i.id+"\"]");if(eye){var h=eye.getAttribute("data-hide");eye.setAttribute("aria-label",h);eye.title=h;eye.setAttribute("aria-pressed","true");}i.focus();i.select();});</script>';
-        // phpcs:enable
+        $v = trim((string) $v);
+        return $v === '' ? '' : esc_url_raw($v, ['http', 'https']);
     }
 
-    /**
-     * Sanitizer for a plain S3/R2 text option: URLs keep their scheme check, visibility is
-     * limited to the two values the storage layer understands (blank -> the default, private).
-     */
-    private static function fieldSanitizer(string $opt): callable
+    /** Sanitizer for a visibility option: the two values the storage layer understands (blank -> private). */
+    public static function sanitizeVisibility($v): string
     {
-        if (substr($opt, -11) === '_public_url' || substr($opt, -9) === '_endpoint') {
-            return static function ($v) { $v = trim((string) $v); return $v === '' ? '' : esc_url_raw($v, ['http', 'https']); };
-        }
-        if (substr($opt, -11) === '_visibility') {
-            return static function ($v) { return $v === 'public' ? 'public' : 'private'; };
-        }
-        return static function ($v) { return sanitize_text_field((string) $v); };
+        return $v === 'public' ? 'public' : 'private';
+    }
+
+    /** Sanitizer for a plain S3/R2 text option. */
+    public static function sanitizeTextOption($v): string
+    {
+        return sanitize_text_field((string) $v);
+    }
+
+    public function sanitizeJwtSecret($v): string
+    {
+        return $this->keepSecret('fluxfiles_secret', false, 32)($v);
+    }
+
+    public function sanitizeS3Secret($v): string
+    {
+        return $this->keepSecret('fluxfiles_s3_secret', true)($v);
+    }
+
+    public function sanitizeR2Secret($v): string
+    {
+        return $this->keepSecret('fluxfiles_r2_secret', true)($v);
     }
 
     /** @param array<string,mixed> $args min / max / step / placeholder / hint */
@@ -770,7 +813,6 @@ class FluxFilesAdmin
                         esc_attr__('Hide', 'fluxfiles'),
                         $gen // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from escaped parts above
                     );
-                    self::printSecretFieldScript();
                     if ($name !== 'fluxfiles_secret' && $value !== '') {
                         printf(
                             '<p><label><input type="checkbox" name="%1$s_clear" value="1" /> %2$s</label></p>',
