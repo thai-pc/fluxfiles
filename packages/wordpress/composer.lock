@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b11c4114fe180df9a0c2f3d3a7253aa8",
+    "content-hash": "84439e65124ad53217240e27be243da5",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -233,16 +233,16 @@
         },
         {
             "name": "fluxfiles/fluxfiles",
-            "version": "v1.1.0",
+            "version": "v1.4.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thai-pc/fluxfiles-core.git",
-                "reference": "1ef62caa99b5d5db74ad82631408e7ee6db4e7bd"
+                "reference": "f7884c2fb80c40de98c3d215a9d2b44cff3a4996"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/1ef62caa99b5d5db74ad82631408e7ee6db4e7bd",
-                "reference": "1ef62caa99b5d5db74ad82631408e7ee6db4e7bd",
+                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/f7884c2fb80c40de98c3d215a9d2b44cff3a4996",
+                "reference": "f7884c2fb80c40de98c3d215a9d2b44cff3a4996",
                 "shasum": ""
             },
             "require": {
@@ -318,7 +318,7 @@
                 "issues": "https://github.com/thai-pc/fluxfiles/issues",
                 "source": "https://github.com/thai-pc/fluxfiles"
             },
-            "time": "2026-11-06T16:08:36+00:00"
+            "time": "2026-11-13T08:00:47+00:00"
         },
         {
             "name": "graham-campbell/result-type",
@@ -1486,16 +1486,16 @@
         },
         {
             "name": "phpseclib/phpseclib",
-            "version": "3.0.57",
+            "version": "3.0.58",
             "source": {
                 "type": "git",
                 "url": "https://github.com/phpseclib/phpseclib.git",
-                "reference": "d17e0ddaeaf6f22f7e007cbb437d78792fe2a0e4"
+                "reference": "91f3a6436bb84040ac0cf49e761977f17d16a39b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpseclib/phpseclib/zipball/d17e0ddaeaf6f22f7e007cbb437d78792fe2a0e4",
-                "reference": "d17e0ddaeaf6f22f7e007cbb437d78792fe2a0e4",
+                "url": "https://api.github.com/repos/phpseclib/phpseclib/zipball/91f3a6436bb84040ac0cf49e761977f17d16a39b",
+                "reference": "91f3a6436bb84040ac0cf49e761977f17d16a39b",
                 "shasum": ""
             },
             "require": {
@@ -1576,7 +1576,7 @@
             ],
             "support": {
                 "issues": "https://github.com/phpseclib/phpseclib/issues",
-                "source": "https://github.com/phpseclib/phpseclib/tree/3.0.57"
+                "source": "https://github.com/phpseclib/phpseclib/tree/3.0.58"
             },
             "funding": [
                 {
@@ -1592,7 +1592,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-08-26T12:13:21+00:00"
+            "time": "2026-11-02T10:45:48+00:00"
         },
         {
             "name": "psr/http-client",
