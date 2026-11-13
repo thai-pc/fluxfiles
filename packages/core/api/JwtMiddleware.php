@@ -68,6 +68,9 @@ class JwtMiddleware
     {
         // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Bearer JWT, authenticated by its HMAC signature and never output; core is a WordPress-independent library (no wp_unslash)
         $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+        if (!is_string($header)) {
+            $header = '';
+        }
 
         if (!preg_match('/^Bearer\s+(.+)$/i', $header, $matches)) {
             throw new ApiException('Missing or malformed Authorization header', 401, 'token_missing');

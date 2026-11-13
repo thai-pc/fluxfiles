@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
-// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- SSRF-guarded outbound fetch: cURL pins the validated IP (CURLOPT_RESOLVE) and caps size and redirects, which wp_remote_* cannot do; core also runs outside WordPress
 // phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- core is a WordPress-independent library; wp_parse_url() does not exist outside WordPress
 
 /**
@@ -440,12 +439,16 @@ final class SsrfGuard
      * switched the rebinding backstop off globally — one allowlisted private
      * SFTP host disarmed it for every tenant's outbound fetch.
      *
-     * @param \CurlHandle $ch
+     * @param \CurlHandle|string $chOrIp The address the HTTP client reported it connected to
+     *                   (cURL: CURLINFO_PRIMARY_IP); '' = nothing to check. A cURL handle is
+     *                   still accepted (the released Webhooks module passes one): its
+     *                   CURLINFO_PRIMARY_IP is read here.
      * @param string[]|null $allowedIps Addresses this fetch was pinned to.
      */
-    public static function assertConnectedIpSafe($ch, ?array $allowedIps = null): void
+    public static function assertConnectedIpSafe(\CurlHandle|string $chOrIp, ?array $allowedIps = null): void
     {
-        $ip = (string) curl_getinfo($ch, CURLINFO_PRIMARY_IP);
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- reads the connected IP of a handle the caller made (SSRF backstop); no request is made here
+        $ip = $chOrIp instanceof \CurlHandle ? (string) curl_getinfo($chOrIp, CURLINFO_PRIMARY_IP) : $chOrIp;
         if ($ip === '') {
             return;
         }
