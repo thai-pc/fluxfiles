@@ -41,7 +41,7 @@ class FluxFilesUrlFetcher implements UrlFetcherInterface
         $hook = static function ($handle, $args = null, $reqUrl = null) use ($pinned, $pin, $maxBytes, $state): void {
             // The hook only exists for the length of our synchronous request, so every firing is
             // ours. Throwing here escapes wp_remote_get() (WP_Http only catches Requests'
-            // own exceptions) BEFORE curl_exec(), so no socket is opened for a request we cannot pin.
+            // own exceptions) BEFORE the request is executed, so no socket is opened for a request we cannot pin.
             if ($state->handle !== null) {
                 throw new ApiException('Unexpected second request (redirect) during a pinned fetch', 422, 'ssrf_blocked');
             }
