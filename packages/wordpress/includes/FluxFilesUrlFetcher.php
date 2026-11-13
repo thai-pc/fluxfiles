@@ -129,7 +129,7 @@ class FluxFilesUrlFetcher implements UrlFetcherInterface
     /** [scheme, host, port] with scheme/host lower-cased and the default port filled in; null if not http(s). */
     private static function endpoint(string $url): ?array
     {
-        $p = parse_url($url);
+        $p = wp_parse_url($url);
         if (!is_array($p) || !isset($p['scheme'], $p['host'])) {
             return null;
         }

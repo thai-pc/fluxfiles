@@ -51,6 +51,7 @@ function remove_action($tag, $cb, $prio = 10) {
 }
 function apply_filters($tag, $value, ...$a) { return $tag === 'use_curl_transport' ? $GLOBALS['WP_FILTER_CURL'] : $value; }
 function wp_allowed_protocols() { return ['http', 'https']; }
+function wp_parse_url($url, $component = -1) { return parse_url($url, $component); }
 /** Like WP's kses: strips NULs and lower-cases an allowed scheme; '' for a disallowed one. */
 function wp_kses_bad_protocol($s, $allowed)
 {
