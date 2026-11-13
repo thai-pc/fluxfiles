@@ -280,10 +280,12 @@ test('OidcDiscovery: unreachable / non-2xx / non-JSON → 502 sso_idp_unreachabl
     }
 });
 
-test('UrlImporter stays on its own DNS-pinned cURL (no transport seam, by design)', function () {
+test('UrlImporter fetches through the pinned UrlFetcherInterface seam, not the generic transport', function () {
     $src = (string) file_get_contents(__DIR__ . '/../../api/UrlImporter.php');
-    assertTrue(!str_contains($src, 'HttpTransportInterface'), 'must not use the transport');
-    assertTrue(str_contains($src, 'curl_init') && str_contains($src, 'assertConnectedIpSafe'), 'still owns the cURL handle + post-connect IP check');
+    assertTrue(!str_contains($src, 'HttpTransportInterface'), 'must not use the generic transport');
+    assertTrue(!str_contains($src, 'curl_init') && str_contains($src, 'UrlFetcherInterface'), 'no raw cURL in the importer');
+    $cu = (string) file_get_contents(__DIR__ . '/../../api/CurlUrlFetcher.php');
+    assertTrue(str_contains($cu, 'curl_init') && str_contains($cu, 'assertConnectedIpSafe'), 'the default fetcher owns the cURL handle + post-connect IP check');
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";

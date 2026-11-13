@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
-// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_exec, WordPress.WP.AlternativeFunctions.curl_curl_getinfo, WordPress.WP.AlternativeFunctions.curl_curl_init, WordPress.WP.AlternativeFunctions.curl_curl_setopt_array -- SSRF-guarded outbound fetch: cURL pins the validated IP (CURLOPT_RESOLVE) and caps size and redirects, which wp_remote_* cannot do; core also runs outside WordPress
+// phpcs:disable WordPress.WP.AlternativeFunctions.unlink_unlink -- removing the probe's own temp file
 // phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- core is a WordPress-independent library; wp_parse_url() does not exist outside WordPress
 
 /**
@@ -28,12 +28,18 @@ class BucketDoctor
     /** A presign probe answer is tiny; 1 MB is generous. */
     private const PROBE_MAX_BYTES = 1048576;
 
-    private HttpTransportInterface $transport;
+    private ?HttpTransportInterface $transport;
+    private ?UrlFetcherInterface $fetcher;
 
-    public function __construct(DiskManager $disks, ?HttpTransportInterface $transport = null)
+    /**
+     * @param ?HttpTransportInterface $transport unpinned (operator-configured disk) probes
+     * @param ?UrlFetcherInterface    $fetcher   pinned (BYOB) probes; defaults to cURL
+     */
+    public function __construct(DiskManager $disks, ?HttpTransportInterface $transport = null, ?UrlFetcherInterface $fetcher = null)
     {
         $this->disks = $disks;
-        $this->transport = $transport ?? new CurlTransport();
+        $this->transport = $transport ?? HttpTransports::curl();
+        $this->fetcher = $fetcher;
     }
 
     /**
@@ -327,54 +333,37 @@ class BucketDoctor
     private function httpGet(string $url, ?string $pinnedIp = null): array
     {
         // Unpinned (operator-configured) disks go through the injected transport. A pinned
-        // BYOB fetch keeps its own cURL handle below: CURLOPT_RESOLVE plus the post-connect
-        // IP check need the handle, which an abstract transport cannot hand back.
+        // BYOB fetch needs the DNS pin plus the post-connect IP check, which only a
+        // UrlFetcherInterface can express.
         if ($pinnedIp === null || $pinnedIp === '') {
-            $res = $this->transport->request('GET', $url, [], null, 15);
+            $res = ($this->transport ?? HttpTransports::curlOrFail())->request('GET', $url, [], null, 15);
             return [$res['status'], $res['body']];
         }
 
-        $ch = curl_init($url);
-        $received = '';
-        $over = false;
+        // An allowlisted host (operator env var / test fixture) waives the public-IP rule
+        // for its own pinned address only: every other address is still rejected.
+        $allowance = SsrfGuard::isAllowlistedHost(
+            (string) (parse_url($url, PHP_URL_HOST) ?? ''),
+            parse_url($url, PHP_URL_PORT)
+        ) ? [$pinnedIp] : null;
+
+        $tmp = tempnam(sys_get_temp_dir(), 'ffdoc_');
+        if ($tmp === false) {
+            return [0, ''];
+        }
         try {
-            $opts = [
-                // The endpoint is tenant-supplied (BYOB): cap what it can make us buffer.
-                CURLOPT_WRITEFUNCTION  => CurlTransport::cappedWriter($received, $over, self::PROBE_MAX_BYTES),
-                CURLOPT_TIMEOUT        => 15,
-                CURLOPT_FOLLOWLOCATION => false,
-            ];
-            if ($pinnedIp !== null && $pinnedIp !== '') {
-                $host = strtolower(trim((string) (parse_url($url, PHP_URL_HOST) ?? ''), '[]'));
-                $port = parse_url($url, PHP_URL_PORT)
-                    ?? (strtolower((string) (parse_url($url, PHP_URL_SCHEME) ?? '')) === 'http' ? 80 : 443);
-                if ($host !== '') {
-                    $opts[CURLOPT_RESOLVE] = ["{$host}:{$port}:{$pinnedIp}"];
-                }
+            // The endpoint is tenant-supplied (BYOB): cap what it can make us buffer.
+            $res = ($this->fetcher ??= HttpTransports::urlFetcher())
+                ->fetch($url, [$pinnedIp], $allowance, $tmp, self::PROBE_MAX_BYTES, 15);
+            $body = file_get_contents($tmp, false, null, 0, self::PROBE_MAX_BYTES);
+            return [$res['status'], $body === false ? '' : $body];
+        } catch (ApiException $e) {
+            if ($e->getErrorCode() === 'ssrf_blocked') {
+                throw $e;
             }
-            curl_setopt_array($ch, $opts);
-            $body = curl_exec($ch);
-            // Post-connect backstop: even pinned via CURLOPT_RESOLVE, re-confirm the
-            // IP curl actually connected to is still safe (defends a pin that
-            // silently didn't take, e.g. a protocol/family curl couldn't route the
-            // resolve entry for). Only meaningful when we had a pin to check against
-            // — an unpinned (non-BYOB) fetch has no SSRF threat model to enforce.
-            if ($pinnedIp !== null && $pinnedIp !== '') {
-                // An allowlisted host (operator env var / test fixture) waives the
-                // public-IP rule for its own pinned address only — every other
-                // address curl might have landed on is still rejected.
-                $allowance = SsrfGuard::isAllowlistedHost(
-                    (string) (parse_url($url, PHP_URL_HOST) ?? ''),
-                    parse_url($url, PHP_URL_PORT)
-                ) ? [$pinnedIp] : null;
-                SsrfGuard::assertConnectedIpSafe($ch, $allowance);
-            }
-            if ($over) {
-                return [0, ''];
-            }
-            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            return [$code, $body === false ? '' : $received];
+            return [0, ''];   // oversized or unreachable: same as before
         } finally {
+            @unlink($tmp);
         }
     }
 

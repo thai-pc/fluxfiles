@@ -67,6 +67,9 @@ jobs:
       - name: WordPress plugin smoke (stubbed WP, uses core autoload)
         run: php packages/wordpress/tests/test-wp-smoke.php
 
+      - name: WordPress URL fetcher (wp_remote_get emulated over a real cURL handle)
+        run: php packages/wordpress/tests/test-wp-url-fetcher.php
+
       - name: WordPress storage base + uninstall (stubbed WP, uses core autoload)
         run: php packages/wordpress/tests/test-wp-storage-uninstall.php
 
