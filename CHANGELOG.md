@@ -5,6 +5,17 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.36] — 2026-11-13
+
+> Released: `node-v1.1.0`, `python-v1.1.0`, `sdk-v1.0.2`, `react-v1.0.2`, `vue-v1.0.1`. Core, Laravel and WordPress are unchanged (`core-v1.4.2`, `laravel-v1.0.9`, `wordpress-v1.1.10`).
+
+### Added
+- Node (`@fluxfiles/node`) and Python (`fluxfiles-token`) token SDKs: typed options for the e-mail notice and document-request claims added in core 1.3.0/1.4.0 (`notifyTo`, `notifyRecipientDomains`, `notifyEvents`, `notifyLocale`, `notifyFromName`, `notifyReplyTo`, `notifyAppUrl`, `notifyBatchWindow`, `notifyIncludeNames`, `intakeNotifyReceipt`, `intakeRequestAnyRecipient`; snake_case in Python). They were only reachable through the raw `claims` map before.
+
+### Fixed
+- SDK (`fluxfiles`) typings: the named types now live in the `FluxFiles` namespace, so `import type { FluxFile } from 'fluxfiles'` works, and `FluxFile.modified` / `created` are typed as Unix seconds (`number`), matching what core returns.
+- React (`@fluxfiles/react`) and Vue (`@fluxfiles/vue`): `allowedTypes` is documented as a picker-only UI filter (the server enforces `allowed_ext`); package homepage links point to the README's framework-adapters section.
+
 ## [1.0.35] — 2026-11-13
 
 > Released: `core-v1.4.2`, `wordpress-v1.1.10` (bundles core 1.4.2). Laravel, Share, Intake and FluxFiles Pro are unchanged.
