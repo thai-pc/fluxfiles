@@ -238,6 +238,7 @@ The duplicate finder (`GET /api/fm/duplicates`, free) has no claim of its own �
 | `notify_from_name` | string | `FLUXFILES_MAIL_FROM_NAME` | Display name on notices, max 80 chars, control chars stripped. The **address** is `FLUXFILES_MAIL_FROM` (a domain verified with the provider); through `wp_mail` / Laravel mail it is the site's / app's own sender unless `FLUXFILES_MAIL_FROM` is set. |
 | `notify_reply_to` | string (e-mail) | — | Reply-To on submitter receipts, so a sender can reply to the operator. Validated like `notify_to`. |
 | `notify_app_url` | string (http/s) | — | Optional "open in your file manager" link in owner notices; `{path}` is replaced with the URL-encoded tenant-relative folder or file. Non-http(s) dropped. Rendered only, never fetched. |
+| `notify_timezone` | string | — | Time zone the times in notices are written in, shown as `(GMT+7)`: an IANA name (`Asia/Ho_Chi_Minh`) or a fixed offset (`+07:00`). Invalid dropped. Sealed into the record with the other notice settings. Else `FLUXFILES_NOTIFY_TIMEZONE`, else UTC. WordPress and Laravel send the site / app zone themselves. |
 | `notify_batch_window` | int (s) | `600` | Quiet period before an intake digest is sent (a multi-file drop is one e-mail). Clamped `[60, 3600]`. |
 | `notify_include_names` | bool | `true` | `false` = owner notices carry counts and sizes only (filenames can be personal data and pass through a third-party mail provider). |
 | `intake_notify_receipt` | bool | `false` | Show an optional "e-mail me a receipt" field on the portal page and send `intake_receipt` to the submitter: count, size and time only, never filenames or links. |
@@ -366,6 +367,7 @@ private-local-media requirement.
 | `FLUXFILES_MAILGUN_API_KEY` / `_DOMAIN` / `_REGION` | — / — / `us` | Mailgun; `_REGION` `us` or `eu`. |
 | `FLUXFILES_SES_REGION` | — | Amazon SES v2 region (e.g. `eu-west-1`). Credentials come from the standard AWS chain (`AWS_*`, instance profile); on WordPress they are never read from `wp-config.php` constants, only from real env vars or the instance profile. |
 | `FLUXFILES_NOTIFY_MAX_PER_HOUR` | `6` | Owner notices per portal/share record per hour; the excess is coalesced into the next digest, never dropped. |
+| `FLUXFILES_NOTIFY_TIMEZONE` | _(UTC)_ | Zone for notice times when the token has no `notify_timezone` (IANA name or `+HH:MM`). Read at send time, so it also covers records sealed earlier. |
 | `FLUXFILES_NOTIFY_ADDRESS_DAILY` | `100` | Notices per recipient address per day, across all records (the limiter key is a hash, no address is stored). |
 | `FLUXFILES_NOTIFY_RECEIPT_LIMIT` | `10` | Submitter receipts per portal per hour. |
 | `FLUXFILES_NOTIFY_RECEIPT_ADDRESS_DAILY` | `3` | Submitter receipts per address per day; also caps document-request mails (request, reminders, complete) per client address per day. |

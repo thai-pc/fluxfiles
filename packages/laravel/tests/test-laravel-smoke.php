@@ -296,6 +296,7 @@ test('share/intake gates + their config forward in proxy mode', function () use 
     assertEqual(true, $p->intake_analytics ?? null, 'intake_analytics');
     assertEqual(['ops@acme.com'], $p->notify_to ?? null, 'notify_to forwarded');
     assertEqual(300, $p->notify_batch_window ?? null, 'notify_batch_window forwarded');
+    assertEqual(config('app.timezone', 'UTC'), $p->notify_timezone ?? null, 'notify_timezone defaults to the app zone');
     assertEqual(true, $p->intake_notify_receipt ?? null, 'intake_notify_receipt forwarded');
     assertEqual(true, $p->intake_request_any_recipient ?? null, 'intake_request_any_recipient forwarded');
     $none = \FluxFiles\JwtCompat::decode($mgr->token(58, ['allow_intake' => true]), $secret);
