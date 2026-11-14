@@ -2821,6 +2821,192 @@ test('settings: the stored secrets are never echoed into the page; a blank save 
     }
 });
 
+test('SFTP + AI settings: registered, secrets write-only, sanitizers validate, uninstall covers them', function () {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $opts = ['sftp_host', 'sftp_port', 'sftp_username', 'sftp_password', 'sftp_private_key', 'sftp_private_key_passphrase', 'sftp_root', 'sftp_host_fingerprint', 'sftp_require_host_key', 'sftp_strict_algorithms', 'ai_provider', 'ai_api_key', 'ai_model', 'ai_base_url', 'ai_auto_tag'];
+    if (!function_exists('wp_kses_post')) { function wp_kses_post($s) { return $s; } }
+    if (!function_exists('selected')) { function selected($a, $b, $echo = true) { return (string) $a === (string) $b ? ' selected="selected"' : ''; } }
+    $keepOpts = $GLOBALS['WP_OPTIONS']; $keepPost = $_POST;
+    $GLOBALS['WP_FIELDS'] = []; $GLOBALS['WP_SETTINGS'] = []; $GLOBALS['WP_SETTINGS_ERRORS'] = [];
+    try {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_sftp_password'] = 'SFTP-PW-XYZ';
+        $GLOBALS['WP_OPTIONS']['fluxfiles_sftp_private_key'] = "-----BEGIN OPENSSH PRIVATE KEY-----\nKEYBODY-XYZ\n-----END OPENSSH PRIVATE KEY-----";
+        $GLOBALS['WP_OPTIONS']['fluxfiles_sftp_private_key_passphrase'] = 'PASSPHRASE-XYZ';
+        $GLOBALS['WP_OPTIONS']['fluxfiles_ai_api_key'] = 'AI-KEY-XYZ';
+        $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+        $admin->registerSettings();
+        $render = static function (string $id): string { ob_start(); try { ($GLOBALS['WP_FIELDS'][$id])(); } catch (\Throwable $e) { echo 'EXC: ' . $e->getMessage(); } finally { return (string) ob_get_clean(); } };
+        $san = static fn (string $o, $v) => ($GLOBALS['WP_SETTINGS'][$o]['sanitize_callback'])($v);
+
+        $uninstall = (string) file_get_contents(__DIR__ . '/../uninstall.php');
+        foreach ($opts as $o) {
+            assertTrue(isset($GLOBALS['WP_SETTINGS']['fluxfiles_' . $o], $GLOBALS['WP_FIELDS']['fluxfiles_' . $o]), "{$o} is registered with a field");
+            assertTrue(strpos($uninstall, "'fluxfiles_{$o}'") !== false, "{$o} is removed on uninstall");
+            $html = $render('fluxfiles_' . $o);
+            assertTrue(strpos($html, 'EXC:') === false, "{$o} renders: {$html}");
+        }
+        // Secrets never reach the page; each can be removed explicitly.
+        foreach (['sftp_password' => 'SFTP-PW-XYZ', 'sftp_private_key' => 'KEYBODY-XYZ', 'sftp_private_key_passphrase' => 'PASSPHRASE-XYZ', 'ai_api_key' => 'AI-KEY-XYZ'] as $o => $val) {
+            $html = $render('fluxfiles_' . $o);
+            assertTrue(strpos($html, 'XYZ') === false, "{$o} is not echoed");
+            assertTrue(strpos($html, 'fluxfiles_' . $o . '_clear') !== false, "{$o} can be removed explicitly");
+            $_POST = [];
+            assertEqual($GLOBALS['WP_OPTIONS']['fluxfiles_' . $o], $san('fluxfiles_' . $o, ''), "blank keeps {$o}");
+            $_POST = ['fluxfiles_' . $o . '_clear' => '1'];
+            assertEqual('', $san('fluxfiles_' . $o, ''), "the clear box removes {$o}");
+        }
+        $_POST = [];
+        $pem = "-----BEGIN OPENSSH PRIVATE KEY-----\r\nNEW\r\n-----END OPENSSH PRIVATE KEY-----\r\n";
+        assertEqual("-----BEGIN OPENSSH PRIVATE KEY-----\nNEW\n-----END OPENSSH PRIVATE KEY-----", $san('fluxfiles_sftp_private_key', $pem), 'a pasted key has its line endings normalised');
+        $GLOBALS['WP_SETTINGS_ERRORS'] = [];
+        assertEqual($GLOBALS['WP_OPTIONS']['fluxfiles_sftp_private_key'], $san('fluxfiles_sftp_private_key', 'not a key'), 'garbage keeps the stored key');
+        assertEqual([['fluxfiles_sftp_private_key', 'fluxfiles_sftp_private_key_format']], $GLOBALS['WP_SETTINGS_ERRORS'], 'with an error');
+        // The stored values drive the disk, but blank fields/other options stay out of the HTML.
+        $GLOBALS['WP_OPTIONS']['fluxfiles_sftp_host'] = 'sftp.example.com';
+        assertTrue(strpos($render('fluxfiles_sftp_host'), 'value="sftp.example.com"') !== false, 'the host is shown (not a secret)');
+
+        // Port / root.
+        assertEqual(22, $san('fluxfiles_sftp_port', ''), 'blank port -> 22');
+        assertEqual(22, $san('fluxfiles_sftp_port', '70000'), 'out-of-range port -> 22');
+        assertEqual(2222, $san('fluxfiles_sftp_port', '2222'), 'valid port kept');
+        assertEqual('/', $san('fluxfiles_sftp_root', ''), 'blank root -> /');
+        assertEqual('/var/www', $san('fluxfiles_sftp_root', 'var/www'), 'root is made absolute');
+
+        // Host: SSRF-checked against the submitted port; refusal keeps the stored host.
+        $GLOBALS['WP_SETTINGS_ERRORS'] = [];
+        \FluxFiles\SsrfGuard::setAllowHosts('');
+        $_POST = ['fluxfiles_sftp_port' => '22'];
+        assertEqual('93.184.216.34', $san('fluxfiles_sftp_host', ' 93.184.216.34 '), 'a public address is accepted');
+        assertEqual('sftp.example.com', $san('fluxfiles_sftp_host', '10.0.0.5'), 'a private address is refused, stored host kept');
+        assertEqual('sftp.example.com', $san('fluxfiles_sftp_host', 'localhost'), 'localhost is refused');
+        assertEqual('sftp.example.com', $san('fluxfiles_sftp_host', 'sftp://93.184.216.34/x'), 'a URL is refused');
+        assertEqual(3, count($GLOBALS['WP_SETTINGS_ERRORS']), 'each refusal is reported');
+        assertEqual('fluxfiles_sftp_host_refused', $GLOBALS['WP_SETTINGS_ERRORS'][0][1]);
+        \FluxFiles\SsrfGuard::setAllowHosts('10.0.0.5');
+        assertEqual('10.0.0.5', $san('fluxfiles_sftp_host', '10.0.0.5'), 'FLUXFILES_SSRF_ALLOW_HOSTS lets a private host through');
+        \FluxFiles\SsrfGuard::setAllowHosts('10.0.0.5:2222');
+        $_POST = ['fluxfiles_sftp_port' => '22'];
+        assertEqual('sftp.example.com', $san('fluxfiles_sftp_host', '10.0.0.5'), 'a host:port allow entry is port-specific');
+        $_POST = ['fluxfiles_sftp_port' => '2222'];
+        assertEqual('10.0.0.5', $san('fluxfiles_sftp_host', '10.0.0.5'), 'the submitted port is the one checked');
+        \FluxFiles\SsrfGuard::setAllowHosts('');
+        assertEqual('', $san('fluxfiles_sftp_host', ''), 'blank host disables the disk');
+
+        // Fingerprint pinning.
+        $GLOBALS['WP_SETTINGS_ERRORS'] = []; $_POST = [];
+        assertEqual('aa:bb:0c,01:02:03', $san('fluxfiles_sftp_host_fingerprint', 'MD5:aa:bb:0c, 01:02:03'), 'colon-hex list is normalised');
+        $GLOBALS['WP_OPTIONS']['fluxfiles_sftp_host_fingerprint'] = 'de:ad:be:ef';
+        assertEqual('de:ad:be:ef', $san('fluxfiles_sftp_host_fingerprint', 'SHA256:abcd'), 'a malformed fingerprint keeps the stored one');
+        assertEqual('fluxfiles_sftp_host_fingerprint_format', $GLOBALS['WP_SETTINGS_ERRORS'][0][1]);
+        $GLOBALS['WP_SETTINGS_ERRORS'] = [];
+        $_POST = ['fluxfiles_sftp_host_fingerprint' => ''];
+        assertEqual('1', $san('fluxfiles_sftp_require_host_key', '1'), 'require host key can be switched on');
+        assertEqual('fluxfiles_sftp_require_host_key_nofp', $GLOBALS['WP_SETTINGS_ERRORS'][0][1] ?? '', 'but warns when no fingerprint is set');
+        $GLOBALS['WP_SETTINGS_ERRORS'] = [];
+        $_POST = ['fluxfiles_sftp_host_fingerprint' => 'aa:bb'];
+        assertEqual('1', $san('fluxfiles_sftp_require_host_key', '1'));
+        assertEqual([], $GLOBALS['WP_SETTINGS_ERRORS'], 'no warning with a fingerprint');
+        assertEqual('0', $san('fluxfiles_sftp_require_host_key', 'yes'), 'anything but 1 is off');
+        assertEqual('1', $san('fluxfiles_sftp_strict_algorithms', '1'));
+
+        // AI: provider limited to AiTagger's, base URL SSRF-checked, key write-only.
+        $options = $render('fluxfiles_ai_provider');
+        foreach (['anthropic', 'openai', 'gemini', 'openrouter', 'groq', 'mistral', 'xai', 'ollama', 'compatible'] as $prov) {
+            assertTrue(in_array($prov, \FluxFiles\AiTagger::supportedProviders(), true), "{$prov} is a real AiTagger provider");
+            assertTrue(strpos($options, 'value="' . $prov . '"') !== false, "{$prov} is offered");
+        }
+        assertEqual('openai', $san('fluxfiles_ai_provider', ' OpenAI '), 'provider is normalised');
+        assertEqual('claude', $san('fluxfiles_ai_provider', 'claude'), 'an AiTagger alias stays valid');
+        assertEqual('', $san('fluxfiles_ai_provider', 'skynet'), 'an unknown provider is dropped');
+        $GLOBALS['WP_SETTINGS_ERRORS'] = [];
+        $GLOBALS['WP_OPTIONS']['fluxfiles_ai_base_url'] = 'https://old.example.com/v1';
+        assertEqual('https://93.184.216.34/v1', $san('fluxfiles_ai_base_url', 'https://93.184.216.34/v1'), 'a public base URL is accepted');
+        assertEqual('https://old.example.com/v1', $san('fluxfiles_ai_base_url', 'http://169.254.169.254/latest'), 'a metadata address is refused, stored URL kept');
+        assertEqual('https://old.example.com/v1', $san('fluxfiles_ai_base_url', 'http://localhost:11434/v1'), 'localhost is refused without an allow-list entry');
+        assertEqual(['fluxfiles_ai_base_url_blocked', 'fluxfiles_ai_base_url_blocked'], array_column($GLOBALS['WP_SETTINGS_ERRORS'], 1), 'with errors');
+        \FluxFiles\SsrfGuard::setAllowHosts('localhost:11434');
+        assertEqual('http://localhost:11434/v1', $san('fluxfiles_ai_base_url', 'http://localhost:11434/v1'), 'an allow-listed local Ollama works');
+        \FluxFiles\SsrfGuard::setAllowHosts('');
+        assertEqual('', $san('fluxfiles_ai_base_url', ''), 'blank base URL = provider default');
+        assertEqual('1', $san('fluxfiles_ai_auto_tag', '1'));
+        assertEqual('0', $san('fluxfiles_ai_auto_tag', 'on'), 'anything but 1 is off');
+    } finally {
+        $GLOBALS['WP_OPTIONS'] = $keepOpts; $_POST = $keepPost;
+        \FluxFiles\SsrfGuard::setAllowHosts('');
+    }
+});
+
+test('diskConfigs + enabledDisks + status: sftp', function () {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $keep = $GLOBALS['WP_OPTIONS'];
+    try {
+        assertTrue(!isset(FluxFilesPlugin::diskConfigs()['sftp']), 'no sftp disk without a host');
+        $GLOBALS['WP_OPTIONS']['fluxfiles_sftp_host'] = 'sftp.example.com';
+        $GLOBALS['WP_OPTIONS']['fluxfiles_sftp_username'] = 'deploy';
+        $GLOBALS['WP_OPTIONS']['fluxfiles_sftp_password'] = 'pw';
+        $d = FluxFilesPlugin::diskConfigs()['sftp'] ?? [];
+        assertEqual('sftp', $d['driver'] ?? '', 'sftp driver');
+        assertEqual(22, $d['port'] ?? 0, 'port defaults to 22');
+        assertEqual('/', $d['root'] ?? '', 'root defaults to /');
+        assertEqual('deploy', $d['username'] ?? '');
+        assertEqual(false, $d['require_host_key'] ?? null, 'host-key requirement is off by default');
+        assertEqual(false, $d['strict_algorithms'] ?? null);
+        $GLOBALS['WP_OPTIONS'] += ['fluxfiles_sftp_port' => 2222, 'fluxfiles_sftp_root' => '/srv', 'fluxfiles_sftp_host_fingerprint' => 'aa:bb', 'fluxfiles_sftp_require_host_key' => '1', 'fluxfiles_sftp_strict_algorithms' => '1', 'fluxfiles_sftp_private_key' => 'PEM', 'fluxfiles_sftp_private_key_passphrase' => 'pp'];
+        $d = FluxFilesPlugin::diskConfigs()['sftp'];
+        assertEqual([2222, '/srv', 'aa:bb', true, true, 'PEM', 'pp'], [$d['port'], $d['root'], $d['host_fingerprint'], $d['require_host_key'], $d['strict_algorithms'], $d['private_key'], $d['private_key_passphrase']], 'every setting reaches the disk config');
+        // enabledDisks keeps sftp (and still drops junk).
+        $GLOBALS['WP_OPTIONS']['fluxfiles_disks'] = ['local', 'sftp', 'ftp'];
+        assertEqual(['local', 'sftp'], FluxFilesPlugin::enabledDisks(), 'sftp is an enabled disk');
+        $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+        assertEqual(['local', 'sftp'], $admin->sanitizeDisks(['local', 'sftp', 'ftp']), 'the Access checkboxes accept sftp');
+        ob_start(); $admin->renderDisksField(); $html = (string) ob_get_clean();
+        assertTrue(strpos($html, 'value="sftp"') !== false, 'an SFTP checkbox is rendered');
+        assertTrue(strpos($html, 'no bucket or host') === false, 'a configured SFTP disk is not flagged');
+        $GLOBALS['WP_OPTIONS']['fluxfiles_sftp_host'] = '';
+        ob_start(); $admin->renderDisksField(); $html = (string) ob_get_clean();
+        assertTrue(strpos($html, 'SFTP is enabled but has no bucket or host') !== false, 'an enabled SFTP disk without a host is flagged');
+        assertTrue(!FluxFilesAdmin::diskIsConfigured('sftp') && FluxFilesAdmin::diskIsConfigured('local'), 'diskIsConfigured follows the host');
+        // Token: chmod stays forced off even with an SFTP disk enabled.
+        $GLOBALS['WP_OPTIONS']['fluxfiles_sftp_host'] = 'sftp.example.com';
+        $payload = (array) \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1), $GLOBALS['WP_OPTIONS']['fluxfiles_secret']);
+        assertTrue(($payload['allow_chmod'] ?? null) === false, 'allow_chmod is still false');
+        assertTrue(in_array('sftp', (array) ($payload['disks'] ?? []), true), 'the token carries the sftp disk');
+    } finally {
+        $GLOBALS['WP_OPTIONS'] = $keep;
+    }
+});
+
+test('Media > FluxFiles page: stable slug, upload_files, URL helper, same embed as the shortcode', function () {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    if (!function_exists('add_media_page')) { function add_media_page(...$a) { $GLOBALS['WP_MEDIA_PAGE'] = $a; return 'media_page_' . $a[3]; } }
+    if (!function_exists('admin_url')) { function admin_url($p = '') { return 'http://wp.test/wp-admin/' . $p; } }
+    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+    $admin->addManagerPage();
+    $a = $GLOBALS['WP_MEDIA_PAGE'];
+    assertEqual('fluxfiles-manager', $a[3], 'slug');
+    assertEqual('upload_files', $a[2], 'capability');
+    assertTrue($a[3] !== 'fluxfiles', 'not the settings slug (parent lookup collision)');
+    assertEqual('http://wp.test/wp-admin/upload.php?page=fluxfiles-manager', FluxFilesPlugin::managerUrl(), 'managerUrl()');
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesAdmin.php');
+    assertTrue(strpos($src, "do_shortcode('[fluxfiles mode=\"browser\"") !== false, 'the page renders the shortcode (one-embed guard included)');
+});
+
+test('AI auto-tag setting becomes the ai_auto_tag claim unless a token overrides it', function () {
+    $keep = $GLOBALS['WP_OPTIONS'];
+    $claim = static function (array $o = []): ?bool {
+        $p = (array) \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1, $o), $GLOBALS['WP_OPTIONS']['fluxfiles_secret']);
+        return array_key_exists('ai_auto_tag', $p) ? (bool) $p['ai_auto_tag'] : null;
+    };
+    try {
+        assertEqual(null, $claim(), 'unset by default (inherits the server default)');
+        $GLOBALS['WP_OPTIONS']['fluxfiles_ai_auto_tag'] = '1';
+        assertEqual(true, $claim(), 'the setting turns it on');
+        assertEqual(false, $claim(['ai_auto_tag' => false]), 'an explicit override wins');
+    } finally {
+        $GLOBALS['WP_OPTIONS'] = $keep;
+    }
+});
+
 test('private local storage keeps the nginx warning (it only stops plain URLs; the server must still deny the folder)', function () {
     require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
     $keep = [$_SERVER['SERVER_SOFTWARE'] ?? null, $GLOBALS['pagenow'] ?? null, $GLOBALS['WP_OPTIONS']['fluxfiles_local_private'] ?? null];
