@@ -1206,7 +1206,7 @@ HTACCESS;
                 $payload[$nk] = is_array($overrides[$nk]) ? array_values($overrides[$nk]) : (string) $overrides[$nk];
             }
         }
-        foreach (['notify_locale', 'notify_from_name', 'notify_reply_to', 'notify_app_url'] as $nk) {
+        foreach (['notify_locale', 'notify_from_name', 'notify_reply_to', 'notify_app_url', 'notify_timezone'] as $nk) {
             if (!empty($overrides[$nk])) {
                 $payload[$nk] = (string) $overrides[$nk];
             }

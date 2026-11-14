@@ -536,6 +536,7 @@ test('generateToken forwards the share/intake gates and their config', function 
         'intake_base_url' => 'https://files.acme.com/public/intake.html',
         'intake_analytics' => true,
         'notify_to'        => ['ops@acme.com'],
+        'notify_timezone'  => 'Asia/Ho_Chi_Minh',
         'notify_batch_window' => 300,
         'intake_notify_receipt' => true,
         'intake_request_any_recipient' => true,
@@ -550,6 +551,7 @@ test('generateToken forwards the share/intake gates and their config', function 
     assertEqual('https://files.acme.com/public/intake.html', $p->intake_base_url ?? null);
     assertEqual(true, $p->intake_analytics ?? null, 'intake_analytics forwarded');
     assertEqual(['ops@acme.com'], $p->notify_to ?? null, 'notify_to forwarded');
+    assertEqual('Asia/Ho_Chi_Minh', $p->notify_timezone ?? null, 'notify_timezone forwarded');
     assertEqual(300, $p->notify_batch_window ?? null, 'notify_batch_window forwarded');
     assertEqual(true, $p->intake_notify_receipt ?? null, 'intake_notify_receipt forwarded');
     assertEqual(true, $p->intake_request_any_recipient ?? null, 'intake_request_any_recipient forwarded');

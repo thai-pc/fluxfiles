@@ -128,7 +128,8 @@
     "reset": "Restablecer"
   },
   "quota": {
-    "storage": "Almacenamiento"
+    "storage": "Almacenamiento",
+    "used": "{size} usados"
   },
   "file": {
     "select": "Seleccionar",
@@ -789,6 +790,29 @@
       "due_on": "Vence el {date}",
       "overdue": "Vencido",
       "complete": "Completo"
+    },
+    "page": {
+      "title": "Subir archivos",
+      "sub": "Suelte los archivos aquí abajo para enviarlos de forma segura.",
+      "sub_request": "Suba cada uno de los documentos solicitados a continuación.",
+      "password_ph": "Se necesita una contraseña para subir",
+      "receipt_ph": "Su correo electrónico para recibir un acuse de recibo (opcional)",
+      "drop_choose": "Elegir archivos",
+      "drop_rest": "o arrástrelos y suéltelos aquí",
+      "choose_file": "Elegir archivo",
+      "required": "obligatorio",
+      "optional": "opcional",
+      "progress_required_one": "{got} de {total} documento obligatorio recibido",
+      "progress_required_other": "{got} de {total} documentos obligatorios recibidos",
+      "progress_received_one": "{count} documento recibido",
+      "progress_received_other": "{count} documentos recibidos",
+      "due": "Vence el {date}",
+      "overdue": "Vencido — la fecha límite era el {date}",
+      "done": "Se han recibido todos los documentos solicitados. ¡Gracias!",
+      "allowed": "Permitidos: {types}",
+      "max_mb": "Máximo {mb} MB por archivo",
+      "remaining_one": "Queda {count} subida",
+      "remaining_other": "Quedan {count} subidas"
     }
   },
   "compliance": {
@@ -960,5 +984,13 @@
       "mute_client_confirm": "Silenciar esto también detiene los recordatorios enviados al cliente. ¿Continuar?",
       "muted_client": "Correos silenciados, incluidos los recordatorios al cliente."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} elemento",
+    "items_other": "{count} elementos",
+    "folders_one": "{count} carpeta",
+    "folders_other": "{count} carpetas",
+    "files_one": "{count} archivo",
+    "files_other": "{count} archivos"
   }
 }

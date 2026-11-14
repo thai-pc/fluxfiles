@@ -559,7 +559,7 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
             $payload[$nk] = is_array($webp[$nk]) ? array_values($webp[$nk]) : (string) $webp[$nk];
         }
     }
-    foreach (['notify_locale', 'notify_from_name', 'notify_reply_to', 'notify_app_url'] as $nk) {
+    foreach (['notify_locale', 'notify_from_name', 'notify_reply_to', 'notify_app_url', 'notify_timezone'] as $nk) {
         if (!empty($webp[$nk])) {
             $payload[$nk] = (string) $webp[$nk];
         }

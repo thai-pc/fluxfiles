@@ -314,6 +314,8 @@ class Claims
     public string $notifyReplyTo = '';
     /** @var string Optional http(s) "open in your file manager" link; `{path}` is replaced. Rendered, never fetched. */
     public string $notifyAppUrl = '';
+    /** @var string Zone notice times are written in (IANA name or +HH:MM); '' = FLUXFILES_NOTIFY_TIMEZONE, else UTC. */
+    public string $notifyTimezone = '';
     /** @var int Quiet period (s) before an intake digest is sent, 60–3600. */
     public int $notifyBatchWindow = 600;
     /** @var bool Filenames in owner notices (false = counts and sizes only). */
@@ -914,6 +916,7 @@ class Claims
         $c->notifyReplyTo = is_string($payload->notify_reply_to ?? null)
             ? (string) Mail\MailMessage::validAddress($payload->notify_reply_to) : '';
         $c->notifyAppUrl = self::sanitizeNotifyAppUrl($payload->notify_app_url ?? null);
+        $c->notifyTimezone = NotifySupport::sanitizeZone($payload->notify_timezone ?? null);
         $c->notifyBatchWindow = isset($payload->notify_batch_window)
             ? max(60, min(3600, (int) $payload->notify_batch_window)) : 600;
         $c->notifyIncludeNames = isset($payload->notify_include_names) ? (bool) $payload->notify_include_names : true;

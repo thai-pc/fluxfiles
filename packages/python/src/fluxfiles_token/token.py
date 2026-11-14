@@ -367,7 +367,7 @@ def _apply_tenant_overrides(
         if extras.get(_n) is not None:
             _v = extras[_n]
             payload[_n] = [str(x) for x in _v] if isinstance(_v, (list, tuple)) else str(_v)
-    for _n in ("notify_locale", "notify_from_name", "notify_reply_to", "notify_app_url"):
+    for _n in ("notify_locale", "notify_from_name", "notify_reply_to", "notify_app_url", "notify_timezone"):
         if extras.get(_n):
             payload[_n] = str(extras[_n])
     if extras.get("notify_batch_window") is not None:
@@ -616,6 +616,7 @@ def create_token(
     notify_from_name: str | None = None,
     notify_reply_to: str | None = None,
     notify_app_url: str | None = None,
+    notify_timezone: str | None = None,
     notify_batch_window: int | None = None,
     notify_include_names: bool | None = None,
     intake_notify_receipt: bool | None = None,
@@ -770,6 +771,7 @@ def create_token(
         notify_from_name=notify_from_name,
         notify_reply_to=notify_reply_to,
         notify_app_url=notify_app_url,
+        notify_timezone=notify_timezone,
         notify_batch_window=notify_batch_window,
         notify_include_names=notify_include_names,
         intake_notify_receipt=intake_notify_receipt,
@@ -898,6 +900,7 @@ def create_byob_token(
     notify_from_name: str | None = None,
     notify_reply_to: str | None = None,
     notify_app_url: str | None = None,
+    notify_timezone: str | None = None,
     notify_batch_window: int | None = None,
     notify_include_names: bool | None = None,
     intake_notify_receipt: bool | None = None,
@@ -1073,6 +1076,7 @@ def create_byob_token(
         notify_from_name=notify_from_name,
         notify_reply_to=notify_reply_to,
         notify_app_url=notify_app_url,
+        notify_timezone=notify_timezone,
         notify_batch_window=notify_batch_window,
         notify_include_names=notify_include_names,
         intake_notify_receipt=intake_notify_receipt,

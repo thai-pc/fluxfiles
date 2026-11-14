@@ -209,6 +209,8 @@ export interface BaseTokenOptions {
   notifyReplyTo?: string;
   /** "Open in your file manager" link in owner notices; `{path}` is replaced. http(s) only. */
   notifyAppUrl?: string;
+  /** Zone for times in notices: IANA name or `+HH:MM`. Default UTC. */
+  notifyTimezone?: string;
   /** Quiet period (s) before an intake digest is sent, 60–3600. Default 600. */
   notifyBatchWindow?: number;
   /** Filenames in owner notices. Default true. */

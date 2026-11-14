@@ -412,10 +412,14 @@ class FluxFilesManager
                 $payload[$nk] = is_array($overrides[$nk]) ? array_values($overrides[$nk]) : (string) $overrides[$nk];
             }
         }
-        foreach (['notify_locale', 'notify_from_name', 'notify_reply_to', 'notify_app_url'] as $nk) {
+        foreach (['notify_locale', 'notify_from_name', 'notify_reply_to', 'notify_app_url', 'notify_timezone'] as $nk) {
             if (!empty($overrides[$nk])) {
                 $payload[$nk] = (string) $overrides[$nk];
             }
+        }
+        if (empty($payload['notify_timezone']) && !empty($payload['notify_to'])) {
+            // Notice times are written in the app's zone, not UTC (a per-token override wins).
+            $payload['notify_timezone'] = (string) config('app.timezone', 'UTC');
         }
         if (array_key_exists('notify_batch_window', $overrides)) {
             $payload['notify_batch_window'] = (int) $overrides['notify_batch_window'];

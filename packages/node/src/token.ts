@@ -274,6 +274,7 @@ function applyTenantOverrides(
   if (opts.notifyFromName) payload.notify_from_name = String(opts.notifyFromName);
   if (opts.notifyReplyTo) payload.notify_reply_to = String(opts.notifyReplyTo);
   if (opts.notifyAppUrl) payload.notify_app_url = String(opts.notifyAppUrl);
+  if (opts.notifyTimezone) payload.notify_timezone = String(opts.notifyTimezone);
   if (opts.notifyBatchWindow !== undefined) payload.notify_batch_window = Math.trunc(Number(opts.notifyBatchWindow));
   if (opts.notifyIncludeNames !== undefined) payload.notify_include_names = !!opts.notifyIncludeNames;
   if (opts.intakeNotifyReceipt !== undefined) payload.intake_notify_receipt = !!opts.intakeNotifyReceipt;

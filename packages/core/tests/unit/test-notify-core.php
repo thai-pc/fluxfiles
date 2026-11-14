@@ -129,6 +129,9 @@ test('domains, events, locale, from name, reply-to, app url, window, flags', fun
     eq('', $claims(['notify_app_url' => 'javascript:alert(1)'])->notifyAppUrl);
     eq('', $claims(['notify_app_url' => 'https://a.io/x y'])->notifyAppUrl);
     eq('', $claims(['notify_reply_to' => 'nope'])->notifyReplyTo);
+    eq('Asia/Ho_Chi_Minh', $claims(['notify_timezone' => 'Asia/Ho_Chi_Minh'])->notifyTimezone);
+    eq('+07:00', $claims(['notify_timezone' => '+07:00'])->notifyTimezone);
+    eq('', $claims(['notify_timezone' => 'Mars/Base'])->notifyTimezone);
 });
 
 echo "\n\033[36m══ /notify/test ══\033[0m\n";

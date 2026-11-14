@@ -95,6 +95,25 @@ test('underDailyCap: per address, case-insensitive, no address in the limiter st
     }
     ok(!str_contains($dump, '@x.test'), 'addresses never written to rate-limit storage');
 });
+test('time: site zone with the zone shown, locale order, env fallback, bad zone', function () {
+    $ts = 1794643140; // 2026-11-14 07:59 UTC
+    eq('2026-11-14 07:59 UTC', NotifySupport::time($ts, 'UTC'), 'explicit UTC');
+    eq('14:59, 14/11/2026 (GMT+7)', NotifySupport::time($ts, 'Asia/Ho_Chi_Minh', 'vi'), 'vi');
+    eq('2026-11-14 14:59 (GMT+7)', NotifySupport::time($ts, '+07:00', 'en'), 'en, fixed offset');
+    eq('14.11.2026 13:29 (GMT+5:30)', NotifySupport::time($ts, 'Asia/Kolkata', 'de'), 'half-hour zone, de');
+    eq('13/11/2026 23:59 (GMT-8)', NotifySupport::time($ts, 'America/Los_Angeles', 'fr'), 'negative offset, fr');
+    eq('2026-11-14 07:59 UTC', NotifySupport::time($ts, 'Not/AZone'), 'bad zone falls back to UTC');
+    $_ENV['FLUXFILES_NOTIFY_TIMEZONE'] = 'Asia/Tokyo';
+    eq('2026-11-14 16:59 (GMT+9)', NotifySupport::time($ts), 'env fallback when the record has no zone');
+    eq('2026-11-14 14:59 (GMT+7)', NotifySupport::time($ts, '+07:00'), 'sealed zone beats env');
+    unset($_ENV['FLUXFILES_NOTIFY_TIMEZONE']);
+    eq('', NotifySupport::sanitizeZone('Mars/Base'));
+    eq('Asia/Ho_Chi_Minh', NotifySupport::sanitizeZone(' Asia/Ho_Chi_Minh '));
+    eq('', NotifySupport::sanitizeZone(['x']));
+    foreach (['en','vi','zh','ja','ko','fr','de','es','ar','pt','it','ru','th','hi','tr','nl'] as $l) {
+        ok(str_ends_with(NotifySupport::time($ts, '+07:00', $l), '(GMT+7)'), "zone shown for $l");
+    }
+});
 test('bytes / time / appLink', function () {
     eq('0 B', NotifySupport::bytes(0)); eq('999 B', NotifySupport::bytes(999)); eq('1.5 KB', NotifySupport::bytes(1536));
     eq('12 MB', NotifySupport::bytes(12 * 1024 * 1024)); eq('1.0 GB', NotifySupport::bytes(1024 ** 3));

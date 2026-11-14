@@ -128,7 +128,8 @@
     "reset": "Zurücksetzen"
   },
   "quota": {
-    "storage": "Speicher"
+    "storage": "Speicher",
+    "used": "{size} belegt"
   },
   "file": {
     "select": "Auswählen",
@@ -789,6 +790,29 @@
       "due_on": "Fällig am {date}",
       "overdue": "Überfällig",
       "complete": "Vollständig"
+    },
+    "page": {
+      "title": "Dateien hochladen",
+      "sub": "Legen Sie Dateien unten ab, um sie sicher zu senden.",
+      "sub_request": "Laden Sie unten jedes angeforderte Dokument hoch.",
+      "password_ph": "Zum Hochladen ist ein Passwort erforderlich",
+      "receipt_ph": "Ihre E-Mail-Adresse für eine Bestätigung (optional)",
+      "drop_choose": "Dateien auswählen",
+      "drop_rest": "oder hierher ziehen und ablegen",
+      "choose_file": "Datei auswählen",
+      "required": "erforderlich",
+      "optional": "optional",
+      "progress_required_one": "{got} von {total} erforderlichem Dokument erhalten",
+      "progress_required_other": "{got} von {total} erforderlichen Dokumenten erhalten",
+      "progress_received_one": "{count} Dokument erhalten",
+      "progress_received_other": "{count} Dokumente erhalten",
+      "due": "Fällig am {date}",
+      "overdue": "Überfällig — fällig war der {date}",
+      "done": "Alle angeforderten Dokumente sind eingegangen. Vielen Dank!",
+      "allowed": "Erlaubt: {types}",
+      "max_mb": "Max. {mb} MB pro Datei",
+      "remaining_one": "Noch {count} Upload übrig",
+      "remaining_other": "Noch {count} Uploads übrig"
     }
   },
   "compliance": {
@@ -960,5 +984,13 @@
       "mute_client_confirm": "Das Stummschalten stoppt auch die Erinnerungen an den Kunden. Fortfahren?",
       "muted_client": "E-Mails stummgeschaltet, auch die Erinnerungen an den Kunden."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} Element",
+    "items_other": "{count} Elemente",
+    "folders_one": "{count} Ordner",
+    "folders_other": "{count} Ordner",
+    "files_one": "{count} Datei",
+    "files_other": "{count} Dateien"
   }
 }
