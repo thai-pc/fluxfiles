@@ -5,6 +5,8 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- i18n: `intake.page.*` in all 16 `lang/*.json` — the text of the Intake upload portal's recipient page (document checklist, due date, progress, constraints, error states). Core only ships the strings; the Intake module resolves them server-side and degrades to English against a core without them.
 ### Fixed
 - Core UI: the status bar (`N items · N folders · N files`) and the quota label (`… used`) were hard-coded English in every locale. They now use the new `statusbar.*` (`_one`/`_other` plural pairs, via `tp()`) and `quota.used` keys in all 16 languages. A browser test (`status-bar.spec.ts`) covers the singular/plural rendering.
 
