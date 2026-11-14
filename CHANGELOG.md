@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- Times in Intake/Share notice e-mails were always written in UTC (`2026-11-14 07:59 UTC`). They now use the site's time zone, with the zone shown and the date order of the notice's language (`14:59, 14/11/2026 (GMT+7)` in Vietnamese, `2026-11-14 14:59 (GMT+7)` in English). New `notify_timezone` claim (IANA name or `+HH:MM`, sealed into the record with the other notice settings) and `FLUXFILES_NOTIFY_TIMEZONE` fallback for records sealed earlier; `NotifySupport::time()` takes the zone and locale as optional arguments, so modules built against it keep working. The WordPress and Laravel adapters send the site / app zone themselves (Laravel: `config('app.timezone')` whenever `notify_to` is set); the Node (`notifyTimezone`) and Python (`notify_timezone`) token builders gained the option. Needs the matching Intake/Share modules (they pass the sealed zone); an older module keeps writing UTC.
+
 ## [1.0.36] — 2026-11-13
 
 > Released: `node-v1.1.0`, `python-v1.1.0`, `sdk-v1.0.2`, `react-v1.0.2`, `vue-v1.0.1`. Core, Laravel and WordPress are unchanged (`core-v1.4.2`, `laravel-v1.0.9`, `wordpress-v1.1.10`).

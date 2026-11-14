@@ -102,6 +102,7 @@ final class NotifySupport
             'from_name' => $claims->notifyFromName,
             'reply_to' => $claims->notifyReplyTo,
             'app_url' => $claims->notifyAppUrl,
+            'tz' => $claims->notifyTimezone,
             'window' => $claims->notifyBatchWindow,
             'names' => $claims->notifyIncludeNames,
             'receipt' => $claims->intakeNotifyReceipt,
@@ -205,10 +206,71 @@ final class NotifySupport
         return ($i === 0 ? (string) (int) $v : number_format($v, $v >= 10 ? 0 : 1)) . ' ' . $units[$i];
     }
 
-    /** `2026-11-11 14:05 UTC` — unambiguous for a recipient in any time zone. */
-    public static function time(int $ts): string
+    /**
+     * The time zone notices are written in: the record's sealed `tz`, else
+     * `FLUXFILES_NOTIFY_TIMEZONE`, else UTC. Accepts an IANA name (`Asia/Ho_Chi_Minh`) or a
+     * fixed offset (`+07:00`, what WordPress reports for a manual UTC offset).
+     */
+    public static function zone(string $tz = ''): \DateTimeZone
     {
-        return gmdate('Y-m-d H:i', $ts) . ' UTC';
+        foreach ([$tz, (string) ($_ENV['FLUXFILES_NOTIFY_TIMEZONE'] ?? '')] as $name) {
+            $name = trim($name);
+            if ($name === '' || strlen($name) > 64) {
+                continue;
+            }
+            try {
+                return new \DateTimeZone($name);
+            } catch (\Throwable $e) {
+                // Unknown zone: try the next source, ending at UTC.
+            }
+        }
+        return new \DateTimeZone('UTC');
+    }
+
+    /** `tz` as a claim value: a zone {@see zone()} accepts, else ''. */
+    public static function sanitizeZone($v): string
+    {
+        if (!is_string($v) || trim($v) === '' || strlen(trim($v)) > 64) {
+            return '';
+        }
+        try {
+            new \DateTimeZone(trim($v));
+        } catch (\Throwable $e) {
+            return '';
+        }
+        return trim($v);
+    }
+
+    /**
+     * A moment for a notice, in the site's zone with the zone shown: `14:59, 14/11/2026
+     * (GMT+7)` for vi, `2026-11-14 14:59 (GMT+7)` for en. Without a zone it stays
+     * `2026-11-14 07:59 UTC`. The order follows the locale; digits stay Western so the
+     * text reads the same in every mail client.
+     */
+    public static function time(int $ts, string $tz = '', string $locale = 'en'): string
+    {
+        $zone = self::zone($tz);
+        $dt = (new \DateTimeImmutable('@' . $ts))->setTimezone($zone);
+        $offset = $dt->getOffset();
+        if ($offset === 0 && $zone->getName() === 'UTC') {
+            $label = 'UTC';
+        } else {
+            $abs = abs($offset);
+            $h = intdiv($abs, 3600);
+            $m = intdiv($abs % 3600, 60);
+            $label = 'GMT' . ($offset < 0 ? '-' : '+') . $h . ($m > 0 ? sprintf(':%02d', $m) : '');
+            if ($offset === 0) {
+                $label = 'GMT';
+            }
+        }
+        $pattern = match ($locale) {
+            'vi' => 'H:i, d/m/Y',
+            'fr', 'es', 'pt', 'it', 'th', 'hi', 'ar' => 'd/m/Y H:i',
+            'nl' => 'd-m-Y H:i',
+            'de', 'ru', 'tr' => 'd.m.Y H:i',
+            default => 'Y-m-d H:i', // en, zh, ja, ko: year-first is the local order or understood
+        };
+        return $dt->format($pattern) . ($label === 'UTC' ? ' UTC' : ' (' . $label . ')');
     }
 
     /** The operator's `notify_app_url` with `{path}` filled in (URL-encoded), or '' when unset. */
