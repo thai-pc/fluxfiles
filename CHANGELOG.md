@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- Core UI: the status bar (`N items · N folders · N files`) and the quota label (`… used`) were hard-coded English in every locale. They now use the new `statusbar.*` (`_one`/`_other` plural pairs, via `tp()`) and `quota.used` keys in all 16 languages. A browser test (`status-bar.spec.ts`) covers the singular/plural rendering.
+
 ## [1.0.36] — 2026-11-13
 
 > Released: `node-v1.1.0`, `python-v1.1.0`, `sdk-v1.0.2`, `react-v1.0.2`, `vue-v1.0.1`. Core, Laravel and WordPress are unchanged (`core-v1.4.2`, `laravel-v1.0.9`, `wordpress-v1.1.10`).

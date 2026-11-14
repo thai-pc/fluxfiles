@@ -128,7 +128,8 @@
     "reset": "Đặt lại"
   },
   "quota": {
-    "storage": "Dung lượng"
+    "storage": "Dung lượng",
+    "used": "{size} đã dùng"
   },
   "file": {
     "select": "Chọn",
@@ -960,5 +961,13 @@
       "mute_client_confirm": "Tắt thông báo cũng sẽ dừng các lời nhắc gửi cho khách hàng. Tiếp tục?",
       "muted_client": "Đã tắt e-mail, kể cả lời nhắc gửi cho khách hàng."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} mục",
+    "items_other": "{count} mục",
+    "folders_one": "{count} thư mục",
+    "folders_other": "{count} thư mục",
+    "files_one": "{count} tệp",
+    "files_other": "{count} tệp"
   }
 }

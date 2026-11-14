@@ -3992,9 +3992,9 @@ function fluxFilesApp() {
             const fc = this.filteredFolders.length;
             const fi = this.filteredFiles.length;
             const total = fc + fi;
-            const parts = [total + ' items'];
-            if (fc > 0) parts.push(fc + ' folders');
-            if (fi > 0) parts.push(fi + ' files');
+            const parts = [this.tp('statusbar.items_one', 'statusbar.items_other', total)];
+            if (fc > 0) parts.push(this.tp('statusbar.folders_one', 'statusbar.folders_other', fc));
+            if (fi > 0) parts.push(this.tp('statusbar.files_one', 'statusbar.files_other', fi));
             return parts.join(' · ');
         },
 
@@ -5495,7 +5495,7 @@ function fluxFilesApp() {
                         }
                     } else {
                         this.quotaPercent = 0;
-                        this.quotaLabel = this.formatSize((usedMb || 0) * 1024 * 1024) + ' used';
+                        this.quotaLabel = this.t('quota.used', { size: this.formatSize((usedMb || 0) * 1024 * 1024) });
                     }
                 }
             } catch (_) {

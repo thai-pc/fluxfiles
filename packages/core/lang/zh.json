@@ -128,7 +128,8 @@
     "reset": "重置"
   },
   "quota": {
-    "storage": "存储空间"
+    "storage": "存储空间",
+    "used": "已使用 {size}"
   },
   "file": {
     "select": "选择",
@@ -960,5 +961,13 @@
       "mute_client_confirm": "关闭通知也会停止发给客户的提醒邮件。要继续吗？",
       "muted_client": "邮件通知已关闭，包括发给客户的提醒。"
     }
+  },
+  "statusbar": {
+    "items_one": "{count} 项",
+    "items_other": "{count} 项",
+    "folders_one": "{count} 个文件夹",
+    "folders_other": "{count} 个文件夹",
+    "files_one": "{count} 个文件",
+    "files_other": "{count} 个文件"
   }
 }
