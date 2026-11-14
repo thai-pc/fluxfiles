@@ -1590,5 +1590,42 @@ test('B5: the A/B concurrent wrong retirement (both in term) is still repaired',
 });
 
 
+test('mail: subscription licences carry the auto-renew paragraph (+ portal link from env), one-time ones do not', function () use ($secretB64) {
+    $portal = 'https://polar.sh/flux-family/portal';
+    $content = new ReflectionMethod(LicenseMailer::class, 'licenseContent'); $content;
+    $build = new ReflectionMethod(LicenseMailer::class, 'build'); $build;
+    $m = new LicenseMailer('log');
+    $both = function (array $rec) use ($m, $content, $build): array {
+        $b = $build->invoke($m, $content->invoke($m, $rec));
+        return [$b['text'], $b['html']];
+    };
+    $mk = fn (string $plan, string $order, array $extra = []) => issuer($secretB64)->issue(['email'=>'sub@x.com','plan'=>$plan,'gateway'=>'polar','order_id'=>$order] + $extra)['record'];
+    putenv('FLUXFILES_SUBSCRIPTION_PORTAL_URL=' . $portal);
+    try {
+        [$t, $h] = $both($mk('pro', 'AR-1', ['subscription_id' => 'sub_a']));
+        assertTrue(str_contains($t, 'Your plan renews automatically (yearly)') && str_contains($t, $portal), 'annual text: sentence + link');
+        assertTrue(str_contains($t, 'you keep using the version you have; only updates and support stop'), 'annual consequence');
+        assertTrue(str_contains($h, 'renews automatically (yearly)') && str_contains($h, $portal), 'annual html: sentence + link');
+        [$t, $h] = $both($mk('pro-monthly', 'AR-2', ['subscription_id' => 'sub_b']));
+        assertTrue(str_contains($t, 'renews automatically (monthly)') && str_contains($t, '31 days after the last renewal plus 7 days') && str_contains($t, 'never deleted'), 'monthly wording');
+        assertTrue(str_contains($h, 'renews automatically (monthly)'), 'monthly html');
+        [$t, $h] = $both($mk('lifetime', 'AR-3'));
+        assertTrue(!str_contains($t, 'renews automatically') && !str_contains($t, $portal) && !str_contains($h, 'renews automatically'), 'lifetime: neither');
+        [$t] = $both($mk('pro', 'AR-4'));
+        assertTrue(!str_contains($t, 'renews automatically'), 'annual without subscription id (one-time): none');
+        // reminders reuse the paragraph
+        $rec = $mk('pro', 'AR-5', ['subscription_id' => 'sub_c']);
+        $rm = new ReflectionMethod(LicenseMailer::class, 'renderRenewalBody'); $rm;
+        assertTrue(str_contains($rm->invoke($m, $rec, '7'), 'renews automatically (yearly)'), 'reminder carries it');
+        putenv('FLUXFILES_SUBSCRIPTION_PORTAL_URL=http://polar.sh/flux-family/portal');
+        [$t] = $both($rec);
+        assertTrue(str_contains($t, 'renews automatically') && !str_contains($t, 'http://polar.sh'), 'http URL ignored, sentence kept');
+        putenv('FLUXFILES_SUBSCRIPTION_PORTAL_URL');
+        [$t] = $both($rec);
+        assertTrue(str_contains($t, 'renews automatically') && !str_contains($t, 'polar.sh'), 'unset: no link');
+    } finally { putenv('FLUXFILES_SUBSCRIPTION_PORTAL_URL'); }
+});
+
+
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f>0?1:0);

@@ -262,7 +262,9 @@ what happens to one with no licence behind it: `services/license-server/README.m
    not refunded are logged (masked email) and mailed to `FLUXFILES_OPS_EMAIL`: reissue
    the lost year with the same `POST /issue`. `/revoke` with `status: active` restores the
    chain shape but does not revive cancelled renewals; un-revoke each one.
-   Optional env: `FLUXFILES_OPS_EMAIL` (also notified), `FLUXFILES_RENEWAL_URL` (in reminders).
+   Optional env: `FLUXFILES_OPS_EMAIL` (also notified), `FLUXFILES_RENEWAL_URL` (in reminders),
+   `FLUXFILES_SUBSCRIPTION_PORTAL_URL` (https Polar customer-portal link in the auto-renew paragraph of
+   subscription licence mails and reminders; the paragraph is sent without a link when unset).
 
 `support` and `support-monthly` are created like any other plan, but they unlock no
 module (`Plans.php` gives them `modules: []`) — the product is a support relationship,

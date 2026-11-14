@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FluxFiles\LicenseServer;
 
 require_once __DIR__ . '/ProDownload.php';
+require_once __DIR__ . '/Plans.php';
 if (is_file(__DIR__ . '/client/Mask.php')) { require_once __DIR__ . '/client/Mask.php'; }
 
 /**
@@ -424,6 +425,9 @@ final class LicenseMailer
                 'Your installed paid modules keep running after that date; renewal only restores new releases and support.'];
         }
 
+        $autoRenew = $this->autoRenewNote($record);
+        if ($autoRenew !== null && !$isRenewal && !$isLifetime) { $notes[] = $autoRenew; }
+
         // Activation order matters: the key must be in place BEFORE `fluxfiles update`
         // (which authenticates with it), and a claim does nothing until the module exists.
         $mods = $this->modulesOf($record);
@@ -469,6 +473,32 @@ final class LicenseMailer
         ];
         if ($wp !== null) { $c['wp'] = $wp; }
         return $c;
+    }
+
+    /**
+     * Auto-renew paragraph for a licence bought as a Polar subscription (null for one-time /
+     * lifetime / renewal-pack plans, which never renew by themselves). The portal link comes from
+     * FLUXFILES_SUBSCRIPTION_PORTAL_URL (https only); unset or invalid, the sentence stays without it.
+     *
+     * @param array<string,mixed> $record
+     */
+    private function autoRenewNote(array $record): ?string
+    {
+        $plan = (string) ($record['plan'] ?? '');
+        if ($plan === 'lifetime' || $plan === 'pro-lifetime' || str_ends_with($plan, '-renewal')) { return null; }
+        $def = Plans::get($plan) ?? [];
+        $enforcement = (string) ($record['enforcement'] ?? $def['enforcement'] ?? 'perpetual');
+        if ((string) ($record['subscription_id'] ?? '') === '' && $enforcement !== 'subscription') { return null; }
+
+        $monthly = str_ends_with($plan, '-monthly') || ((int) ($def['ttlDays'] ?? 365)) <= 31;
+        $url = trim((string) (getenv('FLUXFILES_SUBSCRIPTION_PORTAL_URL') ?: ''));
+        $ok = str_starts_with($url, 'https://') && filter_var($url, FILTER_VALIDATE_URL) !== false
+            && preg_match('/[\s"\'<>]/', $url) !== 1;
+        $manage = 'You can turn off renewal or cancel any time' . ($ok ? ": {$url}." : ' (reply to this email and we will point you to it).');
+        $tail = $monthly
+            ? "If you cancel, your paid modules keep running for 31 days after the last renewal plus 7 days' grace, then stop; your files are never deleted."
+            : 'If you cancel an annual plan you keep using the version you have; only updates and support stop.';
+        return 'Your plan renews automatically (' . ($monthly ? 'monthly' : 'yearly') . "). {$manage} {$tail}";
     }
 
     /**
@@ -610,7 +640,7 @@ final class LicenseMailer
             ];
         }
 
-        return [
+        $content = [
             'heading' => 'Your licence renews soon',
             'preheader' => "Your FluxFiles {$edition} licence renews/expires on {$date}.",
             'intro' => [
@@ -620,6 +650,9 @@ final class LicenseMailer
                 . 'update channel open (see the Notes below for what happens if it lapses).',
             ],
         ];
+        $autoRenew = $this->autoRenewNote($record);
+        if ($autoRenew !== null) { $content['intro'][] = $autoRenew; }
+        return $content;
     }
 
     /** @param array<string,mixed> $record */
