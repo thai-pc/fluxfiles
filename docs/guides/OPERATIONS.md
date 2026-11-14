@@ -243,7 +243,9 @@ what happens to one with no licence behind it: `services/license-server/README.m
    An archived lifetime product is reported: unarchive it in Polar to re-open the deal.
 2. Paste the printed `FLUXFILES_POLAR_PLAN_MAP` into the licence server's environment
    (order: redeploy, polar-setup, paste, restart). A product missing from the map makes
-   the webhook answer 503 and Polar retries.
+   the webhook answer 503 and Polar retries. A product that sells no licence (a sponsorship)
+   goes in `FLUXFILES_POLAR_IGNORE_PRODUCTS` (comma-separated ids) instead: its orders get
+   a 200, outcome `ignored_product`, no licence, e-mail or alert.
 3. Set the products' success URL (`…?checkout_id={CHECKOUT_ID}`) like the others, then
    test one sandbox purchase of each (`--with-lifetime` without `--production`), plus a
    renewal bought with the same Polar account. Renewal keys arrive by email only.

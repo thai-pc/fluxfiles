@@ -83,6 +83,9 @@ final class Webhooks
             } catch (\Throwable $e) {
                 error_log('refund item recording failed');
             }
+            if ($r === null && $this->isIgnoredOrder($body, $refunded)) {
+                return [200, ['refunded' => false, 'ignored' => 'product'], 'ignored_product'];
+            }
             $this->alert(
                 'order.refund',
                 'warn',
@@ -95,6 +98,23 @@ final class Webhooks
         $order = PolarWebhook::extract($body, $plans);
         if ($order === null) {
             return [200, ['ignored' => (string) ($body['type'] ?? '')], 'ignored'];
+        }
+        $ignored = PolarWebhook::ignoredProducts(Config::get('FLUXFILES_POLAR_IGNORE_PRODUCTS', ''));
+        if ($ignored !== [] && in_array($order['product_id'], $ignored, true)) {
+            if (($order['plan'] ?? '') !== '') {
+                // Config error: the plan map wins and the order issues a licence as usual.
+                error_log(
+                    'polar webhook: product ' .
+                        Mask::clean($order['product_id']) .
+                        ' is in both FLUXFILES_POLAR_PLAN_MAP and FLUXFILES_POLAR_IGNORE_PRODUCTS; the plan map wins',
+                );
+            } else {
+                return [
+                    200,
+                    ['ignored' => 'product', 'order_id' => $order['order_id']],
+                    'ignored_product',
+                ];
+            }
         }
         if (($order['plan'] ?? '') === '' || Plans::get($order['plan']) === null) {
             $pid = (string) ($body['data']['product_id'] ?? '');
@@ -289,6 +309,19 @@ final class Webhooks
             }
             $map = json_decode(Config::get('FLUXFILES_POLAR_PLAN_MAP', '{}'), true) ?: [];
             $facts['plan'] = $map[$facts['product_id'] ?? ''] ?? null;
+            if (
+                $facts['plan'] === null &&
+                in_array(
+                    $facts['product_id'] ?? '',
+                    PolarWebhook::ignoredProducts(
+                        Config::get('FLUXFILES_POLAR_IGNORE_PRODUCTS', ''),
+                    ),
+                    true,
+                )
+            ) {
+                // Sponsorship money still shows in the stats, under its own label.
+                $facts['plan'] = 'ignored';
+            }
             $facts['jti'] =
                 $jti ?? ($this->store->findByOrder('polar', $facts['order_id'])['jti'] ?? null);
             $this->store->upsertOrder($facts);
@@ -310,6 +343,24 @@ final class Webhooks
         } catch (\Throwable $e) {
             error_log('order accounting failed');
         }
+    }
+
+    /** A refund of a sponsorship (ignored-product) order: nothing to cancel, nothing to alert. */
+    private function isIgnoredOrder(array $body, string $orderId): bool
+    {
+        $ignored = PolarWebhook::ignoredProducts(Config::get('FLUXFILES_POLAR_IGNORE_PRODUCTS', ''));
+        if ($ignored === []) {
+            return false;
+        }
+        $pid = PolarWebhook::cleanId((string) ($body['data']['product_id'] ?? ''));
+        try {
+            $q = $this->store->pdo()->prepare('SELECT product_id FROM orders WHERE order_id=?');
+            $q->execute([$orderId]);
+            $pid = $pid ?: (string) $q->fetchColumn();
+        } catch (\Throwable $e) {
+        }
+        $map = json_decode(Config::get('FLUXFILES_POLAR_PLAN_MAP', '{}'), true) ?: [];
+        return $pid !== '' && in_array($pid, $ignored, true) && !isset($map[$pid]);
     }
 
     private function alert(string $kind, string $severity, string $dedup, string $text): void

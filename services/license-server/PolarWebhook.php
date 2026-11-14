@@ -75,6 +75,22 @@ final class PolarWebhook
      * @param array<string,mixed> $plans product-id → plan-name map
      * @return array{email:string,plan:string,customer:string,customer_id:string,order_id:string,checkout_id:string,subscription_id:string,billing_reason:string}|null
      */
+    /**
+     * Product ids the operator wants acknowledged and ignored (FLUXFILES_POLAR_IGNORE_PRODUCTS,
+     * comma-separated), e.g. a pay-what-you-want sponsorship that sells no licence.
+     *
+     * @return list<string>
+     */
+    public static function ignoredProducts(string $raw): array
+    {
+        $out = [];
+        foreach (explode(',', $raw) as $id) {
+            $id = self::cleanId(trim($id));
+            if ($id !== '') { $out[$id] = true; }
+        }
+        return array_map('strval', array_keys($out));
+    }
+
     public static function extract(array $body, array $plans): ?array
     {
         $type = (string) ($body['type'] ?? '');

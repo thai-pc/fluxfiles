@@ -376,6 +376,9 @@ final class AdminApi
                         Config::get('FLUXFILES_MAIL_FROM', 'licenses@localhost'),
                     ),
                     'plan_map' => $mapped,
+                    'ignored_products' => PolarWebhook::ignoredProducts(
+                        Config::get('FLUXFILES_POLAR_IGNORE_PRODUCTS', ''),
+                    ),
                     'unmapped_products' => $this->rows(
                         "SELECT DISTINCT product_id FROM webhook_events WHERE outcome='unmapped_product' AND resolved_at IS NULL",
                     ),

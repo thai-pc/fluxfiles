@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Licence server (`services/license-server/`, not a tagged package): `FLUXFILES_POLAR_IGNORE_PRODUCTS`, a comma-separated list of Polar product ids to acknowledge and ignore. An `order.paid` for such a product answers 200, issues no licence, sends no e-mail, raises no operations alert and is recorded as outcome `ignored_product` (its revenue shows under the plan label `ignored`), so a pay-what-you-want sponsorship product no longer hits the 503 "unmapped product" retry loop. An id in both this list and `FLUXFILES_POLAR_PLAN_MAP` keeps issuing (the map wins) and logs a config warning. Redelivery stays a no-op. The admin system status lists the ids as `ignored_products`. Deploy: add the variable to the server's `config.env` and reload.
+
 ## [1.0.38] — 2026-11-14
 
 > Released: `wordpress-v1.2.0` (bundles core 1.5.0), `laravel-v1.0.10` (forwards `notify_timezone`, default `config('app.timezone')`; core floor unchanged). From its own repo: FluxFiles Pro `1.3.0` (bundles Intake 1.8.0 and Share 1.5.1).
