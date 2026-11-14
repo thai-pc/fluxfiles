@@ -811,10 +811,7 @@
       "allowed": "Allowed: {types}",
       "max_mb": "Max {mb} MB per file",
       "remaining_one": "{count} upload remaining",
-      "remaining_other": "{count} uploads remaining",
-      "err_no_token": "This upload link is missing its token.",
-      "err_invalid": "This upload link is invalid or has expired.",
-      "err_load": "Could not load this upload portal."
+      "remaining_other": "{count} uploads remaining"
     }
   },
   "compliance": {

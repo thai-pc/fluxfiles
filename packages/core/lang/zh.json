@@ -811,10 +811,7 @@
       "allowed": "允许的类型：{types}",
       "max_mb": "每个文件最大 {mb} MB",
       "remaining_one": "剩余 {count} 次上传",
-      "remaining_other": "剩余 {count} 次上传",
-      "err_no_token": "此上传链接缺少令牌。",
-      "err_invalid": "此上传链接无效或已过期。",
-      "err_load": "无法加载此上传门户。"
+      "remaining_other": "剩余 {count} 次上传"
     }
   },
   "compliance": {

@@ -811,10 +811,7 @@
       "allowed": "Consentiti: {types}",
       "max_mb": "Max {mb} MB per file",
       "remaining_one": "{count} caricamento rimasto",
-      "remaining_other": "{count} caricamenti rimasti",
-      "err_no_token": "A questo link di caricamento manca il token.",
-      "err_invalid": "Questo link di caricamento non è valido o è scaduto.",
-      "err_load": "Impossibile caricare questo portale di caricamento."
+      "remaining_other": "{count} caricamenti rimasti"
     }
   },
   "compliance": {

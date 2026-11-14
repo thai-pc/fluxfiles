@@ -811,10 +811,7 @@
       "allowed": "Formats autorisés : {types}",
       "max_mb": "{mb} Mo maximum par fichier",
       "remaining_one": "{count} envoi restant",
-      "remaining_other": "{count} envois restants",
-      "err_no_token": "Il manque le jeton dans ce lien d’envoi.",
-      "err_invalid": "Ce lien d’envoi est invalide ou a expiré.",
-      "err_load": "Impossible de charger ce portail d’envoi."
+      "remaining_other": "{count} envois restants"
     }
   },
   "compliance": {

@@ -811,10 +811,7 @@
       "allowed": "허용 형식: {types}",
       "max_mb": "파일당 최대 {mb}MB",
       "remaining_one": "업로드 {count}회 남음",
-      "remaining_other": "업로드 {count}회 남음",
-      "err_no_token": "이 업로드 링크에 토큰이 없습니다.",
-      "err_invalid": "이 업로드 링크가 유효하지 않거나 만료되었습니다.",
-      "err_load": "이 업로드 포털을 불러올 수 없습니다."
+      "remaining_other": "업로드 {count}회 남음"
     }
   },
   "compliance": {

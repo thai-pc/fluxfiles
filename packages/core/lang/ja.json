@@ -811,10 +811,7 @@
       "allowed": "許可される形式：{types}",
       "max_mb": "1 ファイルあたり最大 {mb} MB",
       "remaining_one": "残り {count} 回アップロードできます",
-      "remaining_other": "残り {count} 回アップロードできます",
-      "err_no_token": "このアップロードリンクにはトークンがありません。",
-      "err_invalid": "このアップロードリンクは無効か、有効期限が切れています。",
-      "err_load": "このアップロードポータルを読み込めませんでした。"
+      "remaining_other": "残り {count} 回アップロードできます"
     }
   },
   "compliance": {

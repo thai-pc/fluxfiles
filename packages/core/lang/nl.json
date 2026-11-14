@@ -811,10 +811,7 @@
       "allowed": "Toegestaan: {types}",
       "max_mb": "Max. {mb} MB per bestand",
       "remaining_one": "Nog {count} upload over",
-      "remaining_other": "Nog {count} uploads over",
-      "err_no_token": "Deze uploadlink mist zijn token.",
-      "err_invalid": "Deze uploadlink is ongeldig of verlopen.",
-      "err_load": "Deze uploadportal kon niet worden geladen."
+      "remaining_other": "Nog {count} uploads over"
     }
   },
   "compliance": {

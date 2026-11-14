@@ -811,10 +811,7 @@
       "allowed": "Cho phép: {types}",
       "max_mb": "Tối đa {mb} MB mỗi tệp",
       "remaining_one": "Còn {count} lượt tải lên",
-      "remaining_other": "Còn {count} lượt tải lên",
-      "err_no_token": "Liên kết tải lên này thiếu mã xác thực.",
-      "err_invalid": "Liên kết tải lên này không hợp lệ hoặc đã hết hạn.",
-      "err_load": "Không thể tải cổng tải lên này."
+      "remaining_other": "Còn {count} lượt tải lên"
     }
   },
   "compliance": {

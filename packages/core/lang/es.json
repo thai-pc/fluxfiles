@@ -811,10 +811,7 @@
       "allowed": "Permitidos: {types}",
       "max_mb": "Máximo {mb} MB por archivo",
       "remaining_one": "Queda {count} subida",
-      "remaining_other": "Quedan {count} subidas",
-      "err_no_token": "A este enlace de subida le falta el token.",
-      "err_invalid": "Este enlace de subida no es válido o ha caducado.",
-      "err_load": "No se pudo cargar este portal de subida."
+      "remaining_other": "Quedan {count} subidas"
     }
   },
   "compliance": {

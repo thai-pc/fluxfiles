@@ -811,10 +811,7 @@
       "allowed": "अनुमत प्रकार: {types}",
       "max_mb": "प्रति फ़ाइल अधिकतम {mb} MB",
       "remaining_one": "{count} अपलोड शेष",
-      "remaining_other": "{count} अपलोड शेष",
-      "err_no_token": "इस अपलोड लिंक में टोकन नहीं है।",
-      "err_invalid": "यह अपलोड लिंक अमान्य है या इसकी अवधि समाप्त हो गई है।",
-      "err_load": "इस अपलोड पोर्टल को लोड नहीं किया जा सका।"
+      "remaining_other": "{count} अपलोड शेष"
     }
   },
   "compliance": {

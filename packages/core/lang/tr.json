@@ -811,10 +811,7 @@
       "allowed": "İzin verilenler: {types}",
       "max_mb": "Dosya başına en fazla {mb} MB",
       "remaining_one": "{count} yükleme hakkı kaldı",
-      "remaining_other": "{count} yükleme hakkı kaldı",
-      "err_no_token": "Bu yükleme bağlantısında belirteç eksik.",
-      "err_invalid": "Bu yükleme bağlantısı geçersiz veya süresi dolmuş.",
-      "err_load": "Bu yükleme portalı yüklenemedi."
+      "remaining_other": "{count} yükleme hakkı kaldı"
     }
   },
   "compliance": {

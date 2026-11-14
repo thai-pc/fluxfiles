@@ -811,10 +811,7 @@
       "allowed": "Erlaubt: {types}",
       "max_mb": "Max. {mb} MB pro Datei",
       "remaining_one": "Noch {count} Upload übrig",
-      "remaining_other": "Noch {count} Uploads übrig",
-      "err_no_token": "Diesem Upload-Link fehlt das Token.",
-      "err_invalid": "Dieser Upload-Link ist ungültig oder abgelaufen.",
-      "err_load": "Dieses Upload-Portal konnte nicht geladen werden."
+      "remaining_other": "Noch {count} Uploads übrig"
     }
   },
   "compliance": {

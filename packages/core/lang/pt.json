@@ -811,10 +811,7 @@
       "allowed": "Permitidos: {types}",
       "max_mb": "Máx. {mb} MB por arquivo",
       "remaining_one": "{count} envio restante",
-      "remaining_other": "{count} envios restantes",
-      "err_no_token": "Este link de envio está sem o token.",
-      "err_invalid": "Este link de envio é inválido ou expirou.",
-      "err_load": "Não foi possível carregar este portal de envio."
+      "remaining_other": "{count} envios restantes"
     }
   },
   "compliance": {
