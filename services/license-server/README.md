@@ -27,6 +27,9 @@ export FLUXFILES_UPDATE_STATUS_TOKEN=$(openssl rand -hex 24)     # update server
 # 2. Polar (the store)
 export FLUXFILES_POLAR_WEBHOOK_SECRET=whsec_...              # Polar → Settings → Webhooks
 export FLUXFILES_POLAR_PLAN_MAP='{"<product_id>":"pro","<product_id>":"studio"}'   # + lifetime/renewal ids when the deal is on
+# Optional: products that sell no licence (e.g. a sponsorship). Their orders are answered 200,
+# recorded as outcome `ignored_product`, and raise no alert or e-mail. The plan map wins if an id is in both.
+# export FLUXFILES_POLAR_IGNORE_PRODUCTS=<product_id>,<product_id>
 
 # 3. Licence delivery. Default transport is 'log' — an unconfigured server writes the
 #    message to the error log instead of silently pretending it sent mail.

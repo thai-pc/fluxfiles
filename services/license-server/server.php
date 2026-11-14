@@ -24,6 +24,8 @@ declare(strict_types=1);
  *   FLUXFILES_UPDATE_STATUS_TOKEN        bearer token for /update-status (separate from admin)
  *   FLUXFILES_POLAR_WEBHOOK_SECRET      Polar webhook signing secret (whsec_…)
  *   FLUXFILES_POLAR_PLAN_MAP            JSON {"<product_id>":"pro", ...}
+ *   FLUXFILES_POLAR_IGNORE_PRODUCTS     optional: comma-separated Polar product ids acknowledged (2xx) and ignored, no licence
+ *                                       or alert (e.g. a sponsorship product); the plan map wins if an id is in both
  *   FLUXFILES_REFRESH_MAX_STALE_DAYS    days past expiry+grace after which a key no longer refreshes (default 90)
  *   FLUXFILES_OPS_EMAIL                 optional: also notified when a renewal cannot be matched
  *   FLUXFILES_LICENSE_INSTANCE          optional: instance name echoed by /health (sandbox); see README "Sandbox instance"
