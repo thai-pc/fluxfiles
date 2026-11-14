@@ -301,6 +301,12 @@ final class LicenseMailer
         $origin = rtrim((string) getenv('FLUXFILES_LANDING_ORIGIN'), '/');
         $base = ($origin !== '' && str_starts_with($origin, 'https://')) ? $origin : self::SITE;
         $c['button'] = ['Read the docs', $base . '/docs'];
+        // Footer identity: who sent it, why, and where replies go. The contact is the configured
+        // reply-to when it is a valid address, else the long-standing support address.
+        $reply = trim((string) (getenv('FLUXFILES_MAIL_REPLY_TO') ?: ''));
+        $c['contact'] = filter_var($reply, FILTER_VALIDATE_EMAIL) !== false ? $reply : 'fluxfiles@thai-pc.com';
+        $c['base'] = $base;
+        $c += ['reason' => 'of your FluxFiles purchase or licence'];
         $c += ['intro' => [], 'notes' => [], 'closing' => [], 'preheader' => (string) ($c['heading'] ?? ''), 'to' => '', 'subject' => ''];
         return $c;
     }
@@ -341,10 +347,10 @@ final class LicenseMailer
         $out[] = $c['button'][0] . ': ' . $c['button'][1];
         $out[] = '';
         foreach ($c['closing'] as $para) { $out[] = (string) $para; $out[] = ''; }
-        $out[] = 'Questions? Write to fluxfiles@thai-pc.com or just reply to this email. Replies reach a real person.';
-        $out[] = 'Sent to ' . (string) $c['to'] . '.';
+        $out[] = 'Questions? Reply to this email or write to ' . (string) $c['contact'] . '. Replies reach a real person.';
+        $out[] = 'You are receiving this email because ' . (string) $c['reason'] . ' with this address (' . (string) $c['to'] . ').';
         $out[] = '';
-        $out[] = '— FluxFiles by thai-pc · ' . self::SITE;
+        $out[] = '— FluxFiles by thai-pc · ' . (string) $c['base'];
         return implode("\n", $out);
     }
 
@@ -464,7 +470,8 @@ final class LicenseMailer
         $c = [
             'heading' => $isRenewal ? 'Your renewed licence key' : 'Your FluxFiles licence key',
             'preheader' => $thanks . ' Your licence key and activation steps are inside.',
-            'intro' => [$thanks],
+            'intro' => [$thanks, 'Your licence key is in the box below, followed by a few short steps to switch your modules on.'],
+            'reason' => $isRenewal ? 'you renewed ' . $this->planLabel($record) : 'you bought ' . $this->planLabel($record),
             'plan' => $this->planLabel($record),
             'key' => $key,
             'steps' => $steps,

@@ -1626,6 +1626,25 @@ test('mail: subscription licences carry the auto-renew paragraph (+ portal link 
     } finally { putenv('FLUXFILES_SUBSCRIPTION_PORTAL_URL'); }
 });
 
+test('mail: transactional footer says who sent it and why, in both parts; contact comes from config', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'ft@x.com','plan'=>'pro','gateway'=>'polar','order_id'=>'FT-1'])['record'];
+    $m = new LicenseMailer('log');
+    $content = new ReflectionMethod(LicenseMailer::class, 'licenseContent'); $content;
+    $deliver = fn () => (function () use ($m, $content, $rec) {
+        $c = $content->invoke($m, $rec) + [];
+        $c['to'] = 'ft@x.com'; $c['subject'] = 'Your FluxFiles licence key';
+        $b = new ReflectionMethod(LicenseMailer::class, 'build'); $b;
+        return $b->invoke($m, $c);
+    })();
+    $b = $deliver();
+    assertTrue(str_contains($b['text'], 'You are receiving this email because you bought') && str_contains($b['text'], 'with this address (ft@x.com)'), 'text footer reason');
+    assertTrue(str_contains($b['html'], 'You are receiving this email because you bought') && str_contains($b['html'], '<html lang="en">') && str_contains($b['html'], '<title>Your FluxFiles licence key</title>'), 'html footer + lang + title');
+    assertTrue(str_contains($b['text'], 'write to fluxfiles@thai-pc.com'), 'default contact');
+    putenv('FLUXFILES_MAIL_REPLY_TO=help@example.test');
+    try { $b = $deliver(); } finally { putenv('FLUXFILES_MAIL_REPLY_TO'); }
+    assertTrue(str_contains($b['text'], 'write to help@example.test') && str_contains($b['html'], 'mailto:help@example.test'), 'contact from FLUXFILES_MAIL_REPLY_TO');
+});
+
 
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f>0?1:0);
