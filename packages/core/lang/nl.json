@@ -128,7 +128,8 @@
     "reset": "Resetten"
   },
   "quota": {
-    "storage": "Opslag"
+    "storage": "Opslag",
+    "used": "{size} gebruikt"
   },
   "file": {
     "select": "Selecteren",
@@ -789,6 +790,29 @@
       "due_on": "Uiterlijk {date}",
       "overdue": "Te laat",
       "complete": "Compleet"
+    },
+    "page": {
+      "title": "Bestanden uploaden",
+      "sub": "Zet bestanden hieronder neer om ze veilig te versturen.",
+      "sub_request": "Upload hieronder elk gevraagd document.",
+      "password_ph": "Wachtwoord vereist om te uploaden",
+      "receipt_ph": "Je e-mailadres voor een ontvangstbevestiging (optioneel)",
+      "drop_choose": "Bestanden kiezen",
+      "drop_rest": "of sleep ze hierheen",
+      "choose_file": "Bestand kiezen",
+      "required": "verplicht",
+      "optional": "optioneel",
+      "progress_required_one": "{got} van {total} verplicht document ontvangen",
+      "progress_required_other": "{got} van {total} verplichte documenten ontvangen",
+      "progress_received_one": "{count} document ontvangen",
+      "progress_received_other": "{count} documenten ontvangen",
+      "due": "Uiterlijk {date}",
+      "overdue": "Te laat — uiterlijk was {date}",
+      "done": "Alle gevraagde documenten zijn ontvangen. Bedankt!",
+      "allowed": "Toegestaan: {types}",
+      "max_mb": "Max. {mb} MB per bestand",
+      "remaining_one": "Nog {count} upload over",
+      "remaining_other": "Nog {count} uploads over"
     }
   },
   "compliance": {
@@ -960,5 +984,13 @@
       "mute_client_confirm": "Dempen stopt ook de herinneringen aan de klant. Doorgaan?",
       "muted_client": "E-mails gedempt, ook de herinneringen aan de klant."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} item",
+    "items_other": "{count} items",
+    "folders_one": "{count} map",
+    "folders_other": "{count} mappen",
+    "files_one": "{count} bestand",
+    "files_other": "{count} bestanden"
   }
 }

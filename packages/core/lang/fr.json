@@ -128,7 +128,8 @@
     "reset": "Réinitialiser"
   },
   "quota": {
-    "storage": "Stockage"
+    "storage": "Stockage",
+    "used": "{size} utilisés"
   },
   "file": {
     "select": "Sélectionner",
@@ -789,6 +790,29 @@
       "due_on": "Échéance : {date}",
       "overdue": "En retard",
       "complete": "Terminé"
+    },
+    "page": {
+      "title": "Envoyer des fichiers",
+      "sub": "Déposez vos fichiers ci-dessous pour les envoyer en toute sécurité.",
+      "sub_request": "Envoyez chacun des documents demandés ci-dessous.",
+      "password_ph": "Mot de passe requis pour envoyer",
+      "receipt_ph": "Votre e-mail pour un accusé de réception (facultatif)",
+      "drop_choose": "Choisir des fichiers",
+      "drop_rest": "ou glissez-déposez ici",
+      "choose_file": "Choisir un fichier",
+      "required": "obligatoire",
+      "optional": "facultatif",
+      "progress_required_one": "{got} document obligatoire reçu sur {total}",
+      "progress_required_other": "{got} documents obligatoires reçus sur {total}",
+      "progress_received_one": "{count} document reçu",
+      "progress_received_other": "{count} documents reçus",
+      "due": "À rendre pour le {date}",
+      "overdue": "En retard — était à rendre pour le {date}",
+      "done": "Tous les documents demandés ont été reçus. Merci !",
+      "allowed": "Formats autorisés : {types}",
+      "max_mb": "{mb} Mo maximum par fichier",
+      "remaining_one": "{count} envoi restant",
+      "remaining_other": "{count} envois restants"
     }
   },
   "compliance": {
@@ -960,5 +984,13 @@
       "mute_client_confirm": "Couper les e-mails arrête aussi les rappels envoyés au client. Continuer ?",
       "muted_client": "E-mails coupés, y compris les rappels au client."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} élément",
+    "items_other": "{count} éléments",
+    "folders_one": "{count} dossier",
+    "folders_other": "{count} dossiers",
+    "files_one": "{count} fichier",
+    "files_other": "{count} fichiers"
   }
 }

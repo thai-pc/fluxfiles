@@ -128,7 +128,8 @@
     "reset": "リセット"
   },
   "quota": {
-    "storage": "ストレージ"
+    "storage": "ストレージ",
+    "used": "{size} 使用中"
   },
   "file": {
     "select": "選択",
@@ -789,6 +790,29 @@
       "due_on": "期限 {date}",
       "overdue": "期限切れ",
       "complete": "完了"
+    },
+    "page": {
+      "title": "ファイルをアップロード",
+      "sub": "下にファイルをドロップすると、安全に送信できます。",
+      "sub_request": "以下の各書類をアップロードしてください。",
+      "password_ph": "アップロードにはパスワードが必要です",
+      "receipt_ph": "受領確認用のメールアドレス（任意）",
+      "drop_choose": "ファイルを選択",
+      "drop_rest": "またはここにドラッグ＆ドロップ",
+      "choose_file": "ファイルを選択",
+      "required": "必須",
+      "optional": "任意",
+      "progress_required_one": "必須書類 {got}/{total} 件を受領しました",
+      "progress_required_other": "必須書類 {got}/{total} 件を受領しました",
+      "progress_received_one": "書類 {count} 件を受領しました",
+      "progress_received_other": "書類 {count} 件を受領しました",
+      "due": "期限：{date}",
+      "overdue": "期限超過——期限は {date} でした",
+      "done": "依頼された書類をすべて受領しました。ありがとうございました。",
+      "allowed": "許可される形式：{types}",
+      "max_mb": "1 ファイルあたり最大 {mb} MB",
+      "remaining_one": "残り {count} 回アップロードできます",
+      "remaining_other": "残り {count} 回アップロードできます"
     }
   },
   "compliance": {
@@ -960,5 +984,13 @@
       "mute_client_confirm": "停止すると、顧客へのリマインダーも送信されなくなります。続行しますか？",
       "muted_client": "メール通知を停止しました（顧客へのリマインダーを含む）。"
     }
+  },
+  "statusbar": {
+    "items_one": "{count} 件",
+    "items_other": "{count} 件",
+    "folders_one": "{count} フォルダ",
+    "folders_other": "{count} フォルダ",
+    "files_one": "{count} ファイル",
+    "files_other": "{count} ファイル"
   }
 }

@@ -128,7 +128,8 @@
     "reset": "รีเซ็ต"
   },
   "quota": {
-    "storage": "พื้นที่จัดเก็บ"
+    "storage": "พื้นที่จัดเก็บ",
+    "used": "ใช้ไปแล้ว {size}"
   },
   "file": {
     "select": "เลือก",
@@ -789,6 +790,29 @@
       "due_on": "ครบกำหนด {date}",
       "overdue": "เลยกำหนด",
       "complete": "ครบถ้วน"
+    },
+    "page": {
+      "title": "อัปโหลดไฟล์",
+      "sub": "วางไฟล์ด้านล่างเพื่อส่งอย่างปลอดภัย",
+      "sub_request": "โปรดอัปโหลดเอกสารที่ร้องขอแต่ละรายการด้านล่าง",
+      "password_ph": "ต้องใช้รหัสผ่านเพื่ออัปโหลด",
+      "receipt_ph": "อีเมลของคุณสำหรับรับใบเสร็จ (ไม่บังคับ)",
+      "drop_choose": "เลือกไฟล์",
+      "drop_rest": "หรือลากแล้ววางที่นี่",
+      "choose_file": "เลือกไฟล์",
+      "required": "จำเป็น",
+      "optional": "ไม่บังคับ",
+      "progress_required_one": "ได้รับเอกสารที่จำเป็นแล้ว {got} จาก {total} รายการ",
+      "progress_required_other": "ได้รับเอกสารที่จำเป็นแล้ว {got} จาก {total} รายการ",
+      "progress_received_one": "ได้รับเอกสารแล้ว {count} รายการ",
+      "progress_received_other": "ได้รับเอกสารแล้ว {count} รายการ",
+      "due": "กำหนดส่ง {date}",
+      "overdue": "เลยกำหนด — กำหนดส่งคือ {date}",
+      "done": "ได้รับเอกสารที่ร้องขอครบทุกรายการแล้ว ขอบคุณค่ะ/ครับ",
+      "allowed": "ประเภทที่อนุญาต: {types}",
+      "max_mb": "สูงสุด {mb} MB ต่อไฟล์",
+      "remaining_one": "เหลืออัปโหลดได้อีก {count} ครั้ง",
+      "remaining_other": "เหลืออัปโหลดได้อีก {count} ครั้ง"
     }
   },
   "compliance": {
@@ -960,5 +984,13 @@
       "mute_client_confirm": "การปิดอีเมลจะหยุดการแจ้งเตือนที่ส่งถึงลูกค้าด้วย ดำเนินการต่อหรือไม่?",
       "muted_client": "ปิดอีเมลแล้ว รวมถึงการแจ้งเตือนถึงลูกค้า"
     }
+  },
+  "statusbar": {
+    "items_one": "{count} รายการ",
+    "items_other": "{count} รายการ",
+    "folders_one": "{count} โฟลเดอร์",
+    "folders_other": "{count} โฟลเดอร์",
+    "files_one": "{count} ไฟล์",
+    "files_other": "{count} ไฟล์"
   }
 }

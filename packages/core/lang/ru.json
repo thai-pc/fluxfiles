@@ -128,7 +128,8 @@
     "reset": "Сбросить"
   },
   "quota": {
-    "storage": "Хранилище"
+    "storage": "Хранилище",
+    "used": "Использовано: {size}"
   },
   "file": {
     "select": "Выбрать",
@@ -789,6 +790,29 @@
       "due_on": "Срок: {date}",
       "overdue": "Просрочено",
       "complete": "Выполнено"
+    },
+    "page": {
+      "title": "Загрузка файлов",
+      "sub": "Перетащите файлы ниже, чтобы безопасно отправить их.",
+      "sub_request": "Загрузите каждый запрошенный документ ниже.",
+      "password_ph": "Для загрузки требуется пароль",
+      "receipt_ph": "Ваш e-mail для получения квитанции (необязательно)",
+      "drop_choose": "Выбрать файлы",
+      "drop_rest": "или перетащите их сюда",
+      "choose_file": "Выбрать файл",
+      "required": "обязательно",
+      "optional": "необязательно",
+      "progress_required_one": "Получено обязательных документов: {got} из {total}",
+      "progress_required_other": "Получено обязательных документов: {got} из {total}",
+      "progress_received_one": "Получено документов: {count}",
+      "progress_received_other": "Получено документов: {count}",
+      "due": "Срок: {date}",
+      "overdue": "Просрочено — срок был {date}",
+      "done": "Все запрошенные документы получены. Спасибо!",
+      "allowed": "Допустимые типы: {types}",
+      "max_mb": "Максимум {mb} МБ на файл",
+      "remaining_one": "Осталось загрузок: {count}",
+      "remaining_other": "Осталось загрузок: {count}"
     }
   },
   "compliance": {
@@ -960,5 +984,13 @@
       "mute_client_confirm": "Отключение также остановит напоминания, отправляемые клиенту. Продолжить?",
       "muted_client": "Письма отключены, включая напоминания клиенту."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} элемент",
+    "items_other": "Элементов: {count}",
+    "folders_one": "{count} папка",
+    "folders_other": "Папок: {count}",
+    "files_one": "{count} файл",
+    "files_other": "Файлов: {count}"
   }
 }

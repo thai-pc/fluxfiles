@@ -128,7 +128,8 @@
     "reset": "Reset zoom"
   },
   "quota": {
-    "storage": "Storage"
+    "storage": "Storage",
+    "used": "{size} used"
   },
   "file": {
     "select": "Select",
@@ -789,6 +790,29 @@
       "due_on": "Due {date}",
       "overdue": "Overdue",
       "complete": "Complete"
+    },
+    "page": {
+      "title": "Upload files",
+      "sub": "Drop files below to send them securely.",
+      "sub_request": "Upload each requested document below.",
+      "password_ph": "Password required to upload",
+      "receipt_ph": "Your e-mail for a receipt (optional)",
+      "drop_choose": "Choose files",
+      "drop_rest": "or drag & drop here",
+      "choose_file": "Choose file",
+      "required": "required",
+      "optional": "optional",
+      "progress_required_one": "{got} of {total} required document received",
+      "progress_required_other": "{got} of {total} required documents received",
+      "progress_received_one": "{count} document received",
+      "progress_received_other": "{count} documents received",
+      "due": "Due {date}",
+      "overdue": "Overdue — was due {date}",
+      "done": "All requested documents have been received. Thank you!",
+      "allowed": "Allowed: {types}",
+      "max_mb": "Max {mb} MB per file",
+      "remaining_one": "{count} upload remaining",
+      "remaining_other": "{count} uploads remaining"
     }
   },
   "compliance": {
@@ -960,5 +984,13 @@
       "mute_client_confirm": "Muting this also stops the reminders e-mailed to the client. Continue?",
       "muted_client": "E-mails muted, including the client's reminders."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} item",
+    "items_other": "{count} items",
+    "folders_one": "{count} folder",
+    "folders_other": "{count} folders",
+    "files_one": "{count} file",
+    "files_other": "{count} files"
   }
 }
