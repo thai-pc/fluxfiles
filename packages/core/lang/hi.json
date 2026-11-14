@@ -128,7 +128,8 @@
     "reset": "रीसेट करें"
   },
   "quota": {
-    "storage": "स्टोरेज"
+    "storage": "स्टोरेज",
+    "used": "{size} उपयोग किया गया"
   },
   "file": {
     "select": "चुनें",
@@ -960,5 +961,13 @@
       "mute_client_confirm": "इसे बंद करने से ग्राहक को भेजे जाने वाले रिमाइंडर भी रुक जाएंगे। जारी रखें?",
       "muted_client": "ई-मेल बंद कर दिए गए, ग्राहक के रिमाइंडर सहित।"
     }
+  },
+  "statusbar": {
+    "items_one": "{count} आइटम",
+    "items_other": "{count} आइटम",
+    "folders_one": "{count} फ़ोल्डर",
+    "folders_other": "{count} फ़ोल्डर",
+    "files_one": "{count} फ़ाइल",
+    "files_other": "{count} फ़ाइलें"
   }
 }

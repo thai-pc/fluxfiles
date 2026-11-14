@@ -128,7 +128,8 @@
     "reset": "Sıfırla"
   },
   "quota": {
-    "storage": "Depolama"
+    "storage": "Depolama",
+    "used": "{size} kullanıldı"
   },
   "file": {
     "select": "Seç",
@@ -960,5 +961,13 @@
       "mute_client_confirm": "Sessize almak, müşteriye gönderilen hatırlatmaları da durdurur. Devam edilsin mi?",
       "muted_client": "E-postalar sessize alındı, müşteriye giden hatırlatmalar dahil."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} öğe",
+    "items_other": "{count} öğe",
+    "folders_one": "{count} klasör",
+    "folders_other": "{count} klasör",
+    "files_one": "{count} dosya",
+    "files_other": "{count} dosya"
   }
 }

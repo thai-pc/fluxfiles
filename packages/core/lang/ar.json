@@ -128,7 +128,8 @@
     "reset": "إعادة الضبط"
   },
   "quota": {
-    "storage": "التخزين"
+    "storage": "التخزين",
+    "used": "المستخدم: {size}"
   },
   "file": {
     "select": "تحديد",
@@ -960,5 +961,13 @@
       "mute_client_confirm": "سيؤدي الإيقاف أيضًا إلى إيقاف التذكيرات المرسلة إلى العميل. هل تريد المتابعة؟",
       "muted_client": "تم إيقاف رسائل البريد، بما في ذلك تذكيرات العميل."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} عنصر",
+    "items_other": "العناصر: {count}",
+    "folders_one": "{count} مجلد",
+    "folders_other": "المجلدات: {count}",
+    "files_one": "{count} ملف",
+    "files_other": "الملفات: {count}"
   }
 }

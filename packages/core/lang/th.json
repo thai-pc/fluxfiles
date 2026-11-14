@@ -128,7 +128,8 @@
     "reset": "รีเซ็ต"
   },
   "quota": {
-    "storage": "พื้นที่จัดเก็บ"
+    "storage": "พื้นที่จัดเก็บ",
+    "used": "ใช้ไปแล้ว {size}"
   },
   "file": {
     "select": "เลือก",
@@ -960,5 +961,13 @@
       "mute_client_confirm": "การปิดอีเมลจะหยุดการแจ้งเตือนที่ส่งถึงลูกค้าด้วย ดำเนินการต่อหรือไม่?",
       "muted_client": "ปิดอีเมลแล้ว รวมถึงการแจ้งเตือนถึงลูกค้า"
     }
+  },
+  "statusbar": {
+    "items_one": "{count} รายการ",
+    "items_other": "{count} รายการ",
+    "folders_one": "{count} โฟลเดอร์",
+    "folders_other": "{count} โฟลเดอร์",
+    "files_one": "{count} ไฟล์",
+    "files_other": "{count} ไฟล์"
   }
 }
