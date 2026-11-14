@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- i18n: `intake.page.*` in all 16 `lang/*.json` — the text of the Intake upload portal's recipient page (document checklist, due date, progress, constraints, error states). Core only ships the strings; the Intake module resolves them server-side and degrades to English against a core without them.
+
 ## [1.0.36] — 2026-11-13
 
 > Released: `node-v1.1.0`, `python-v1.1.0`, `sdk-v1.0.2`, `react-v1.0.2`, `vue-v1.0.1`. Core, Laravel and WordPress are unchanged (`core-v1.4.2`, `laravel-v1.0.9`, `wordpress-v1.1.10`).

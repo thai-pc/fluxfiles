@@ -789,6 +789,32 @@
       "due_on": "截止 {date}",
       "overdue": "已逾期",
       "complete": "已完成"
+    },
+    "page": {
+      "title": "上传文件",
+      "sub": "将文件拖放到下方，即可安全发送。",
+      "sub_request": "请在下方上传每一项所需文档。",
+      "password_ph": "上传需要输入密码",
+      "receipt_ph": "您的电子邮箱，用于接收回执（可选）",
+      "drop_choose": "选择文件",
+      "drop_rest": "或拖放到此处",
+      "choose_file": "选择文件",
+      "required": "必填",
+      "optional": "选填",
+      "progress_required_one": "已收到 {got}/{total} 份必需文档",
+      "progress_required_other": "已收到 {got}/{total} 份必需文档",
+      "progress_received_one": "已收到 {count} 份文档",
+      "progress_received_other": "已收到 {count} 份文档",
+      "due": "截止日期：{date}",
+      "overdue": "已逾期——截止日期为 {date}",
+      "done": "已收到所有所需文档，谢谢！",
+      "allowed": "允许的类型：{types}",
+      "max_mb": "每个文件最大 {mb} MB",
+      "remaining_one": "剩余 {count} 次上传",
+      "remaining_other": "剩余 {count} 次上传",
+      "err_no_token": "此上传链接缺少令牌。",
+      "err_invalid": "此上传链接无效或已过期。",
+      "err_load": "无法加载此上传门户。"
     }
   },
   "compliance": {

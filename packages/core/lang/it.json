@@ -789,6 +789,32 @@
       "due_on": "Scade il {date}",
       "overdue": "In ritardo",
       "complete": "Completa"
+    },
+    "page": {
+      "title": "Carica file",
+      "sub": "Trascina i file qui sotto per inviarli in modo sicuro.",
+      "sub_request": "Carica qui sotto ciascun documento richiesto.",
+      "password_ph": "Per caricare è necessaria una password",
+      "receipt_ph": "La tua e-mail per ricevere una ricevuta (facoltativo)",
+      "drop_choose": "Scegli i file",
+      "drop_rest": "oppure trascinali e rilasciali qui",
+      "choose_file": "Scegli file",
+      "required": "obbligatorio",
+      "optional": "facoltativo",
+      "progress_required_one": "{got} di {total} documento obbligatorio ricevuto",
+      "progress_required_other": "{got} di {total} documenti obbligatori ricevuti",
+      "progress_received_one": "{count} documento ricevuto",
+      "progress_received_other": "{count} documenti ricevuti",
+      "due": "Scadenza: {date}",
+      "overdue": "In ritardo — la scadenza era il {date}",
+      "done": "Tutti i documenti richiesti sono stati ricevuti. Grazie!",
+      "allowed": "Consentiti: {types}",
+      "max_mb": "Max {mb} MB per file",
+      "remaining_one": "{count} caricamento rimasto",
+      "remaining_other": "{count} caricamenti rimasti",
+      "err_no_token": "A questo link di caricamento manca il token.",
+      "err_invalid": "Questo link di caricamento non è valido o è scaduto.",
+      "err_load": "Impossibile caricare questo portale di caricamento."
     }
   },
   "compliance": {

@@ -789,6 +789,32 @@
       "due_on": "Vence em {date}",
       "overdue": "Atrasado",
       "complete": "Concluído"
+    },
+    "page": {
+      "title": "Enviar arquivos",
+      "sub": "Solte os arquivos abaixo para enviá-los com segurança.",
+      "sub_request": "Envie cada um dos documentos solicitados abaixo.",
+      "password_ph": "É necessária uma senha para enviar",
+      "receipt_ph": "Seu e-mail para receber um comprovante (opcional)",
+      "drop_choose": "Escolher arquivos",
+      "drop_rest": "ou arraste e solte aqui",
+      "choose_file": "Escolher arquivo",
+      "required": "obrigatório",
+      "optional": "opcional",
+      "progress_required_one": "{got} de {total} documento obrigatório recebido",
+      "progress_required_other": "{got} de {total} documentos obrigatórios recebidos",
+      "progress_received_one": "{count} documento recebido",
+      "progress_received_other": "{count} documentos recebidos",
+      "due": "Prazo: {date}",
+      "overdue": "Atrasado — o prazo era {date}",
+      "done": "Todos os documentos solicitados foram recebidos. Obrigado!",
+      "allowed": "Permitidos: {types}",
+      "max_mb": "Máx. {mb} MB por arquivo",
+      "remaining_one": "{count} envio restante",
+      "remaining_other": "{count} envios restantes",
+      "err_no_token": "Este link de envio está sem o token.",
+      "err_invalid": "Este link de envio é inválido ou expirou.",
+      "err_load": "Não foi possível carregar este portal de envio."
     }
   },
   "compliance": {

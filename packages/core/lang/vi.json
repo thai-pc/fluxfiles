@@ -789,6 +789,32 @@
       "due_on": "Hạn {date}",
       "overdue": "Quá hạn",
       "complete": "Hoàn tất"
+    },
+    "page": {
+      "title": "Tải tệp lên",
+      "sub": "Thả tệp vào bên dưới để gửi một cách an toàn.",
+      "sub_request": "Vui lòng tải lên từng tài liệu được yêu cầu bên dưới.",
+      "password_ph": "Cần nhập mật khẩu để tải lên",
+      "receipt_ph": "Email của bạn để nhận biên nhận (không bắt buộc)",
+      "drop_choose": "Chọn tệp",
+      "drop_rest": "hoặc kéo và thả vào đây",
+      "choose_file": "Chọn tệp",
+      "required": "bắt buộc",
+      "optional": "tùy chọn",
+      "progress_required_one": "Đã nhận {got}/{total} tài liệu bắt buộc",
+      "progress_required_other": "Đã nhận {got}/{total} tài liệu bắt buộc",
+      "progress_received_one": "Đã nhận {count} tài liệu",
+      "progress_received_other": "Đã nhận {count} tài liệu",
+      "due": "Hạn nộp: {date}",
+      "overdue": "Quá hạn — hạn nộp là {date}",
+      "done": "Đã nhận đủ tất cả tài liệu được yêu cầu. Xin cảm ơn!",
+      "allowed": "Cho phép: {types}",
+      "max_mb": "Tối đa {mb} MB mỗi tệp",
+      "remaining_one": "Còn {count} lượt tải lên",
+      "remaining_other": "Còn {count} lượt tải lên",
+      "err_no_token": "Liên kết tải lên này thiếu mã xác thực.",
+      "err_invalid": "Liên kết tải lên này không hợp lệ hoặc đã hết hạn.",
+      "err_load": "Không thể tải cổng tải lên này."
     }
   },
   "compliance": {

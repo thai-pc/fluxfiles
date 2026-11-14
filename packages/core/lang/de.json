@@ -789,6 +789,32 @@
       "due_on": "Fällig am {date}",
       "overdue": "Überfällig",
       "complete": "Vollständig"
+    },
+    "page": {
+      "title": "Dateien hochladen",
+      "sub": "Legen Sie Dateien unten ab, um sie sicher zu senden.",
+      "sub_request": "Laden Sie unten jedes angeforderte Dokument hoch.",
+      "password_ph": "Zum Hochladen ist ein Passwort erforderlich",
+      "receipt_ph": "Ihre E-Mail-Adresse für eine Bestätigung (optional)",
+      "drop_choose": "Dateien auswählen",
+      "drop_rest": "oder hierher ziehen und ablegen",
+      "choose_file": "Datei auswählen",
+      "required": "erforderlich",
+      "optional": "optional",
+      "progress_required_one": "{got} von {total} erforderlichem Dokument erhalten",
+      "progress_required_other": "{got} von {total} erforderlichen Dokumenten erhalten",
+      "progress_received_one": "{count} Dokument erhalten",
+      "progress_received_other": "{count} Dokumente erhalten",
+      "due": "Fällig am {date}",
+      "overdue": "Überfällig — fällig war der {date}",
+      "done": "Alle angeforderten Dokumente sind eingegangen. Vielen Dank!",
+      "allowed": "Erlaubt: {types}",
+      "max_mb": "Max. {mb} MB pro Datei",
+      "remaining_one": "Noch {count} Upload übrig",
+      "remaining_other": "Noch {count} Uploads übrig",
+      "err_no_token": "Diesem Upload-Link fehlt das Token.",
+      "err_invalid": "Dieser Upload-Link ist ungültig oder abgelaufen.",
+      "err_load": "Dieses Upload-Portal konnte nicht geladen werden."
     }
   },
   "compliance": {

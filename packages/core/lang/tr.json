@@ -789,6 +789,32 @@
       "due_on": "Son tarih: {date}",
       "overdue": "Gecikmiş",
       "complete": "Tamamlandı"
+    },
+    "page": {
+      "title": "Dosya yükle",
+      "sub": "Güvenle göndermek için dosyaları aşağıya bırakın.",
+      "sub_request": "İstenen her belgeyi aşağıdan yükleyin.",
+      "password_ph": "Yüklemek için parola gerekli",
+      "receipt_ph": "Makbuz için e-posta adresiniz (isteğe bağlı)",
+      "drop_choose": "Dosya seçin",
+      "drop_rest": "veya buraya sürükleyip bırakın",
+      "choose_file": "Dosya seç",
+      "required": "zorunlu",
+      "optional": "isteğe bağlı",
+      "progress_required_one": "{total} zorunlu belgeden {got} tanesi alındı",
+      "progress_required_other": "{total} zorunlu belgeden {got} tanesi alındı",
+      "progress_received_one": "{count} belge alındı",
+      "progress_received_other": "{count} belge alındı",
+      "due": "Son tarih: {date}",
+      "overdue": "Gecikti — son tarih {date} idi",
+      "done": "İstenen tüm belgeler alındı. Teşekkürler!",
+      "allowed": "İzin verilenler: {types}",
+      "max_mb": "Dosya başına en fazla {mb} MB",
+      "remaining_one": "{count} yükleme hakkı kaldı",
+      "remaining_other": "{count} yükleme hakkı kaldı",
+      "err_no_token": "Bu yükleme bağlantısında belirteç eksik.",
+      "err_invalid": "Bu yükleme bağlantısı geçersiz veya süresi dolmuş.",
+      "err_load": "Bu yükleme portalı yüklenemedi."
     }
   },
   "compliance": {
