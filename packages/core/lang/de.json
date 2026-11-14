@@ -128,7 +128,8 @@
     "reset": "Zurücksetzen"
   },
   "quota": {
-    "storage": "Speicher"
+    "storage": "Speicher",
+    "used": "{size} belegt"
   },
   "file": {
     "select": "Auswählen",
@@ -983,5 +984,13 @@
       "mute_client_confirm": "Das Stummschalten stoppt auch die Erinnerungen an den Kunden. Fortfahren?",
       "muted_client": "E-Mails stummgeschaltet, auch die Erinnerungen an den Kunden."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} Element",
+    "items_other": "{count} Elemente",
+    "folders_one": "{count} Ordner",
+    "folders_other": "{count} Ordner",
+    "files_one": "{count} Datei",
+    "files_other": "{count} Dateien"
   }
 }

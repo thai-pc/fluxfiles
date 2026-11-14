@@ -128,7 +128,8 @@
     "reset": "Reimposta"
   },
   "quota": {
-    "storage": "Archiviazione"
+    "storage": "Archiviazione",
+    "used": "{size} utilizzati"
   },
   "file": {
     "select": "Seleziona",
@@ -983,5 +984,13 @@
       "mute_client_confirm": "Disattivare le e-mail ferma anche i promemoria inviati al cliente. Continuare?",
       "muted_client": "E-mail silenziate, compresi i promemoria al cliente."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} elemento",
+    "items_other": "{count} elementi",
+    "folders_one": "{count} cartella",
+    "folders_other": "{count} cartelle",
+    "files_one": "{count} file",
+    "files_other": "{count} file"
   }
 }

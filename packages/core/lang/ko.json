@@ -128,7 +128,8 @@
     "reset": "원래대로"
   },
   "quota": {
-    "storage": "저장 공간"
+    "storage": "저장 공간",
+    "used": "{size} 사용 중"
   },
   "file": {
     "select": "선택",
@@ -983,5 +984,13 @@
       "mute_client_confirm": "끄면 고객에게 보내는 알림도 중단됩니다. 계속할까요?",
       "muted_client": "이메일 알림을 껐습니다(고객 알림 포함)."
     }
+  },
+  "statusbar": {
+    "items_one": "{count}개 항목",
+    "items_other": "{count}개 항목",
+    "folders_one": "폴더 {count}개",
+    "folders_other": "폴더 {count}개",
+    "files_one": "파일 {count}개",
+    "files_other": "파일 {count}개"
   }
 }

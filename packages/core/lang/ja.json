@@ -128,7 +128,8 @@
     "reset": "リセット"
   },
   "quota": {
-    "storage": "ストレージ"
+    "storage": "ストレージ",
+    "used": "{size} 使用中"
   },
   "file": {
     "select": "選択",
@@ -983,5 +984,13 @@
       "mute_client_confirm": "停止すると、顧客へのリマインダーも送信されなくなります。続行しますか？",
       "muted_client": "メール通知を停止しました（顧客へのリマインダーを含む）。"
     }
+  },
+  "statusbar": {
+    "items_one": "{count} 件",
+    "items_other": "{count} 件",
+    "folders_one": "{count} フォルダ",
+    "folders_other": "{count} フォルダ",
+    "files_one": "{count} ファイル",
+    "files_other": "{count} ファイル"
   }
 }

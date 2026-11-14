@@ -128,7 +128,8 @@
     "reset": "Réinitialiser"
   },
   "quota": {
-    "storage": "Stockage"
+    "storage": "Stockage",
+    "used": "{size} utilisés"
   },
   "file": {
     "select": "Sélectionner",
@@ -983,5 +984,13 @@
       "mute_client_confirm": "Couper les e-mails arrête aussi les rappels envoyés au client. Continuer ?",
       "muted_client": "E-mails coupés, y compris les rappels au client."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} élément",
+    "items_other": "{count} éléments",
+    "folders_one": "{count} dossier",
+    "folders_other": "{count} dossiers",
+    "files_one": "{count} fichier",
+    "files_other": "{count} fichiers"
   }
 }

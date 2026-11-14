@@ -128,7 +128,8 @@
     "reset": "Resetten"
   },
   "quota": {
-    "storage": "Opslag"
+    "storage": "Opslag",
+    "used": "{size} gebruikt"
   },
   "file": {
     "select": "Selecteren",
@@ -983,5 +984,13 @@
       "mute_client_confirm": "Dempen stopt ook de herinneringen aan de klant. Doorgaan?",
       "muted_client": "E-mails gedempt, ook de herinneringen aan de klant."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} item",
+    "items_other": "{count} items",
+    "folders_one": "{count} map",
+    "folders_other": "{count} mappen",
+    "files_one": "{count} bestand",
+    "files_other": "{count} bestanden"
   }
 }

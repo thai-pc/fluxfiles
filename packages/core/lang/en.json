@@ -128,7 +128,8 @@
     "reset": "Reset zoom"
   },
   "quota": {
-    "storage": "Storage"
+    "storage": "Storage",
+    "used": "{size} used"
   },
   "file": {
     "select": "Select",
@@ -983,5 +984,13 @@
       "mute_client_confirm": "Muting this also stops the reminders e-mailed to the client. Continue?",
       "muted_client": "E-mails muted, including the client's reminders."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} item",
+    "items_other": "{count} items",
+    "folders_one": "{count} folder",
+    "folders_other": "{count} folders",
+    "files_one": "{count} file",
+    "files_other": "{count} files"
   }
 }

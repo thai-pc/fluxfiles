@@ -128,7 +128,8 @@
     "reset": "Сбросить"
   },
   "quota": {
-    "storage": "Хранилище"
+    "storage": "Хранилище",
+    "used": "Использовано: {size}"
   },
   "file": {
     "select": "Выбрать",
@@ -983,5 +984,13 @@
       "mute_client_confirm": "Отключение также остановит напоминания, отправляемые клиенту. Продолжить?",
       "muted_client": "Письма отключены, включая напоминания клиенту."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} элемент",
+    "items_other": "Элементов: {count}",
+    "folders_one": "{count} папка",
+    "folders_other": "Папок: {count}",
+    "files_one": "{count} файл",
+    "files_other": "Файлов: {count}"
   }
 }

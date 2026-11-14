@@ -128,7 +128,8 @@
     "reset": "Redefinir"
   },
   "quota": {
-    "storage": "Armazenamento"
+    "storage": "Armazenamento",
+    "used": "{size} usados"
   },
   "file": {
     "select": "Selecionar",
@@ -983,5 +984,13 @@
       "mute_client_confirm": "Silenciar isto também interrompe os lembretes enviados ao cliente. Continuar?",
       "muted_client": "E-mails silenciados, incluindo os lembretes ao cliente."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} item",
+    "items_other": "{count} itens",
+    "folders_one": "{count} pasta",
+    "folders_other": "{count} pastas",
+    "files_one": "{count} arquivo",
+    "files_other": "{count} arquivos"
   }
 }

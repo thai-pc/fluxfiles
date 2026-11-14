@@ -128,7 +128,8 @@
     "reset": "Restablecer"
   },
   "quota": {
-    "storage": "Almacenamiento"
+    "storage": "Almacenamiento",
+    "used": "{size} usados"
   },
   "file": {
     "select": "Seleccionar",
@@ -983,5 +984,13 @@
       "mute_client_confirm": "Silenciar esto también detiene los recordatorios enviados al cliente. ¿Continuar?",
       "muted_client": "Correos silenciados, incluidos los recordatorios al cliente."
     }
+  },
+  "statusbar": {
+    "items_one": "{count} elemento",
+    "items_other": "{count} elementos",
+    "folders_one": "{count} carpeta",
+    "folders_other": "{count} carpetas",
+    "files_one": "{count} archivo",
+    "files_other": "{count} archivos"
   }
 }
