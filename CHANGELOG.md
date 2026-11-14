@@ -6,6 +6,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Licence server (`services/license-server/`, not a tagged package): the licence e-mail and renewal reminders of subscription licences (Polar subscription id, or `subscription` enforcement) now say the plan renews automatically and can be cancelled any time, with the annual/monthly consequence. New optional non-secret `FLUXFILES_SUBSCRIPTION_PORTAL_URL` (https only) adds the Polar customer-portal link; unset, the sentence is sent without it. One-time/lifetime licences are unchanged. The deploy allow-lists (`bootstrap.php`, `L-secret.sh`) must list the new var.
 - Licence server (`services/license-server/`, not a tagged package): `FLUXFILES_POLAR_IGNORE_PRODUCTS`, a comma-separated list of Polar product ids to acknowledge and ignore. An `order.paid` for such a product answers 200, issues no licence, sends no e-mail, raises no operations alert and is recorded as outcome `ignored_product` (its revenue shows under the plan label `ignored`), so a pay-what-you-want sponsorship product no longer hits the 503 "unmapped product" retry loop. An id in both this list and `FLUXFILES_POLAR_PLAN_MAP` keeps issuing (the map wins) and logs a config warning. Redelivery stays a no-op. The admin system status lists the ids as `ignored_products`. Deploy: add the variable to the server's `config.env` and reload.
 
 ## [1.0.38] — 2026-11-14

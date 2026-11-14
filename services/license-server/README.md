@@ -183,7 +183,11 @@ emails the buyer ("we couldn't match your licence, reply and we'll fix or refund
 `FLUXFILES_OPS_EMAIL` if set. Manual fix:
 `POST /issue {"plan":"pro-renewal","email":"<the email of the LIFETIME purchase>"}`
 (`studio-renewal` for Studio), or refund in Polar. Optional `FLUXFILES_RENEWAL_URL` is
-quoted in the reminder mails of one-time plans.
+quoted in the reminder mails of one-time plans. Optional `FLUXFILES_SUBSCRIPTION_PORTAL_URL`
+(https only, non-secret) is the Polar customer portal quoted in the "your plan renews
+automatically" paragraph that subscription licences get in the licence mail and renewal
+reminders (unset or invalid: the sentence is sent without the link; one-time/lifetime
+licences never get it).
 
 ## Key refresh (`POST /refresh`)
 

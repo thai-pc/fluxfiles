@@ -28,6 +28,7 @@ $codeBox = fn (string $html): string =>
 $ctaUrl = isset($c['button']) ? $href((string) $c['button'][1]) : null;
 $wpUrl = isset($c['wp']) ? $href((string) $c['wp']['url']) : null;
 $siteUrl = $href((string) $c['site']);
+$baseUrl = $href((string) $c['base']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -104,9 +105,9 @@ $siteUrl = $href((string) $c['site']);
 <?php endforeach; ?>
     </td></tr>
     <tr><td class="ff-pad" style="padding:20px 8px;font:13px/1.6 <?= $font ?>;color:#6b7280;">
-      <p class="ff-muted" style="margin:0 0 8px;color:#6b7280;">Questions? Write to <a href="mailto:fluxfiles@thai-pc.com" class="ff-accent" style="color:#6d3fc7;">fluxfiles@thai-pc.com</a> or just reply to this email. Replies reach a real person.</p>
-      <p class="ff-muted" style="margin:0 0 8px;color:#6b7280;">Sent to <?= $e((string) $c['to']) ?>.</p>
-      <p class="ff-muted" style="margin:0;color:#6b7280;">FluxFiles by thai-pc<?php if ($siteUrl !== null): ?> &middot; <a href="<?= $e($siteUrl) ?>" class="ff-accent" style="color:#6d3fc7;"><?= $e($siteUrl) ?></a><?php endif; ?></p>
+      <p class="ff-muted" style="margin:0 0 8px;color:#6b7280;">Questions? Reply to this email or write to <a href="mailto:<?= $e((string) $c['contact']) ?>" class="ff-accent" style="color:#6d3fc7;"><?= $e((string) $c['contact']) ?></a>. Replies reach a real person.</p>
+      <p class="ff-muted" style="margin:0 0 8px;color:#6b7280;">You are receiving this email because <?= $e((string) $c['reason']) ?> with this address (<?= $e((string) $c['to']) ?>).</p>
+      <p class="ff-muted" style="margin:0;color:#6b7280;">FluxFiles by thai-pc<?php if ($baseUrl !== null): ?> &middot; <a href="<?= $e($baseUrl) ?>" class="ff-accent" style="color:#6d3fc7;"><?= $e($baseUrl) ?></a><?php endif; ?></p>
     </td></tr>
   </table>
 </td></tr>
