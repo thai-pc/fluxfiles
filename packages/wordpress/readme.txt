@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.1.10
+Stable tag: 1.2.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -180,6 +180,15 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.2.0 =
+* New Media > FluxFiles page: the full file manager inside wp-admin, without placing a shortcode on a page.
+* SFTP settings: connect your own SFTP server as a disk (host, port, user, password or private key, root folder, host fingerprint pinning). The host is checked against private and local addresses unless you allow it in wp-config.php.
+* AI tagging settings: choose a provider, enter your own API key, optional model and base URL, and optionally tag images on upload. Off until you configure it.
+* Password, private key and API key fields are write-only: they are never shown again and are kept when left empty.
+* The file manager's status bar and storage label are translated (16 languages), as is the client upload page of upload portals (with FluxFiles Pro).
+* Notice e-mails show times in your site's time zone instead of UTC, and link to the new file manager page.
+* Bundles FluxFiles core 1.5.0.
+
 = 1.1.10 =
 * Bundles FluxFiles core 1.4.2 and phpseclib 3.0.58 (security fix for encrypted SFTP keys).
 * WordPress.org review fixes: the admin notices' and secret-field scripts are now enqueued files instead of inline `<script>` tags, and the settings use named sanitize callbacks.
@@ -293,6 +302,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Adds a Media > FluxFiles page and SFTP and AI tagging settings. Existing settings and files are unchanged.
 
 = 1.1.10 =
 Review fixes: scripts are enqueued, admin notices are dismissible and limited to relevant screens. No change to your files or settings.

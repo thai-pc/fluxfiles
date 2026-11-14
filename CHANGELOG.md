@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.38] — 2026-11-14
+
+> Released: `wordpress-v1.2.0` (bundles core 1.5.0), `laravel-v1.0.10` (forwards `notify_timezone`, default `config('app.timezone')`; core floor unchanged). From its own repo: FluxFiles Pro `1.3.0` (bundles Intake 1.8.0 and Share 1.5.1).
+
 ### Added
 - WordPress plugin: a full-page file manager at **Media → FluxFiles** (`upload.php?page=fluxfiles-manager`, capability `upload_files` or the `fluxfiles_required_capability` filter), the same embed as the `[fluxfiles]` shortcode at full height. `FluxFilesPlugin::managerUrl()` returns its URL; the slug is deliberately not `fluxfiles`, because two pages with the same `page` under different menu parents confuse WordPress' parent lookup.
 - WordPress plugin: the **SFTP** and **AI tagging** settings that the code and the readme already assumed. *Settings → FluxFiles → Cloud* gains an SFTP section (host, port, username, password or PEM key + passphrase, root, host-key fingerprint, "Require host key", "Modern algorithms only"), SFTP is now an option under *Access → Enabled disks*, and the connection test covers it. The host is checked with the SSRF guard on save (`FLUXFILES_SSRF_ALLOW_HOSTS` still applies) and a refused host or malformed key or fingerprint keeps the stored value with an admin notice. A new *AI* tab sets the provider (the ones `AiTagger` supports), API key, model, base URL (SSRF-checked on save) and a "Tag on upload" switch that becomes the `ai_auto_tag` claim unless a token override sets it. AI tagging is free (it uses the administrator's own provider account); no licence or module gates it. `chmod` stays forced off. The new options are removed on uninstall.
