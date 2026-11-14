@@ -16,7 +16,8 @@ FluxFiles is a folder-based media and document library for WordPress with a mode
 
 **Features**
 
-* Multi-storage: local disk, Amazon S3, Cloudflare R2; SFTP through a BYOB token
+* Multi-storage: local disk, Amazon S3, Cloudflare R2 and your own SFTP server, all set up under Settings > FluxFiles
+* A full-page file manager under **Media > FluxFiles**, for anyone who can upload files
 * Folders, drag and drop and chunked uploads, rename, move, copy, a restorable Trash, and a built-in crop editor
 * Image optimization with WebP variants (thumb, medium, large)
 * Optional AI tagging and alt text with the provider of your choice (see External services)
@@ -65,10 +66,10 @@ When an administrator configures an R2 disk, the same data as for S3 goes to the
 When an administrator sets a custom endpoint on the S3 disk, the same data as for Amazon S3 goes to that endpoint. The provider you chose is under its own terms and privacy policy.
 
 = Your SFTP server =
-Only when a developer mints a BYOB token for an SFTP server. File bytes and paths go to that server, which you operate.
+Only when an administrator saves an SFTP host under Settings > FluxFiles > Cloud, or a developer mints a BYOB token for an SFTP server. File bytes and paths go to that server, which you operate. Pin the server's host key fingerprint in the same screen so the connection cannot be impersonated.
 
 = AI tagging providers =
-Only when an administrator selects a provider and enters its API key, and the token has AI tagging enabled. FluxFiles sends a downscaled copy of the image (at most 1024 px), the prompt and your API key to the provider, and receives tags and alt text back. Supported providers, each under its own terms:
+Only when an administrator selects a provider and enters its API key under Settings > FluxFiles > AI, and an image is then tagged: by hand, or for every upload if the administrator also switches on "Tag on upload" (off by default). FluxFiles sends a downscaled copy of the image (at most 1024 px), the prompt and your API key to the provider, and receives tags and alt text back. Supported providers, each under its own terms:
 
 * Anthropic: [Commercial Terms](https://www.anthropic.com/legal/commercial-terms), [Privacy Policy](https://www.anthropic.com/legal/privacy)
 * OpenAI: [Terms](https://openai.com/policies/terms-of-use/), [Privacy Policy](https://openai.com/policies/privacy-policy/)
@@ -140,7 +141,7 @@ FileBird adds folders to the native Media Library grid. FluxFiles does not chang
 
 = What storage backends are supported? =
 
-Local disk, AWS S3, and Cloudflare R2, configured in Settings. You can configure multiple disks and allow users to switch between them. SFTP has no Settings screen: a developer mints a BYOB token that carries the server details.
+Local disk, AWS S3, Cloudflare R2 and SFTP, configured in Settings. You can configure multiple disks and allow users to switch between them. A developer can also mint a BYOB token that carries per-user SFTP server details.
 
 = Does it require an external server? =
 

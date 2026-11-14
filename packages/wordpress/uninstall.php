@@ -46,7 +46,10 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
         'fluxfiles_r2_bucket', 'fluxfiles_r2_account_id', 'fluxfiles_r2_key', 'fluxfiles_r2_secret',
         'fluxfiles_r2_visibility', 'fluxfiles_r2_public_url', 'fluxfiles_r2_url_ttl',
         'fluxfiles_picker_multiple', 'fluxfiles_max_files',
-        'fluxfiles_ai_provider', 'fluxfiles_ai_api_key', 'fluxfiles_ai_model', 'fluxfiles_ai_base_url',
+        'fluxfiles_sftp_host', 'fluxfiles_sftp_port', 'fluxfiles_sftp_username', 'fluxfiles_sftp_password',
+        'fluxfiles_sftp_private_key', 'fluxfiles_sftp_private_key_passphrase', 'fluxfiles_sftp_root',
+        'fluxfiles_sftp_host_fingerprint', 'fluxfiles_sftp_require_host_key', 'fluxfiles_sftp_strict_algorithms',
+        'fluxfiles_ai_provider', 'fluxfiles_ai_api_key', 'fluxfiles_ai_model', 'fluxfiles_ai_base_url', 'fluxfiles_ai_auto_tag',
     ];
 
     // Options tied to the stored data: removed only with the opt-in, otherwise a

@@ -13,6 +13,7 @@ class FluxFilesAdmin
     public function __construct()
     {
         add_action('admin_menu', [$this, 'addMenuPage']);
+        add_action('admin_menu', [$this, 'addManagerPage']);
         add_action('admin_init', [$this, 'registerSettings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('admin_notices', [$this, 'renderNginxStorageNotice']);
@@ -31,6 +32,33 @@ class FluxFilesAdmin
             'fluxfiles',
             [$this, 'renderSettingsPage']
         );
+    }
+
+    /** Slug of the Media > FluxFiles page (see FluxFilesPlugin::managerUrl()). Kept stable: e-mails link to it. */
+    public const MANAGER_SLUG = 'fluxfiles-manager';
+
+    /** Media > FluxFiles: the file manager itself, for anyone who may upload files. */
+    public function addManagerPage(): void
+    {
+        add_media_page(
+            esc_html__('FluxFiles', 'fluxfiles'),
+            esc_html__('FluxFiles', 'fluxfiles'),
+            class_exists('FluxFilesApi') ? FluxFilesApi::requiredCapability() : 'upload_files',
+            self::MANAGER_SLUG,
+            [$this, 'renderManagerPage']
+        );
+    }
+
+    /**
+     * Same embed as the [fluxfiles] shortcode (so its one-manager-per-page guard and token
+     * refresh apply), at full height of the admin screen.
+     */
+    public function renderManagerPage(): void
+    {
+        echo '<div class="wrap"><h1>' . esc_html__('FluxFiles', 'fluxfiles') . '</h1>';
+        // The shortcode escapes its own output (container id, size) and prints the error notices itself.
+        echo do_shortcode('[fluxfiles mode="browser" height="calc(100vh - 170px)"]'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        echo '</div>';
     }
 
     public function enqueueAssets(string $hook): void
@@ -73,11 +101,13 @@ class FluxFilesAdmin
         }
         // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified above
         $disk = isset($_POST['disk']) ? sanitize_key(wp_unslash($_POST['disk'])) : '';
-        if (!in_array($disk, ['s3', 'r2'], true)) {
+        if (!in_array($disk, ['s3', 'r2', 'sftp'], true)) {
             wp_send_json_error(['message' => __('Unknown disk.', 'fluxfiles')], 400);
         }
-        if (trim((string) get_option('fluxfiles_' . $disk . '_bucket', '')) === '') {
-            wp_send_json_error(['message' => __('Fill in the bucket and save first.', 'fluxfiles')]);
+        if (!self::diskIsConfigured($disk)) {
+            wp_send_json_error(['message' => $disk === 'sftp'
+                ? __('Fill in the host and save first.', 'fluxfiles')
+                : __('Fill in the bucket and save first.', 'fluxfiles')]);
         }
         if (!in_array($disk, (array) get_option('fluxfiles_disks', ['local']), true)) {
             /* translators: %s: disk name, e.g. S3 */
@@ -105,6 +135,19 @@ class FluxFilesAdmin
     }
 
     /**
+     * True when a disk has what it needs to connect: `local` always, SFTP a host, S3/R2 a
+     * bucket. An enabled disk that is not configured would be offered and then fail.
+     */
+    public static function diskIsConfigured(string $disk): bool
+    {
+        if ($disk === 'local') {
+            return true;
+        }
+        $key = $disk === 'sftp' ? 'host' : 'bucket';
+        return trim((string) get_option('fluxfiles_' . $disk . '_' . $key, '')) !== '';
+    }
+
+    /**
      * Status for the header of the settings page.
      *
      * @return array<int,array{label:string,value:string,state:string,id?:string}>
@@ -122,7 +165,7 @@ class FluxFilesAdmin
         $diskLabels = [];
         $diskState = 'ok';
         foreach ($disks as $d) {
-            $ok = $d === 'local' || trim((string) get_option('fluxfiles_' . $d . '_bucket', '')) !== '';
+            $ok = self::diskIsConfigured((string) $d);
             $diskLabels[] = strtoupper((string) $d) . ($ok ? '' : ' ⚠');
             if (!$ok) {
                 $diskState = 'warn';
@@ -401,6 +444,61 @@ class FluxFilesAdmin
         register_setting('fluxfiles', 'fluxfiles_r2_secret', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeR2Secret']]);
         register_setting('fluxfiles', 'fluxfiles_r2_visibility', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeVisibility']]);
         register_setting('fluxfiles', 'fluxfiles_r2_public_url', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeUrlOption']]);
+
+        // SFTP section
+        add_settings_section(
+            'fluxfiles_sftp',
+            esc_html__('SFTP', 'fluxfiles'),
+            function () {
+                echo '<p>' . esc_html__('Connect an SFTP server you operate. Leave host empty to disable. Use a private key where you can, and pin the host key below. The credentials are stored in this site\'s options table, like the S3 keys.', 'fluxfiles') . '</p>';
+            },
+            'fluxfiles'
+        );
+
+        $this->addField('fluxfiles_sftp_host', esc_html__('Host', 'fluxfiles'), 'fluxfiles_sftp', 'text', ['placeholder' => 'sftp.example.com', 'hint' => __('A host name or IP address, no scheme. It must resolve to a public address; for a server on a private network, list it in FLUXFILES_SSRF_ALLOW_HOSTS in wp-config.php.', 'fluxfiles')]);
+        $this->addField('fluxfiles_sftp_port', esc_html__('Port', 'fluxfiles'), 'fluxfiles_sftp', 'number', ['placeholder' => '22', 'min' => 1, 'max' => 65535]);
+        $this->addField('fluxfiles_sftp_username', esc_html__('Username', 'fluxfiles'), 'fluxfiles_sftp');
+        $this->addField('fluxfiles_sftp_password', esc_html__('Password', 'fluxfiles'), 'fluxfiles_sftp', 'password', ['hint' => __('Ignored when a private key is set.', 'fluxfiles')]);
+        $this->addField('fluxfiles_sftp_private_key', esc_html__('Private key (PEM)', 'fluxfiles'), 'fluxfiles_sftp', 'secretarea', ['placeholder' => '-----BEGIN OPENSSH PRIVATE KEY-----']);
+        $this->addField('fluxfiles_sftp_private_key_passphrase', esc_html__('Private key passphrase', 'fluxfiles'), 'fluxfiles_sftp', 'password');
+        $this->addField('fluxfiles_sftp_root', esc_html__('Root folder', 'fluxfiles'), 'fluxfiles_sftp', 'text', ['placeholder' => '/', 'hint' => __('The folder on the server FluxFiles starts in. Defaults to /.', 'fluxfiles')]);
+        $this->addField('fluxfiles_sftp_host_fingerprint', esc_html__('Host key fingerprint', 'fluxfiles'), 'fluxfiles_sftp', 'text', ['placeholder' => 'aa:bb:cc:…', 'hint' => __('Recommended. Without it any host key is trusted, so someone on the network path can impersonate your server. Colon-hex format, comma-separated to allow several keys. See the SFTP section of docs/reference/CONFIG.md for the commands that print it.', 'fluxfiles')]);
+        $this->addField('fluxfiles_sftp_require_host_key', esc_html__('Require host key', 'fluxfiles'), 'fluxfiles_sftp', 'switch', ['label' => __('Refuse to connect unless a fingerprint is set', 'fluxfiles')]);
+        $this->addField('fluxfiles_sftp_strict_algorithms', esc_html__('Modern algorithms only', 'fluxfiles'), 'fluxfiles_sftp', 'switch', ['label' => __('Refuse legacy key exchange, ciphers and MACs', 'fluxfiles'), 'hint' => __('Older or embedded SFTP servers may fail the handshake with this on.', 'fluxfiles')]);
+
+        register_setting('fluxfiles', 'fluxfiles_sftp_host', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeSftpHost']]);
+        register_setting('fluxfiles', 'fluxfiles_sftp_port', ['type' => 'integer', 'sanitize_callback' => [self::class, 'sanitizeSftpPort'], 'default' => 22]);
+        register_setting('fluxfiles', 'fluxfiles_sftp_username', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
+        register_setting('fluxfiles', 'fluxfiles_sftp_password', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeSftpPassword']]);
+        register_setting('fluxfiles', 'fluxfiles_sftp_private_key', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeSftpPrivateKey']]);
+        register_setting('fluxfiles', 'fluxfiles_sftp_private_key_passphrase', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeSftpPassphrase']]);
+        register_setting('fluxfiles', 'fluxfiles_sftp_root', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeSftpRoot']]);
+        register_setting('fluxfiles', 'fluxfiles_sftp_host_fingerprint', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeSftpFingerprint']]);
+        register_setting('fluxfiles', 'fluxfiles_sftp_require_host_key', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeSftpRequireHostKey'], 'default' => '0']);
+        register_setting('fluxfiles', 'fluxfiles_sftp_strict_algorithms', ['type' => 'string', 'sanitize_callback' => static fn ($v) => $v === '1' ? '1' : '0', 'default' => '0']);
+
+        // AI section. Free: tagging and alt text use the administrator's own provider account
+        // (bring your own key); nothing here needs a licence or a FluxFiles module.
+        add_settings_section(
+            'fluxfiles_ai',
+            esc_html__('AI tagging', 'fluxfiles'),
+            function () {
+                echo '<p>' . esc_html__('Optional. Choose a provider and enter your own API key to get tags and alt text for images. FluxFiles sends a downscaled copy of an image (at most 1024 px), the prompt and your key to that provider only, and only when you tag an image or tag on upload is on. Nothing goes through a FluxFiles server. The providers and their terms are listed under "External services" in this plugin\'s readme on WordPress.org.', 'fluxfiles') . '</p>';
+            },
+            'fluxfiles'
+        );
+
+        $this->addField('fluxfiles_ai_provider', esc_html__('Provider', 'fluxfiles'), 'fluxfiles_ai', 'ai_provider');
+        $this->addField('fluxfiles_ai_api_key', esc_html__('API key', 'fluxfiles'), 'fluxfiles_ai', 'password');
+        $this->addField('fluxfiles_ai_model', esc_html__('Model (optional)', 'fluxfiles'), 'fluxfiles_ai', 'text', ['hint' => __('Leave empty for the provider\'s default vision model. The model must accept images.', 'fluxfiles')]);
+        $this->addField('fluxfiles_ai_base_url', esc_html__('Base URL (optional)', 'fluxfiles'), 'fluxfiles_ai', 'url', ['placeholder' => 'https://llm.example.com/v1', 'hint' => __('Only for a self-hosted or unlisted OpenAI-compatible endpoint (required for "OpenAI-compatible endpoint"). It is checked like any outbound address: private and local hosts, including Ollama on localhost, must be listed in FLUXFILES_SSRF_ALLOW_HOSTS in wp-config.php.', 'fluxfiles')]);
+        $this->addField('fluxfiles_ai_auto_tag', esc_html__('Tag on upload', 'fluxfiles'), 'fluxfiles_ai', 'switch', ['label' => __('Tag new images automatically when they are uploaded', 'fluxfiles'), 'hint' => __('Every uploaded image is sent to the provider. Off by default; you can still tag single images by hand.', 'fluxfiles')]);
+
+        register_setting('fluxfiles', 'fluxfiles_ai_provider', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeAiProvider']]);
+        register_setting('fluxfiles', 'fluxfiles_ai_api_key', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeAiApiKey']]);
+        register_setting('fluxfiles', 'fluxfiles_ai_model', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
+        register_setting('fluxfiles', 'fluxfiles_ai_base_url', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeAiBaseUrl']]);
+        register_setting('fluxfiles', 'fluxfiles_ai_auto_tag', ['type' => 'string', 'sanitize_callback' => static fn ($v) => $v === '1' ? '1' : '0', 'default' => '0']);
 
         // Extension point: add-ons (FluxFiles Pro) register their own sections and
         // settings on this page; $group is the settings_fields()/register_setting group.
@@ -777,6 +875,197 @@ class FluxFilesAdmin
         return sanitize_text_field((string) $v);
     }
 
+    /** Provider choices on the AI tagging section: option value => label (all values are AiTagger providers). */
+    public static function aiProviders(): array
+    {
+        return [
+            ''           => __('None (AI tagging off)', 'fluxfiles'),
+            'anthropic'  => __('Anthropic (Claude)', 'fluxfiles'),
+            'openai'     => __('OpenAI', 'fluxfiles'),
+            'gemini'     => __('Google Gemini', 'fluxfiles'),
+            'openrouter' => __('OpenRouter', 'fluxfiles'),
+            'groq'       => __('Groq', 'fluxfiles'),
+            'mistral'    => __('Mistral AI', 'fluxfiles'),
+            'xai'        => __('xAI (Grok)', 'fluxfiles'),
+            'ollama'     => __('Ollama (your own server)', 'fluxfiles'),
+            'compatible' => __('OpenAI-compatible endpoint (set the base URL)', 'fluxfiles'),
+        ];
+    }
+
+    /** Sanitizer for the AI provider: only a name the bundled AiTagger understands (aliases such as `claude` stay valid). */
+    public static function sanitizeAiProvider($v): string
+    {
+        $v = strtolower(trim(sanitize_text_field((string) $v)));
+        if ($v === '') {
+            return '';
+        }
+        $known = class_exists(\FluxFiles\AiTagger::class)
+            ? \FluxFiles\AiTagger::supportedProviders()
+            : array_keys(self::aiProviders());
+        return in_array($v, $known, true) ? $v : '';
+    }
+
+    public function sanitizeAiApiKey($v): string
+    {
+        return $this->keepSecret('fluxfiles_ai_api_key', true)($v);
+    }
+
+    /**
+     * AI base URL: http(s), blank allowed, and the same SSRF check as every other outbound
+     * address (FLUXFILES_SSRF_ALLOW_HOSTS applies). A refused value keeps the stored one.
+     */
+    public function sanitizeAiBaseUrl($v): string
+    {
+        $url = self::sanitizeUrlOption($v);
+        if ($url === '') {
+            return '';
+        }
+        try {
+            // assertSafeUrl() refuses a `localhost`-style name outright; an operator who listed
+            // the endpoint in FLUXFILES_SSRF_ALLOW_HOSTS (a local Ollama) has opted in.
+            $parts = (array) wp_parse_url($url);
+            $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
+            if ($host === '' || !\FluxFiles\SsrfGuard::isAllowlistedHost($host, isset($parts['port']) ? (int) $parts['port'] : null)) {
+                \FluxFiles\SsrfGuard::assertSafeUrl($url);
+            }
+        } catch (\Throwable $e) {
+            add_settings_error(
+                'fluxfiles_ai_base_url',
+                'fluxfiles_ai_base_url_blocked',
+                sprintf(
+                    /* translators: 1: the URL, 2: the reason */
+                    esc_html__('The AI base URL %1$s was refused (%2$s); the previous one was kept. A private or local host must be listed in FLUXFILES_SSRF_ALLOW_HOSTS in wp-config.php.', 'fluxfiles'),
+                    esc_html($url),
+                    esc_html($e->getMessage())
+                )
+            );
+            return (string) get_option('fluxfiles_ai_base_url', '');
+        }
+        return $url;
+    }
+
+    /** Sanitizer for the SFTP port: 1-65535, anything else is 22. */
+    public static function sanitizeSftpPort($v): int
+    {
+        $p = (int) $v;
+        return ($p >= 1 && $p <= 65535) ? $p : 22;
+    }
+
+    /** Sanitizer for the SFTP root folder: absolute path, blank is `/`. */
+    public static function sanitizeSftpRoot($v): string
+    {
+        $v = trim(sanitize_text_field((string) $v));
+        return $v === '' ? '/' : '/' . ltrim($v, '/');
+    }
+
+    /**
+     * SFTP host: a bare host name or IP, checked with SsrfGuard::assertHostSafe() against the
+     * submitted port (the disk build repeats the check on every connection). A refused or
+     * malformed host keeps the stored one and shows why.
+     */
+    public function sanitizeSftpHost($v): string
+    {
+        $host = trim(sanitize_text_field((string) $v));
+        if ($host === '') {
+            return '';
+        }
+        $stored = (string) get_option('fluxfiles_sftp_host', '');
+        $fail = static function (string $why) use ($host, $stored): string {
+            add_settings_error(
+                'fluxfiles_sftp_host',
+                'fluxfiles_sftp_host_refused',
+                sprintf(
+                    /* translators: 1: the host, 2: the reason */
+                    esc_html__('The SFTP host %1$s was refused (%2$s); the previous host was kept. A host on a private network must be listed in FLUXFILES_SSRF_ALLOW_HOSTS in wp-config.php.', 'fluxfiles'),
+                    esc_html($host),
+                    esc_html($why)
+                )
+            );
+            return $stored;
+        };
+        if (preg_match('/^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9._-]+)$/', $host) !== 1) {
+            return $fail(__('enter a host name or IP address only, without a scheme, port or path', 'fluxfiles'));
+        }
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- runs inside options.php, which has verified the settings nonce
+        $port = self::sanitizeSftpPort(isset($_POST['fluxfiles_sftp_port']) ? sanitize_text_field(wp_unslash($_POST['fluxfiles_sftp_port'])) : 22);
+        try {
+            \FluxFiles\SsrfGuard::assertHostSafe($host, $port);
+        } catch (\Throwable $e) {
+            return $fail($e->getMessage());
+        }
+        return $host;
+    }
+
+    public function sanitizeSftpPassword($v): string
+    {
+        return $this->keepSecret('fluxfiles_sftp_password', true)($v);
+    }
+
+    public function sanitizeSftpPassphrase($v): string
+    {
+        return $this->keepSecret('fluxfiles_sftp_private_key_passphrase', true)($v);
+    }
+
+    /** SFTP private key: a PEM block (line endings normalised); anything else keeps the stored key. */
+    public function sanitizeSftpPrivateKey($v): string
+    {
+        $new = trim(str_replace("\r\n", "\n", (string) $v));
+        if ($new !== '' && strpos($new, '-----BEGIN ') !== 0) {
+            add_settings_error(
+                'fluxfiles_sftp_private_key',
+                'fluxfiles_sftp_private_key_format',
+                esc_html__('That does not look like a PEM private key (it should start with -----BEGIN ...); the stored key was kept.', 'fluxfiles')
+            );
+            return (string) get_option('fluxfiles_sftp_private_key', '');
+        }
+        return $this->keepSecret('fluxfiles_sftp_private_key', true)($new);
+    }
+
+    /**
+     * SFTP host-key fingerprint(s): colon-hex, comma-separated. A `MD5:` prefix is dropped;
+     * a malformed value keeps the stored one rather than silently disabling pinning.
+     */
+    public function sanitizeSftpFingerprint($v): string
+    {
+        $raw = trim(sanitize_text_field((string) $v));
+        if ($raw === '') {
+            return '';
+        }
+        $out = [];
+        foreach (explode(',', $raw) as $fp) {
+            $fp = preg_replace('/^md5:/i', '', trim($fp));
+            if (preg_match('/^[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2})+$/', (string) $fp) !== 1) {
+                add_settings_error(
+                    'fluxfiles_sftp_host_fingerprint',
+                    'fluxfiles_sftp_host_fingerprint_format',
+                    esc_html__('The host key fingerprint must be colon-separated hex pairs (aa:bb:cc:…), several separated by commas; the previous value was kept.', 'fluxfiles')
+                );
+                return (string) get_option('fluxfiles_sftp_host_fingerprint', '');
+            }
+            $out[] = (string) $fp;
+        }
+        return implode(',', $out);
+    }
+
+    /** "Require host key": warns when switched on without a fingerprint (every connection would then be refused). */
+    public function sanitizeSftpRequireHostKey($v): string
+    {
+        if ($v !== '1') {
+            return '0';
+        }
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- runs inside options.php, which has verified the settings nonce
+        $submitted = isset($_POST['fluxfiles_sftp_host_fingerprint']) ? trim(sanitize_text_field(wp_unslash($_POST['fluxfiles_sftp_host_fingerprint']))) : '';
+        if ($submitted === '') {
+            add_settings_error(
+                'fluxfiles_sftp_require_host_key',
+                'fluxfiles_sftp_require_host_key_nofp',
+                esc_html__('"Require host key" is on but no host key fingerprint is set, so the SFTP disk will refuse to connect until you add one.', 'fluxfiles'),
+                'warning'
+            );
+        }
+        return '1';
+    }
+
     public function sanitizeJwtSecret($v): string
     {
         return $this->keepSecret('fluxfiles_secret', false, 32)($v);
@@ -831,6 +1120,53 @@ class FluxFilesAdmin
                             esc_html__('Remove the stored secret', 'fluxfiles')
                         );
                     }
+                    if (!empty($args['hint'])) {
+                        printf('<p class="description">%s</p>', wp_kses_post((string) $args['hint']));
+                    }
+                    return;
+                }
+                if ($type === 'secretarea') {
+                    // Same write-only contract as the password inputs: the stored key is never
+                    // printed back; a blank submit keeps it, the checkbox removes it.
+                    printf(
+                        '<textarea id="%1$s" name="%1$s" rows="5" cols="50" class="large-text code" autocomplete="off" spellcheck="false" aria-describedby="%1$s-hint"%2$s></textarea><p class="description" id="%1$s-hint">%3$s</p>',
+                        esc_attr($name),
+                        isset($args['placeholder']) ? ' placeholder="' . esc_attr((string) $args['placeholder']) . '"' : '',
+                        $value === ''
+                            ? esc_html__('No key is stored.', 'fluxfiles')
+                            : esc_html__('A key is stored. Leave blank to keep it, or paste a new one to replace it.', 'fluxfiles')
+                    );
+                    if ($value !== '') {
+                        printf(
+                            '<p><label><input type="checkbox" name="%1$s_clear" value="1" /> %2$s</label></p>',
+                            esc_attr($name),
+                            esc_html__('Remove the stored key', 'fluxfiles')
+                        );
+                    }
+                    return;
+                }
+                if ($type === 'switch') {
+                    printf(
+                        '<input type="hidden" name="%1$s" value="0" /><label class="ff-switch-label"><input type="checkbox" class="ff-switch" id="%1$s" name="%1$s" value="1"%2$s /> %3$s</label>',
+                        esc_attr($name),
+                        $value === '1' ? ' checked' : '',
+                        esc_html((string) ($args['label'] ?? ''))
+                    );
+                    if (!empty($args['hint'])) {
+                        printf('<p class="description">%s</p>', wp_kses_post((string) $args['hint']));
+                    }
+                    return;
+                }
+                if ($type === 'ai_provider') {
+                    $choices = self::aiProviders();
+                    if ($value !== '' && !isset($choices[$value])) {
+                        $choices[$value] = $value; // an alias set with wp-cli (claude, google, grok)
+                    }
+                    echo '<select id="' . esc_attr($name) . '" name="' . esc_attr($name) . '">';
+                    foreach ($choices as $id => $label) {
+                        printf('<option value="%1$s"%2$s>%3$s</option>', esc_attr((string) $id), selected($value, (string) $id, false), esc_html($label));
+                    }
+                    echo '</select>';
                     return;
                 }
                 if ($type === 'visibility') {
@@ -905,7 +1241,7 @@ class FluxFilesAdmin
     public function renderDisksField(): void
     {
         $current = get_option('fluxfiles_disks', ['local']);
-        $allDisks = ['local', 's3', 'r2'];
+        $allDisks = FluxFilesPlugin::DISKS;
 
         foreach ($allDisks as $disk) {
             $checked = in_array($disk, $current, true) ? 'checked' : '';
@@ -916,10 +1252,10 @@ class FluxFilesAdmin
                 esc_html(strtoupper($disk))
             );
         }
-        // An enabled cloud disk with no bucket would be offered to users and then fail on first use.
+        // An enabled cloud disk with no bucket (or SFTP with no host) would be offered to users and then fail on first use.
         $unconfigured = [];
-        foreach (['s3', 'r2'] as $disk) {
-            if (in_array($disk, (array) $current, true) && trim((string) get_option('fluxfiles_' . $disk . '_bucket', '')) === '') {
+        foreach (['s3', 'r2', 'sftp'] as $disk) {
+            if (in_array($disk, (array) $current, true) && !self::diskIsConfigured($disk)) {
                 $unconfigured[] = strtoupper($disk);
             }
         }
@@ -927,7 +1263,7 @@ class FluxFilesAdmin
             printf(
                 '<p class="description" style="color:#b32d2e">%s</p>',
                 /* translators: %s: disk names, e.g. "S3, R2" */
-                sprintf(esc_html__('%s is enabled but has no bucket yet. Fill in its section below, or untick it; otherwise it will fail when someone opens it.', 'fluxfiles'), esc_html(implode(', ', $unconfigured)))
+                sprintf(esc_html__('%s is enabled but has no bucket or host yet. Fill in its section below, or untick it; otherwise it will fail when someone opens it.', 'fluxfiles'), esc_html(implode(', ', $unconfigured)))
             );
         }
     }
@@ -1087,6 +1423,6 @@ class FluxFilesAdmin
         if (!is_array($input)) {
             return ['local'];
         }
-        return array_values(array_intersect($input, ['local', 's3', 'r2']));
+        return array_values(array_intersect($input, FluxFilesPlugin::DISKS));
     }
 }

@@ -270,6 +270,8 @@ Not JWT claims — set per disk, either in the static `config/disks.php` SFTP
 block (env-var-driven) or inside an encrypted BYOB `byob_disks` entry (same
 fields, `CredentialEncryptor` doesn't allowlist config keys).
 
+In the WordPress plugin these are the *Settings → FluxFiles → Cloud → SFTP* fields (`fluxfiles_sftp_*` options); the host is SSRF-checked on save and `allow_chmod` stays forced `false`.
+
 | Key | Type | Default | Notes |
 |---|---|---|---|
 | `host_fingerprint` | string | `""` | Colon-hex fingerprint(s) (comma-separated) pinning the expected host key. Empty = trust any host key. |

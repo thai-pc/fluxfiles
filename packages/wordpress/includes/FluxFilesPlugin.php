@@ -9,6 +9,9 @@ require_once __DIR__ . '/FluxFilesStorage.php';
  */
 class FluxFilesPlugin
 {
+    /** Disks an administrator can enable under Settings › Access, in display order. */
+    public const DISKS = ['local', 's3', 'r2', 'sftp'];
+
     private static ?self $instance = null;
 
     public static function instance(): self
@@ -767,6 +770,27 @@ HTACCESS;
             ];
         }
 
+        // SFTP: exists only when a host is saved (Settings › Cloud). allow_chmod stays
+        // forced false on every token (disableFileEditing()), so the permissions dialog
+        // never appears on it.
+        $sftpHost = trim((string) get_option('fluxfiles_sftp_host', ''));
+        if ($sftpHost !== '') {
+            $disks['sftp'] = [
+                'driver'                 => 'sftp',
+                'host'                   => $sftpHost,
+                'port'                   => (int) get_option('fluxfiles_sftp_port', 22) ?: 22,
+                'username'               => (string) get_option('fluxfiles_sftp_username', ''),
+                'password'               => (string) get_option('fluxfiles_sftp_password', ''),
+                'private_key'            => (string) get_option('fluxfiles_sftp_private_key', ''),
+                'private_key_passphrase' => (string) get_option('fluxfiles_sftp_private_key_passphrase', ''),
+                'root'                   => (string) get_option('fluxfiles_sftp_root', '') ?: '/',
+                // Colon-hex host-key pin(s); empty = trust any key unless require_host_key is on.
+                'host_fingerprint'       => (string) get_option('fluxfiles_sftp_host_fingerprint', ''),
+                'require_host_key'       => get_option('fluxfiles_sftp_require_host_key', '0') === '1',
+                'strict_algorithms'      => get_option('fluxfiles_sftp_strict_algorithms', '0') === '1',
+            ];
+        }
+
         return $disks;
     }
 
@@ -1062,6 +1086,9 @@ HTACCESS;
         self::applyRolePreset($payload, $roleDefaults);
         if (isset($overrides['ai_auto_tag'])) {
             $payload['ai_auto_tag'] = (bool) $overrides['ai_auto_tag'];
+        } elseif (!array_key_exists('ai_auto_tag', $payload) && get_option('fluxfiles_ai_auto_tag', '0') === '1') {
+            // Settings › AI "Tag new images on upload"; an explicit override above still wins.
+            $payload['ai_auto_tag'] = true;
         }
         if (!empty($overrides['rate_read'])) {
             $payload['rate_read'] = (int) $overrides['rate_read'];
@@ -1536,9 +1563,19 @@ HTACCESS;
     {
         $disks = array_values(array_filter(
             array_map('strval', (array) get_option('fluxfiles_disks', ['local'])),
-            static function ($d) { return in_array($d, ['local', 's3', 'r2'], true); }
+            static function ($d) { return in_array($d, self::DISKS, true); }
         ));
         return $disks ?: ['local'];
+    }
+
+    /**
+     * Admin URL of the full-page file manager (Media > FluxFiles). The slug is stable and
+     * is not the settings slug: two pages with the same `page` under different parents
+     * confuse WordPress' parent lookup. Use it for links in e-mails and notices.
+     */
+    public static function managerUrl(): string
+    {
+        return admin_url('upload.php?page=fluxfiles-manager');
     }
 
     public static function apiEndpoint(): string

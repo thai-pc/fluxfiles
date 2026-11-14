@@ -15,7 +15,8 @@ $fluxfiles_tabs = [
     'access'  => ['label' => __('Access', 'fluxfiles'), 'sections' => ['fluxfiles_permissions']],
     'media'   => ['label' => __('Media Library', 'fluxfiles'), 'sections' => ['fluxfiles_media']],
     'storage' => ['label' => __('Storage', 'fluxfiles'), 'sections' => ['fluxfiles_storage']],
-    'cloud'   => ['label' => __('Cloud (S3 / R2)', 'fluxfiles'), 'sections' => ['fluxfiles_s3', 'fluxfiles_r2']],
+    'cloud'   => ['label' => __('Cloud (S3 / R2 / SFTP)', 'fluxfiles'), 'sections' => ['fluxfiles_s3', 'fluxfiles_r2', 'fluxfiles_sftp']],
+    'ai'      => ['label' => __('AI', 'fluxfiles'), 'sections' => ['fluxfiles_ai']],
     'addons'  => ['label' => __('Add-ons', 'fluxfiles'), 'sections' => []],
     'advanced' => ['label' => __('Advanced', 'fluxfiles'), 'sections' => ['fluxfiles_danger']],
     'embed'   => ['label' => __('Embed', 'fluxfiles'), 'sections' => []],
@@ -41,10 +42,10 @@ $fluxfiles_render_section = static function (string $sid) use ($fluxfiles_all): 
     $section = $fluxfiles_all[$sid];
     $danger = $sid === 'fluxfiles_danger' ? ' ff-card--danger' : '';
     echo '<section class="ff-card' . esc_attr($danger) . '" id="ff-section-' . esc_attr($sid) . '">';
-    $test = in_array($sid, ['fluxfiles_s3', 'fluxfiles_r2'], true) ? substr($sid, 10) : '';
+    $test = in_array($sid, ['fluxfiles_s3', 'fluxfiles_r2', 'fluxfiles_sftp'], true) ? substr($sid, 10) : '';
     echo '<header class="ff-card-head"><h2>' . esc_html(wp_strip_all_tags((string) $section['title'])) . '</h2>';
     if ($test !== '') {
-        $configured = trim((string) get_option('fluxfiles_' . $test . '_bucket', '')) !== '';
+        $configured = FluxFilesAdmin::diskIsConfigured($test);
         $enabled = in_array($test, (array) get_option('fluxfiles_disks', ['local']), true);
         $state = $configured ? ($enabled ? 'ok' : 'warn') : 'off';
         $text = $configured ? ($enabled ? __('Configured', 'fluxfiles') : __('Configured, not enabled', 'fluxfiles')) : __('Not configured', 'fluxfiles');

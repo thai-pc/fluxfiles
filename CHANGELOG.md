@@ -5,6 +5,11 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- WordPress plugin: a full-page file manager at **Media → FluxFiles** (`upload.php?page=fluxfiles-manager`, capability `upload_files` or the `fluxfiles_required_capability` filter), the same embed as the `[fluxfiles]` shortcode at full height. `FluxFilesPlugin::managerUrl()` returns its URL; the slug is deliberately not `fluxfiles`, because two pages with the same `page` under different menu parents confuse WordPress' parent lookup.
+- WordPress plugin: the **SFTP** and **AI tagging** settings that the code and the readme already assumed. *Settings → FluxFiles → Cloud* gains an SFTP section (host, port, username, password or PEM key + passphrase, root, host-key fingerprint, "Require host key", "Modern algorithms only"), SFTP is now an option under *Access → Enabled disks*, and the connection test covers it. The host is checked with the SSRF guard on save (`FLUXFILES_SSRF_ALLOW_HOSTS` still applies) and a refused host or malformed key or fingerprint keeps the stored value with an admin notice. A new *AI* tab sets the provider (the ones `AiTagger` supports), API key, model, base URL (SSRF-checked on save) and a "Tag on upload" switch that becomes the `ai_auto_tag` claim unless a token override sets it. AI tagging is free (it uses the administrator's own provider account); no licence or module gates it. `chmod` stays forced off. The new options are removed on uninstall.
+- The new secret fields (SFTP password, private key, passphrase, AI API key) are write-only like the S3/R2 secrets: never echoed into the page, kept when left blank, removable with a checkbox.
+
 ## [1.0.36] — 2026-11-13
 
 > Released: `node-v1.1.0`, `python-v1.1.0`, `sdk-v1.0.2`, `react-v1.0.2`, `vue-v1.0.1`. Core, Laravel and WordPress are unchanged (`core-v1.4.2`, `laravel-v1.0.9`, `wordpress-v1.1.10`).

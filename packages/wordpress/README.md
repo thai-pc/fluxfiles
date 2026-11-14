@@ -1,7 +1,7 @@
 # FluxFiles for WordPress
 
 WordPress plugin that embeds [FluxFiles](https://github.com/thai-pc/fluxfiles) — a
-multi-storage file manager (Local, AWS S3, Cloudflare R2, plus SFTP through BYOB tokens) — directly in your site
+multi-storage file manager (Local, AWS S3, Cloudflare R2, SFTP) — directly in your site
 via a shortcode, an editor media button, and a JWT-bridged REST proxy.
 
 Unlike the JS/framework wrappers, this plugin **bundles the FluxFiles core**, so it
@@ -392,18 +392,22 @@ metadata automatically.
 
 ## SFTP disk & PTY terminal
 
-The WordPress plugin runs FluxFiles **through the WP REST API (proxy mode)**, whose
-admin settings page only exposes **Local / S3 / R2** storage — there's no settings
-field to register an SFTP disk. SFTP works through a **BYOB token** that carries the
-server details: mint one in your own code with `FluxFilesPlugin::generateByobToken()`.
+The settings page (**Settings → FluxFiles → Cloud**) has an **SFTP** section: host,
+port, username, password or a PEM private key (+ passphrase), root folder, and the host
+key fingerprint. Pin the fingerprint (and switch on *Require host key*): without it any
+host key is trusted. Passwords, keys and passphrases are write-only — the page never
+prints them back; leave a field blank to keep it, or tick the box to remove it. Tick
+**SFTP** under *Access → Enabled disks* to offer the disk. For per-user servers, a
+**BYOB token** still works: mint one in your own code with
+`FluxFilesPlugin::generateByobToken()`. `chmod` stays disabled in the plugin.
 
 The host must resolve to a public address. For a server on your own private network,
 list it in `define('FLUXFILES_SSRF_ALLOW_HOSTS', 'sftp.internal.example');` in
 `wp-config.php` (or as a real env var, comma-separated). Downloads and previews use a
 short-lived per-file link that carries the disk config encrypted, capped at 30 minutes.
 
-Without custom code, use the **standalone FluxFiles server** (or the Docker image) —
-see the [core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting).
+For the standalone server (or the Docker image) see the
+[core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting).
 
 If you run your own [ttyd / gotty / wetty](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md),
 pass its URL as the `terminal_pty_url` token override and the UI embeds it.
@@ -413,7 +417,7 @@ pass its URL as the `terminal_pty_url` token override and the UI embeds it.
 
 - Multi-storage — Local disk, AWS S3, Cloudflare R2; SFTP through BYOB tokens (cursor-based pagination)
 - Image optimization — automatic WebP variants (thumb / medium / large)
-- AI tagging — Claude / OpenAI vision API
+- AI tagging — bring your own key (Anthropic, OpenAI, Gemini, OpenRouter, Groq, Mistral, xAI, Ollama or any OpenAI-compatible endpoint) under Settings → FluxFiles → AI; free, no licence
 - Full-text search across file names + metadata; folder search
 - 16 languages with RTL support; dark mode with auto-detection
 
