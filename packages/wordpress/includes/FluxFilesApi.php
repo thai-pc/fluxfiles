@@ -909,7 +909,8 @@ class FluxFilesApi
      * typed into a form by an administrator, so a call to it is checked again at call time
      * (core's SsrfCheckedTransport), then FluxFilesAiTransport pins the checked addresses on
      * WordPress' cURL handle, verifies the connected address and refuses any 3xx answer. On a
-     * Streams transport the pin is not available and the call-time check stands alone.
+     * Streams transport, or when WordPress sends the URL through a configured proxy, the pin
+     * is skipped and the call-time check stands alone.
      */
     public static function savedAiTagger(?\FluxFiles\HttpTransportInterface $transport = null): ?\FluxFiles\AiTagger
     {

@@ -3455,37 +3455,99 @@ test('savedAiTagger(): a base URL is SSRF-checked at call time (private host -> 
     }
 });
 
-test('FluxFilesAiTransport: pins the checked addresses via http_api_curl (request-scoped), refuses a changed target, rejects a private DNS answer', function () {
+/** Scripted inner transport for FluxFilesAiTransport: $script($hooks) runs while the request is "in flight". */
+class FfScriptedTransport implements \FluxFiles\HttpTransportInterface
+{
+    public $calls = 0;
+    public $hooksSeen = 0;
+    public function __construct(public $script = null, public array $res = ['status' => 200, 'headers' => [], 'body' => '{}']) {}
+    public function request(string $method, string $url, array $headers = [], ?string $body = null, int $timeout = 30): array
+    {
+        $this->calls++;
+        $hooks = $GLOBALS['WP_ADDED_ACTIONS']['http_api_curl'] ?? [];
+        $this->hooksSeen = count($hooks);
+        if ($this->script) { ($this->script)($hooks); }
+        return $this->res;
+    }
+}
+/** FluxFilesAiTransport whose "connected address" is whatever the test says. */
+class FfAiTransportIp extends FluxFilesAiTransport
+{
+    public $ip = '93.184.216.34';
+    protected function connectedIp($handle): ?string { return $this->ip; }
+}
+
+test('FluxFilesAiTransport: request-scoped pin hook, a changed target and a second firing are refused', function () {
     if (!extension_loaded('curl')) { return; }
     \FluxFiles\SsrfGuard::setAllowHosts('');
-    $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 200], 'headers' => [], 'body' => '{}'];
     $GLOBALS['WP_ADDED_ACTIONS']['http_api_curl'] = [];
-    $seen = null;
-    // Capture the hook while the (synchronous) inner request runs.
-    $inner = new class implements \FluxFiles\HttpTransportInterface {
-        public $hooks = [];
-        public function request(string $method, string $url, array $headers = [], ?string $body = null, int $timeout = 30): array {
-            $this->hooks = $GLOBALS['WP_ADDED_ACTIONS']['http_api_curl'] ?? [];
-            return ['status' => 200, 'headers' => [], 'body' => '{}'];
-        }
-    };
-    $t = new FluxFilesAiTransport($inner);
-    $res = $t->request('POST', 'https://93.184.216.34/v1/x', [], '{}', 5);
-    assertEqual(200, $res['status']);
-    assertEqual(1, count($inner->hooks), 'one hook while the request runs');
+    $url = 'https://93.184.216.34/v1/x';
+
+    $inner = new FfScriptedTransport(function ($hooks) { $h = curl_init(); $hooks[0]($h, [], 'https://93.184.216.34/v1/x'); });
+    $res = (new FfAiTransportIp($inner))->request('POST', $url, [], '{}', 5);
+    assertEqual(1, $inner->hooksSeen, 'one hook while the request runs');
     assertEqual([], $GLOBALS['WP_ADDED_ACTIONS']['http_api_curl'], 'removed afterwards');
-    $hook = $inner->hooks[0];
-    $h = curl_init();
-    $hook($h, [], 'https://93.184.216.34/v1/x');   // same endpoint: pins without throwing
-    $threw = false;
-    try { $hook($h, [], 'https://169.254.169.254/v1/x'); } catch (\FluxFiles\ApiException $e) { $threw = true; }
-    assertTrue($threw, 'a different target is refused before it is sent');
-    // A private literal never reaches the inner transport.
-    $inner->hooks = ['untouched'];
-    $res = $t->request('POST', 'http://10.0.0.5/v1', [], '{}', 5);
+    assertEqual(200, $res['status'], 'pinned and verified');
+
+    $threw = null;
+    $inner = new FfScriptedTransport(function ($hooks) use (&$threw) {
+        try { $hooks[0](curl_init(), [], 'https://169.254.169.254/v1/x'); } catch (\FluxFiles\ApiException $e) { $threw = $e->getErrorCode(); }
+    });
+    (new FfAiTransportIp($inner))->request('POST', $url, [], '{}', 5);
+    assertEqual('ssrf_blocked', $threw, 'a different target is refused before it is sent');
+
+    $threw = null;
+    $inner = new FfScriptedTransport(function ($hooks) use (&$threw) {
+        $h = curl_init();
+        $hooks[0]($h, [], 'https://93.184.216.34/v1/x');
+        try { $hooks[0]($h, [], 'https://93.184.216.34/v1/x'); } catch (\FluxFiles\ApiException $e) { $threw = $e->getMessage(); }
+    });
+    (new FfAiTransportIp($inner))->request('POST', $url, [], '{}', 5);
+    assertTrue($threw !== null && strpos($threw, 'second request') !== false, 'a redirect hop (second firing) is refused: ' . json_encode($threw));
+});
+
+test('FluxFilesAiTransport: a post-connect address that is private empties the answer (rebinding backstop)', function () {
+    if (!extension_loaded('curl')) { return; }
+    \FluxFiles\SsrfGuard::setAllowHosts('');
+    $fire = function ($hooks) { $hooks[0](curl_init(), [], 'https://93.184.216.34/v1/x'); };
+    $t = new FfAiTransportIp(new FfScriptedTransport($fire, ['status' => 200, 'headers' => [], 'body' => 'secret-answer']));
+    $t->ip = '10.0.0.5';
+    $res = $t->request('POST', 'https://93.184.216.34/v1/x', [], '{}', 5);
+    assertEqual(0, $res['status']);
+    assertEqual('', $res['body'], 'no body leaks');
+    assertTrue(strncmp($res['error'], 'blocked_host:', 13) === 0, $res['error']);
+    $t->ip = '';   // unreadable after a real answer: fail closed
+    assertEqual(0, $t->request('POST', 'https://93.184.216.34/v1/x', [], '{}', 5)['status'], 'unverifiable address fails closed');
+});
+
+test('FluxFilesAiTransport: no pin on a proxied URL; a private literal never reaches the inner transport; allowlisted hosts are not pinned', function () {
+    \FluxFiles\SsrfGuard::setAllowHosts('');
+    $GLOBALS['WP_ADDED_ACTIONS']['http_api_curl'] = [];
+    if (!class_exists('WP_HTTP_Proxy')) {
+        eval('class WP_HTTP_Proxy { public static $on = false; public function is_enabled() { return self::$on; } public function send_through_proxy($u) { return true; } }');
+    }
+    WP_HTTP_Proxy::$on = true;
+    try {
+        $inner = new FfScriptedTransport();
+        $res = (new FluxFilesAiTransport($inner))->request('POST', 'https://93.184.216.34/v1/x', [], '{}', 5);
+        assertEqual(0, $inner->hooksSeen, 'no http_api_curl hook (the proxy would be dropped by a pin)');
+        assertEqual(200, $res['status'], 'the call still goes out (call-time check only)');
+    } finally {
+        WP_HTTP_Proxy::$on = false;
+    }
+    $inner = new FfScriptedTransport();
+    $res = (new FluxFilesAiTransport($inner))->request('POST', 'http://10.0.0.5/v1', [], '{}', 5);
     assertEqual(0, $res['status']);
     assertTrue(strncmp($res['error'], 'blocked_host:', 13) === 0, $res['error']);
-    assertEqual(['untouched'], $inner->hooks, 'inner not called');
+    assertEqual(0, $inner->calls, 'inner not called');
+    \FluxFiles\SsrfGuard::setAllowHosts('llm.internal');
+    try {
+        $inner = new FfScriptedTransport();
+        (new FluxFilesAiTransport($inner))->request('POST', 'http://llm.internal/v1', [], '{}', 5);
+        assertEqual(0, $inner->hooksSeen, 'an allowlisted host is not pinned');
+    } finally {
+        \FluxFiles\SsrfGuard::setAllowHosts('');
+    }
 });
 
 test('Settings AI test (ajaxTestAi): nonce, capability, limit, not-configured, ok and classified failure; never the key', function () use ($ffAiWith, $ffAiOk, $ffAjax) {
