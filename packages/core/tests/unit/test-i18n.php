@@ -248,6 +248,19 @@ $declaredDynamic = [
                               //       fm.js falls back to this generic key, so one
                               //       translation covers all nine and any future one.
     ],
+    'AiError.php' => [
+        'ai_not_configured',   // AiException passes the code AiError::classify() chose
+        'ai_auth',
+        'ai_model_not_found',
+        'ai_no_vision',
+        'ai_quota',
+        'ai_rate_limited',
+        'ai_unavailable',
+        'ai_network',
+        'ai_blocked_host',
+        'ai_bad_response',
+        'ai_provider_error',
+    ],
     'FileManager.php' => [
         'virus_failed',   // shared staging step feeds both the virus and DLP
         'dlp_failed',     // scanners — the code picks whichever scanner is active.

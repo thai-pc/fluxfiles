@@ -5,6 +5,12 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Core AI tagging: provider failures are now classified instead of the generic `502 'AI service returned an error'`. A new `AiError` classifier maps every provider's response (Anthropic, Gemini, and the OpenAI-shaped gateways: OpenAI, OpenRouter, Groq, Mistral, xAI, Ollama, `compatible`) to a code: `ai_auth`, `ai_model_not_found`, `ai_no_vision`, `ai_quota`, `ai_rate_limited`, `ai_unavailable`, `ai_network`, `ai_blocked_host`, `ai_bad_response`, `ai_provider_error` (all with `error.*` strings in the 16 locales; `ai_not_configured` already existed). `POST /ai-tag` returns the code plus `error_params` `{provider, model, default_model}`, so the existing "AI tagging failed" toast says what to fix. Upstream failures are always HTTP 502, never 401/403/429 (the UI reads 401 as "our own token expired"). Provider text is redacted before it is logged (the key, key-shaped strings, bearer tokens, URL credentials).
+- Core AI tagging: an upload whose auto-tag failed still succeeds and now carries `ai_error: "<code>"` in its result.
+- `AiTagger::testConnection()` (one tiny real vision call), `checkModel()` (a free model lookup that never sends an image: existence, Anthropic `lifecycle` retired/deprecated, vision capability), `describe()` and `api()`. Both checks return one result shape and never throw. They are building blocks for the connection test (endpoint, doctor row and CLI follow in later releases); no route is added yet.
+- `SsrfCheckedTransport`: an `HttpTransportInterface` decorator that re-checks the SSRF rule at call time (allowlisted host, else `SsrfGuard::assertSafeUrl`), for hosts where an admin types the AI base URL into a form. Not wired in core or Laravel, where the base URL is operator config.
+
 ## [1.0.39] — 2026-11-15
 
 > Released: `core-v1.5.1` (AI default-model fix), `wordpress-v1.2.1` (bundles core 1.5.1). CI runners pinned to `ubuntu-24.04` (Playwright 1.60 cannot install Chromium on the Ubuntu 26.04 `ubuntu-latest` image).

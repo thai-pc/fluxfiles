@@ -1252,6 +1252,10 @@ class FileManager
                     ]);
                     $result['ai_tags'] = $aiResult;
                 }
+            } catch (AiException $e) {
+                // The upload itself succeeded; surface WHY it was not tagged so the UI can say so.
+                $result['ai_error'] = $e->getErrorCode();
+                \FluxFiles\Log::warn('FluxFiles: AI auto-tag failed — ' . $e->getErrorCode());
             } catch (\Throwable $e) {
                 \FluxFiles\Log::warn('FluxFiles: AI auto-tag failed — ' . $e->getMessage());
             }
