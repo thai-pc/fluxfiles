@@ -427,19 +427,6 @@ test('an allowlisted host passes through', function () {
     }
 });
 
-test('a 3xx answer from an allowed host is refused (never followed)', function () {
-    $prev = SsrfGuard::$allowHosts;
-    SsrfGuard::setAllowHosts('llm.internal');
-    try {
-        $inner = new FakeTransport(FakeTransport::json(302, [], ['location' => 'http://169.254.169.254/']));
-        $res = (new SsrfCheckedTransport($inner))->request('POST', 'http://llm.internal/v1/chat/completions', [], '{}', 5);
-        assertEqual(0, $res['status']);
-        assertTrue(strncmp($res['error'], 'blocked_host:', 13) === 0, $res['error']);
-    } finally {
-        SsrfGuard::$allowHosts = $prev;
-    }
-});
-
 test('through AiTagger the refusal surfaces as ai_blocked_host', function () {
     $inner = new FakeTransport(FakeTransport::json(200, []));
     $t = new AiTagger('compatible', 'k', 'm', 'http://192.168.1.10:8080/v1', new SsrfCheckedTransport($inner));

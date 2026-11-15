@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
-// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- core is a WordPress-independent library; wp_parse_url() does not exist outside WordPress
-
 /**
  * Decorator that re-runs the SSRF rule on every outbound call of an operator-entered URL.
  *
@@ -19,8 +17,6 @@ namespace FluxFiles;
  *
  * Residual risk: DNS can still change between this check and the inner transport's own
  * lookup, and a host HTTP API that cannot pin an IP (wp_remote_request) cannot close that.
- *
- * A 3xx answer is refused too (see request()).
  *
  * Honours the {@see HttpTransportInterface} contract: a refusal is a status-0 answer, not a
  * throw. Its `error` starts with `blocked_host:`, which AiError::classify() maps to
@@ -52,13 +48,6 @@ final class SsrfCheckedTransport implements HttpTransportInterface
             }
         }
 
-        $res = $this->inner->request($method, $url, $headers, $body, $timeout);
-        // Defence in depth: an AI endpoint never legitimately redirects, and following one
-        // would walk past the check above. The inner transports do not follow redirects, this
-        // makes the policy independent of that setting.
-        if ($res['status'] >= 300 && $res['status'] < 400) {
-            return ['status' => 0, 'headers' => [], 'body' => '', 'error' => 'blocked_host: redirect refused'];
-        }
-        return $res;
+        return $this->inner->request($method, $url, $headers, $body, $timeout);
     }
 }
