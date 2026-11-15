@@ -17,7 +17,7 @@ env:
 jobs:
   core-php:
     name: Core (PHP ${{ matrix.php }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -85,7 +85,7 @@ jobs:
   # test-laravel-db-metadata.php — which runs on that lock — was silently broken.
   lockfiles-and-laravel-db:
     name: Lock files valid + Laravel DB adapter
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -117,7 +117,7 @@ jobs:
 
   adapter-core-floor:
     name: Adapter ↔ core floor guard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # Need full history + tags so the guard can build core at each adapter's
       # declared composer floor (a `core-vX.Y.Z` monorepo tag) in a worktree.
@@ -142,7 +142,7 @@ jobs:
 
   ui-min-fresh:
     name: UI min assets are fresh
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -162,7 +162,7 @@ jobs:
 
   iframe-allow:
     name: iframe allow parity
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -174,7 +174,7 @@ jobs:
 
   api-e2e:
     name: API e2e (PHP ${{ matrix.php }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -228,7 +228,7 @@ jobs:
   # had no CI at all: test-api.sh was the only e2e that ran.
   selfboot-e2e:
     name: Self-booting e2e (PHP ${{ matrix.php }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -313,7 +313,7 @@ jobs:
 
   s3-localstack:
     name: Live S3 (LocalStack)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -424,7 +424,7 @@ jobs:
 
   db-mysql:
     name: DB backend (MySQL)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Unlike atmoz/sftp and localstack, mysql:8's default CMD already starts the
     # server correctly, so a native `services:` container (with a health check
     # GitHub Actions waits on before running steps) is the better fit here — no
@@ -479,7 +479,7 @@ jobs:
 
   db-postgres:
     name: DB backend (PostgreSQL)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Same rationale as db-mysql: postgres:16's default CMD already starts the
     # server correctly, so `services:` fits without a manual docker run.
     services:
@@ -524,7 +524,7 @@ jobs:
 
   wrappers:
     name: Wrapper (${{ matrix.pkg }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -546,7 +546,7 @@ jobs:
 
   node-sdk:
     name: Node token SDK (PHP↔Node parity)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -589,7 +589,7 @@ jobs:
 
   python-token:
     name: Python token SDK (PHP↔Python parity)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -622,7 +622,7 @@ jobs:
 
   browser-e2e:
     name: Browser e2e (Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -654,7 +654,7 @@ jobs:
 
   editor-e2e:
     name: Editor plugins e2e (real TinyMCE / CKEditor 4 / CKEditor 5 / Summernote)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -692,7 +692,7 @@ jobs:
 
   pack-smoke:
     name: Pack & install (published artifacts)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -707,7 +707,7 @@ jobs:
 
   wp-dist-guard:
     name: WordPress.org zip guard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -734,7 +734,7 @@ jobs:
 
   docker-build:
     name: Docker production image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:

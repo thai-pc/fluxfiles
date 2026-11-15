@@ -17,7 +17,7 @@ permissions:
   contents: read
 jobs:
   php:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -53,7 +53,7 @@ jobs:
       - name: Root collector privilege boundary (disposable runner)
         run: sudo -n "$(command -v php)" services/license-server/tests/support/collector-root-smoke.php "$(id -u)" "$(id -g)"
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
