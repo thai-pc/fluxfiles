@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.42] — 2026-11-15
+
+> Released: `wordpress-v1.3.0` (bundles core 1.6.1): AI connection test, Bucket Doctor storage test, Site Health checks, SSRF hardening of the AI base URL and the S3 endpoint.
+
 ### Added
 - WordPress: Tools > Site Health gains two async tests (WordPress 5.6+; capability `view_site_health_checks`; no JavaScript of our own). **FluxFiles storage** lists one item on each ENABLED cloud disk (read-only, never writes); **FluxFiles AI** (only when a provider is saved) looks the configured model up at the provider through core's `checkModel()`, which is free and never sends an image. Good / recommended / critical with the reason and a link to the Cloud or AI tab (retired model, bad key, blocked host = critical; deprecated model, rate limit, network error = recommended). Results are cached in transients: storage 1 h, AI 12 h (15 min after a failure that may pass by itself) and both are dropped when the disk or AI settings are saved. The transients are removed on uninstall.
 - WordPress: AI connection test. **Settings > FluxFiles > AI** gains a **Test connection** button (admin only, nonce, 2 runs/min per user; AJAX `fluxfiles_test_ai`, enqueued JS only) that runs one tiny real vision call against the SAVED provider settings and shows the provider, model and latency, or the classified error with its fix hint. "Tag on upload" is not required. The REST proxy gains `POST /ai/test` (same gate as `/ai-tag`, 2/min `ai_test` bucket, audited; the provider `detail` text is returned to site administrators only) and the Doctor report carries the additive `ai` block, both through core's shared `AiTestEndpoint`. Needs core 1.6.0 (the plugin floor is now `^1.6.0`).
