@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- Core: `SsrfCheckedTransport.php` lacked the `parse_url` Plugin Check exemption that `SsrfGuard`/`DiskManager` carry, so a WordPress build bundling core 1.6.0 failed Plugin Check (`WordPress.WP.AlternativeFunctions.parse_url_parse_url`). Comment-only change; no behaviour change.
+
 ## [1.0.40] — 2026-11-15
 
 > Released: `core-v1.6.0` (AI error classification, `POST /api/fm/ai/test`, the Doctor AI row, CLI `doctor` / `ai:test`). The WordPress and Laravel adapters pick these up in their next releases (they do not proxy `/ai/test` yet).
