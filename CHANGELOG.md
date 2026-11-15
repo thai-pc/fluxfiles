@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.41] — 2026-11-15
+
+> Released: `core-v1.6.1` (Plugin Check exemption in `SsrfCheckedTransport.php`; comment-only, no behaviour change).
+
 ### Fixed
 - Core: `SsrfCheckedTransport.php` lacked the `parse_url` Plugin Check exemption that `SsrfGuard`/`DiskManager` carry, so a WordPress build bundling core 1.6.0 failed Plugin Check (`WordPress.WP.AlternativeFunctions.parse_url_parse_url`). Comment-only change; no behaviour change.
 
