@@ -347,6 +347,10 @@ There are no new `_fluxfiles/` files:
     - it is wired for real tagging, the `/ai/test` proxy, the admin button and Site Health
   - Residual risk: DNS can change between the check and `wp_remote_request`, and WP's HTTP API
     cannot pin an IP. That is the same as today's tagging path, and it is documented.
+  - When `SsrfCheckedTransport` is wired in WP, also reject any 3xx answer inside the decorator
+    (defence in depth: today only the inner transports' no-redirect setting prevents a hop), and where
+    the inner transport is cURL pin the checked IPs with `SsrfGuard::curlOptionsForIps()` plus the
+    post-connect check, as URL import does.
 - **Secrets.**
   - The key travels only in a header. Gemini already uses `x-goog-api-key`, never `?key=`.
   - It never appears in a response, the audit detail, a log line (`redact()`), CLI output or a
@@ -358,6 +362,9 @@ There are no new `_fluxfiles/` files:
   - Limits: `/ai/test` 2/min per user on top of the write bucket; WP AJAX 2/min; Cloud test
     5/min.
   - A probe is ~16×16 px + ≤ 16 output tokens. The health path never calls inference.
+- **Provider/model visibility.** `error_params` (`provider`, `model`, `default_model`) reaches any
+  `write`-capable token that calls `/ai-tag`. Accepted: it is not a secret and it is what makes the
+  error actionable; only `detail` is withheld from scoped tokens.
 - **Scoping.** No file path is involved. `disk` is checked against the token, and the audit key is
   the tenant scope root. `owner_only` and legal holds are not applicable because nothing is read or
   written.

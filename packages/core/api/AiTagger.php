@@ -484,7 +484,14 @@ class AiTagger
     /** @return array{verified: bool, warning?: ?string, retires_at?: ?string} */
     private function checkAnthropicModel(): array
     {
-        $r = $this->httpGet($this->anthropicBase() . '/models/' . rawurlencode($this->model), $this->anthropicHeaders());
+        try {
+            $r = $this->httpGet($this->anthropicBase() . '/models/' . rawurlencode($this->model), $this->anthropicHeaders());
+        } catch (AiException $e) {
+            if ($this->lookupMissingOnProxy($e)) {
+                return ['verified' => false];
+            }
+            throw $e;
+        }
 
         // `lifecycle` / `capabilities` may be missing (older API version): unknown is OK.
         $lc = $r['lifecycle'] ?? null;
@@ -504,10 +511,23 @@ class AiTagger
         return ['verified' => true];
     }
 
+    /** A custom base URL (a proxy) may not route the model lookup: unknown, not a failure. */
+    private function lookupMissingOnProxy(AiException $e): bool
+    {
+        return $this->baseUrl !== '' && in_array($e->getUpstreamStatus(), [404, 405], true);
+    }
+
     /** @return array{verified: bool} */
     private function checkGeminiModel(): array
     {
-        $r = $this->httpGet($this->geminiBase() . '/models/' . rawurlencode($this->model), $this->geminiHeaders(false));
+        try {
+            $r = $this->httpGet($this->geminiBase() . '/models/' . rawurlencode($this->model), $this->geminiHeaders(false));
+        } catch (AiException $e) {
+            if ($this->lookupMissingOnProxy($e)) {
+                return ['verified' => false];
+            }
+            throw $e;
+        }
 
         $methods = $r['supportedGenerationMethods'] ?? null;
         if (is_array($methods) && !in_array('generateContent', $methods, true)) {
@@ -524,9 +544,14 @@ class AiTagger
         try {
             $r = $this->httpGet($this->baseUrl . '/models', $this->openAiHeaders(false));
         } catch (AiException $e) {
-            // A gateway with no model list: nothing to object to, but nothing proven either.
             if (in_array($e->getUpstreamStatus(), [404, 405], true)) {
-                return ['verified' => false];
+                // Self-hosted / unknown gateways may have no model list: nothing to object
+                // to, but nothing proven either. A named provider always has /models, so
+                // there a 404 means the base URL is wrong.
+                if (in_array($this->provider, ['compatible', 'ollama'], true)) {
+                    return ['verified' => false];
+                }
+                throw $this->exception(AiError::PROVIDER_ERROR, ['reason' => 'base_url'], $e->getDetail(), $e->getUpstreamStatus());
             }
             throw $e;
         }
@@ -609,15 +634,20 @@ PROMPT;
             throw $this->exception(AiError::BAD_RESPONSE, [], 'the model reply is not valid JSON');
         }
 
-        return [
-            'tags'     => array_values(array_filter(
-                array_map('trim', $parsed['tags'] ?? []),
-                function (string $t): bool { return $t !== ''; }
-            )),
-            'title'    => substr(trim($parsed['title'] ?? ''), 0, 255),
-            'alt_text' => substr(trim($parsed['alt_text'] ?? ''), 0, 500),
-            'caption'  => substr(trim($parsed['caption'] ?? ''), 0, 1000),
-        ];
+        try {
+            return [
+                'tags'     => array_values(array_filter(
+                    array_map('trim', $parsed['tags'] ?? []),
+                    function (string $t): bool { return $t !== ''; }
+                )),
+                'title'    => substr(trim($parsed['title'] ?? ''), 0, 255),
+                'alt_text' => substr(trim($parsed['alt_text'] ?? ''), 0, 500),
+                'caption'  => substr(trim($parsed['caption'] ?? ''), 0, 1000),
+            ];
+        } catch (\TypeError $e) {
+            // Valid JSON of the wrong shape ("tags": "a, b", "title": 5).
+            throw $this->exception(AiError::BAD_RESPONSE, [], 'the model reply has fields of the wrong type');
+        }
     }
 
     private function resizeForApi(string $imageData): string

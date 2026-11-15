@@ -87,9 +87,22 @@ final class AiError
     public static function hint(string $code, array $params = []): string
     {
         $hint = self::HINTS[$code] ?? self::HINTS[self::PROVIDER_ERROR];
-        if ($code === self::MODEL_NOT_FOUND && (string) ($params['default_model'] ?? '') === '') {
-            // `compatible` has no default model to fall back to.
-            return 'Enter a current vision model.';
+        if ($code === self::MODEL_NOT_FOUND && ($params['reason'] ?? '') === 'api_version') {
+            return 'The model is not available on this API version: check the API version in FLUXFILES_AI_BASE_URL, or set FLUXFILES_AI_MODEL to a current vision model.';
+        }
+        if ($code === self::MODEL_NOT_FOUND) {
+            $default = (string) ($params['default_model'] ?? '');
+            if ($default === '') {
+                // `compatible` has no default model to fall back to.
+                return 'Enter a current vision model.';
+            }
+            if ((string) ($params['model'] ?? '') === $default) {
+                // The built-in default itself failed: clearing the setting would change nothing.
+                return 'The built-in default model is unavailable for this key; set FLUXFILES_AI_MODEL to a current vision model (or update FluxFiles).';
+            }
+        }
+        if ($code === self::PROVIDER_ERROR && ($params['reason'] ?? '') === 'base_url') {
+            return 'The base URL looks wrong for this API (path or API version); check FLUXFILES_AI_BASE_URL.';
         }
         return strtr($hint, [
             '{default_model}' => (string) ($params['default_model'] ?? ''),
@@ -136,7 +149,11 @@ final class AiError
         if (is_string($err)) {
             $err = ['message' => $err];
         }
-        $message = is_array($err) ? (string) ($err['message'] ?? '') : '';
+        $message = '';
+        if (is_array($err) && isset($err['message'])) {
+            // Some gateways send an array/object here.
+            $message = is_string($err['message']) ? $err['message'] : (string) json_encode($err['message']);
+        }
         $type = '';
         foreach (['type', 'code', 'status'] as $k) {
             if (is_array($err) && isset($err[$k]) && is_scalar($err[$k])) {
@@ -144,9 +161,24 @@ final class AiError
             }
         }
         $reasons = '';
-        foreach ((is_array($err) ? ($err['details'] ?? []) : []) as $d) {
-            if (is_array($d) && isset($d['reason']) && is_scalar($d['reason'])) {
+        $quotaIds = '';
+        $retryDelay = null;
+        $details = is_array($err) ? ($err['details'] ?? []) : [];
+        foreach (is_array($details) ? $details : [] as $d) {
+            if (!is_array($d)) {
+                continue;
+            }
+            if (isset($d['reason']) && is_scalar($d['reason'])) {
                 $reasons .= ' ' . $d['reason'];
+            }
+            // Gemini: QuotaFailure.violations[].quotaId and RetryInfo.retryDelay ("17s").
+            foreach (is_array($d['violations'] ?? null) ? $d['violations'] : [] as $v) {
+                if (is_array($v) && isset($v['quotaId']) && is_scalar($v['quotaId'])) {
+                    $quotaIds .= ' ' . strtolower((string) $v['quotaId']);
+                }
+            }
+            if (isset($d['retryDelay']) && is_string($d['retryDelay'])) {
+                $retryDelay = $d['retryDelay'];
             }
         }
         $blob = strtolower(trim($message . ' ' . $type . ' ' . $reasons));
@@ -160,6 +192,10 @@ final class AiError
         if ($status === 402) {
             return $result(self::QUOTA);
         }
+        // OpenRouter answers a moderation refusal of the INPUT with 403: not a key problem.
+        if ($status === 403 && preg_match('/moderation|flagged/', $blob) === 1) {
+            return $result(self::PROVIDER_ERROR);
+        }
         if ($status === 401 || $status === 403) {
             return $result(self::AUTH);
         }
@@ -168,11 +204,28 @@ final class AiError
             return $result(self::AUTH);
         }
         if ($status === 429) {
+            // Structured fields first: the same human text ("exceeded your current quota ...
+            // check your plan and billing") is sent for transient per-minute limits too.
+            $retry = (string) ($headers['retry-after'] ?? '');
+            $retryAfter = ctype_digit($retry) ? (int) $retry : null;
+            if ($retryAfter === null && $retryDelay !== null && preg_match('/^(\d+(?:\.\d+)?)s$/', $retryDelay, $m) === 1) {
+                $retryAfter = (int) ceil((float) $m[1]);
+            }
+            $rate = static fn (): array => $result(self::RATE_LIMITED, $retryAfter !== null ? ['retry_after' => $retryAfter] : []);
+
+            $ids = ' ' . trim($type) . ' ';
+            if (strpos($ids, 'insufficient_quota') !== false || strpos($quotaIds, 'perday') !== false) {
+                return $result(self::QUOTA);
+            }
+            if (strpos($ids, 'rate_limit_exceeded') !== false || strpos($ids, 'rate_limit_error') !== false
+                || strpos($quotaIds, 'perminute') !== false || $retryDelay !== null) {
+                return $rate();
+            }
+            // No structured signal: fall back to the text.
             if (preg_match('/insufficient_quota|quota|billing|credit/', $blob) === 1) {
                 return $result(self::QUOTA);
             }
-            $retry = (string) ($headers['retry-after'] ?? '');
-            return $result(self::RATE_LIMITED, ctype_digit($retry) ? ['retry_after' => (int) $retry] : []);
+            return $rate();
         }
         if ($status >= 500) {
             return $result(self::UNAVAILABLE);
@@ -183,7 +236,16 @@ final class AiError
         }
 
         $namesModel = preg_match('/model/', $blob) === 1;
-        $gone = preg_match('/not found|not_found|does not exist|not a valid model|decommissioned|retired|no longer available/', $blob) === 1;
+        $gone = preg_match('/not found|not_found|does not exist|not a valid model|invalid[_ ]model|decommissioned|retired|no longer available/', $blob) === 1;
+        // Gemini says "not found for API version vX" both for a missing model and for a base
+        // URL pinned to the wrong version: still model_not_found (the code stays stable), but
+        // the hint points at the API version as well.
+        if ($status === 404 && $isJson && strpos($blob, 'for api version') !== false) {
+            return $result(self::MODEL_NOT_FOUND, ['reason' => 'api_version']);
+        }
+        if ($status === 404 && preg_match('/no endpoints found that support (image|vision|multimodal)/', $blob) === 1) {
+            return $result(self::NO_VISION);
+        }
         if ($status === 404) {
             // A 404 that does not name a model is a wrong base URL, not a missing model.
             if ($isJson && $namesModel && $gone) {
@@ -211,8 +273,19 @@ final class AiError
      */
     public static function redact(string $s, string $apiKey = ''): string
     {
-        if (strlen($apiKey) >= 4) {   // a real key is never shorter; 1-char test keys would shred the text
-            $s = str_replace($apiKey, '***', $s);
+        if (function_exists('mb_scrub')) {
+            $s = mb_scrub($s);   // invalid UTF-8 would make the /u passes below return null
+        }
+        // a real key is never shorter than 4; 1-char test keys would shred the text.
+        // Also the forms a provider may echo it in: trimmed, URL-encoded, JSON-escaped.
+        $forms = [];
+        foreach ([$apiKey, trim($apiKey), rawurlencode($apiKey), urlencode($apiKey), substr((string) json_encode($apiKey, JSON_UNESCAPED_UNICODE), 1, -1)] as $f) {
+            if (strlen($f) >= 4) {
+                $forms[$f] = true;
+            }
+        }
+        foreach (array_keys($forms) as $f) {
+            $s = str_replace($f, '***', $s);
         }
         $s = (string) preg_replace([
             '/sk-[A-Za-z0-9_-]{6,}/',

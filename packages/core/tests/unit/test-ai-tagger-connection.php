@@ -211,7 +211,7 @@ test('testConnection accepts an empty reply (a thinking model can spend 16 token
 });
 
 test('testConnection never throws and carries code, hint, detail, params', function () use ($providers) {
-    $t = tagger($providers['claude'][0], new FakeTransport(['status' => 404, 'headers' => [], 'body' => '{"type":"error","error":{"type":"not_found_error","message":"model: claude-sonnet-4-20250514"}}']));
+    $t = new AiTagger('claude', 'sk-ant-SECRETKEY123456', 'claude-sonnet-4-20250514', null, new FakeTransport(['status' => 404, 'headers' => [], 'body' => '{"type":"error","error":{"type":"not_found_error","message":"model: claude-sonnet-4-20250514"}}']));
     $r = $t->testConnection();
     assertEqual(false, $r['ok']);
     assertEqual('ai_model_not_found', $r['code']);
@@ -319,6 +319,36 @@ test('openai shape: 404/405 on /models → ok but verified:false', function () {
     foreach ([404, 405] as $status) {
         $r = (new AiTagger('compatible', 'k', 'm', 'https://gw.example/v1', new FakeTransport(['status' => $status, 'headers' => [], 'body' => 'nope'])))->checkModel();
         assertTrue($r['ok'] === true && $r['verified'] === false, "{$status}: " . json_encode($r));
+    }
+});
+
+test('openai-shape: a 404/405 on /models is lenient only for compatible/ollama', function () {
+    foreach (['openai', 'groq', 'mistral', 'xai', 'openrouter'] as $p) {
+        $res = ['status' => 404, 'headers' => [], 'body' => '<html>Not Found</html>'];
+        $r = (new AiTagger($p, 'k', null, null, new FakeTransport($res)))->checkModel();
+        assertTrue($r['ok'] === false && $r['code'] === 'ai_provider_error', "{$p}: " . json_encode($r));
+        if ($p !== 'openrouter') {
+            assertEqual('base_url', $r['params']['reason'], "{$p} reason");
+            assertTrue(strpos($r['hint'], 'base URL') !== false, "{$p} hint");
+        }
+    }
+    $r = (new AiTagger('ollama', '', null, null, new FakeTransport(['status' => 404, 'headers' => [], 'body' => 'x'])))->checkModel();
+    assertTrue($r['ok'] === true && $r['verified'] === false, 'ollama stays lenient');
+});
+
+test('anthropic/gemini behind a custom base URL: a 404 on the lookup is unverified, not a failure', function () {
+    foreach (['claude', 'gemini'] as $p) {
+        $res = ['status' => 404, 'headers' => [], 'body' => 'no route'];
+        $r = (new AiTagger($p, 'k', null, 'https://proxy.example/v1', new FakeTransport($res)))->checkModel();
+        assertTrue($r['ok'] === true && $r['verified'] === false, "{$p}: " . json_encode($r));
+    }
+});
+
+test('malformed model JSON (wrong types) → ai_bad_response, not a TypeError', function () use ($providers) {
+    foreach (['{"tags":"a, b"}', '{"title":5}', '{"tags":[["x"]]}', '{"alt_text":["a"]}'] as $text) {
+        $t = tagger($providers['claude'][0], new FakeTransport(FakeTransport::json(200, ['content' => [['type' => 'text', 'text' => $text]]])));
+        try { $t->analyze(png(), 'image/png'); throw new \RuntimeException("should throw for {$text}"); }
+        catch (AiException $e) { assertEqual('ai_bad_response', $e->getErrorCode(), $text); assertEqual(502, $e->getHttpCode()); }
     }
 });
 

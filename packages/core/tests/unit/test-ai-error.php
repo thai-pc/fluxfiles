@@ -56,7 +56,15 @@ $cases = [
     // quota
     ['402',                    'openai', 402, json_encode(['error' => ['message' => 'Insufficient credits', 'code' => 402]]), [], 'ai_quota'],
     ['openai 429 insufficient_quota', 'openai', 429, $openaiErr('You exceeded your current quota, please check your plan and billing details.', 'insufficient_quota', 'insufficient_quota'), [], 'ai_quota'],
-    ['gemini 429 quota',       'gemini', 429, $geminiErr(429, 'You exceeded your current quota, please check your plan and billing details.', 'RESOURCE_EXHAUSTED'), [], 'ai_quota'],
+    ['gemini 429 per-day quota', 'gemini', 429, json_encode(['error' => ['code' => 429, 'status' => 'RESOURCE_EXHAUSTED', 'message' => 'You exceeded your current quota, please check your plan and billing details.', 'details' => [['@type' => 'type.googleapis.com/google.rpc.QuotaFailure', 'violations' => [['quotaMetric' => 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId' => 'GenerateRequestsPerDayPerProjectPerModel-FreeTier']]], ['@type' => 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay' => '43s']]]]), [], 'ai_quota'],
+    ['gemini 429 per-minute is a rate limit', 'gemini', 429, json_encode(['error' => ['code' => 429, 'status' => 'RESOURCE_EXHAUSTED', 'message' => 'You exceeded your current quota, please check your plan and billing details.', 'details' => [['@type' => 'type.googleapis.com/google.rpc.QuotaFailure', 'violations' => [['quotaMetric' => 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId' => 'GenerateRequestsPerMinutePerProjectPerModel-FreeTier']]], ['@type' => 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay' => '43s']]]]), [], 'ai_rate_limited'],
+    ['openai 429 rate limit linking billing', 'openai', 429, $openaiErr('Rate limit reached for gpt-4o in organization org-x on tokens per min (TPM): Limit 30000. Visit https://platform.openai.com/account/billing to add a payment method.', 'rate_limit_exceeded', 'tokens'), [], 'ai_rate_limited'],
+    ['anthropic 429 rate_limit_error mentions credit', 'anthropic', 429, $anthropicErr('rate_limit_error', 'rate limit; add credit to raise limits'), [], 'ai_rate_limited'],
+    ['mistral 400 invalid_model', 'openai', 400, json_encode(['message' => 'Invalid model: pixtral-99', 'type' => 'invalid_model', 'code' => '1500']), [], 'ai_model_not_found'],
+    ['openrouter 404 no endpoints support image', 'openai', 404, json_encode(['error' => ['message' => 'No endpoints found that support image input', 'code' => 404]]), [], 'ai_no_vision'],
+    ['openrouter 403 moderation is not an auth error', 'openai', 403, json_encode(['error' => ['message' => 'Your chosen model requires moderation and your input was flagged', 'code' => 403]]), [], 'ai_provider_error'],
+    ['gemini 404 wrong API version', 'gemini', 404, $geminiErr(404, 'models/gemini-flash-latest is not found for API version v1, or is not supported for generateContent.', 'NOT_FOUND'), [], 'ai_model_not_found'],
+    ['non-string error.message', 'openai', 400, json_encode(['error' => ['message' => ['a', 'b'], 'code' => 'x']]), [], 'ai_provider_error'],
     ['anthropic 400 credit',   'anthropic', 400, $anthropicErr('invalid_request_error', 'Your credit balance is too low to access the Anthropic API.'), [], 'ai_quota'],
     // rate limited
     ['openai 429 plain',       'openai', 429, $openaiErr('Rate limit reached for gpt-4o on requests per min (RPM): Limit 3, Used 3.', 'rate_limit_exceeded', 'requests'), ['retry-after' => '12'], 'ai_rate_limited'],
@@ -77,9 +85,26 @@ foreach ($cases as [$label, $api, $status, $body, $headers, $code]) {
     test("{$label} → {$code}", function () use ($api, $status, $body, $headers, $code) {
         $c = AiError::classify($api, $status, $body, $headers);
         assertEqual($code, $c['code']);
-        assertTrue(strlen($c['detail']) <= 201, 'detail is bounded');
+        assertTrue(mb_strlen($c['detail']) <= 201, 'detail is bounded');
     });
 }
+
+test('Gemini 429 takes retry_after from RetryInfo.retryDelay', function () {
+    $b = json_encode(['error' => ['code' => 429, 'status' => 'RESOURCE_EXHAUSTED', 'message' => 'x', 'details' => [['@type' => 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay' => '16.2s']]]]);
+    $c = AiError::classify('gemini', 429, $b);
+    assertEqual('ai_rate_limited', $c['code']);
+    assertEqual(['retry_after' => 17], $c['params']);
+});
+
+test('the wrong-API-version hint points at the base URL; a default-model failure gets a distinct hint', function () {
+    $c = AiError::classify('gemini', 404, json_encode(['error' => ['message' => 'models/x is not found for API version v1', 'status' => 'NOT_FOUND']]));
+    assertEqual(['reason' => 'api_version'], $c['params']);
+    assertTrue(strpos(AiError::hint('ai_model_not_found', $c['params'] + ['model' => 'x', 'default_model' => 'x']), 'API version') !== false);
+    $same = AiError::hint('ai_model_not_found', ['model' => 'gpt-4o', 'default_model' => 'gpt-4o']);
+    assertTrue(stripos($same, 'clear') === false && strpos($same, 'FLUXFILES_AI_MODEL') !== false, $same);
+    assertTrue(stripos(AiError::hint('ai_model_not_found', ['model' => 'old', 'default_model' => 'gpt-4o']), 'clear') !== false, 'a custom model still gets the clear-it hint');
+    assertTrue(strpos(AiError::hint('ai_provider_error', ['reason' => 'base_url']), 'base URL') !== false);
+});
 
 test('429 carries retry_after from the header', function () {
     $c = AiError::classify('openai', 429, '{}', ['retry-after' => '12']);
@@ -133,6 +158,17 @@ test('redact: a key that straddles the 200-char cut is removed before cutting', 
     $key = 'ZZZZYYYYXXXXWWWW';
     $out = AiError::redact(str_repeat('a', 195) . $key, $key);
     assertTrue(strpos($out, 'ZZZZ') === false, 'no key fragment');
+});
+
+test('redact: encoded forms of the key, and invalid UTF-8 keeps the diagnostic', function () {
+    $key = 'ab/cd+ef gh12';
+    foreach ([$key, rawurlencode($key), urlencode($key), substr(json_encode($key), 1, -1)] as $form) {
+        assertTrue(strpos(AiError::redact("echo: {$form} end", $key), 'gh12') === false || strpos(AiError::redact("echo: {$form} end", $key), $form) === false, $form);
+    }
+    assertTrue(strpos(AiError::redact('x ' . rawurlencode($key), $key), 'ab%2Fcd') === false, 'url-encoded form');
+    assertTrue(strpos(AiError::redact('x ' . substr(json_encode($key), 1, -1), $key), 'ab\\/cd') === false, 'json-escaped form');
+    $out = AiError::redact("HTTP 400: bad \xff\xfe input");
+    assertTrue(strpos($out, 'HTTP 400: bad') === 0, "kept: {$out}");
 });
 
 echo "\n{$yellow}► messages, hints, AiException{$reset}\n";
