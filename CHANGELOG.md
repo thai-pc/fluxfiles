@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.43] — 2026-11-15
+
+> Released: `laravel-v1.1.0` (core floor `^1.6.1`): AI connection test route, Doctor `ai` block, `fluxfiles:doctor --ai`.
+
 ### Added
 - Laravel: AI connection test. The proxy gains `POST {route_prefix}/ai/test` (same gate as `/ai-tag`, `ai_auto_tag` not required, 2/min `ai_test` bucket, audited as `ai_test`; provider `detail` only for unscoped, non-BYOB, non-`owner_only` tokens) and `disk/doctor` carries the additive `ai` block, both through core's shared `AiTestEndpoint`. `php artisan fluxfiles:doctor --ai [--cheap]` runs the check from the shell (non-zero exit on failure, key and base URL never printed). A `FluxFiles\HttpTransportInterface` bound in the container as `fluxfiles.ai_transport` replaces the AI HTTP transport. `/ai-tag` without a provider now answers the coded `ai_not_configured`. Needs core 1.6.1 (the adapter floor is now `^1.6.1`).
 
