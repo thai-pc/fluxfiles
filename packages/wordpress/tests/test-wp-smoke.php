@@ -3337,6 +3337,7 @@ test('fileManager(): the AI tagger is wired only for ai_auto_tag AND a configure
 });
 
 // ── AI connection test (docs/design/CONNECTION-TEST-DESIGN.md §8) ──
+require_once __DIR__ . '/../includes/FluxFilesSiteHealth.php';
 class AjaxDone extends RuntimeException { public function __construct(public bool $ok, public array $payload, public int $http = 200) { parent::__construct('ajax'); } }
 if (!function_exists('wp_send_json_success')) {
     function wp_send_json_success($d = null, $c = 200) { throw new AjaxDone(true, (array) $d, $c); }
@@ -3607,6 +3608,356 @@ test('Settings page: the AI card has the test button and enqueued JS carries the
     $loc = $GLOBALS['WP_LOCALIZED']['fluxfiles-settings'][1] ?? null;
     assertTrue($loc !== null, 'settings script data was localized');
     assertEqual('nonce-fluxfiles_test_ai', $loc['aiNonce'] ?? null);
+});
+
+// ── Cloud tab test on BucketDoctor + Site Health (docs/design/CONNECTION-TEST-DESIGN.md §8) ──
+if (!function_exists('sanitize_key')) { function sanitize_key($k) { return preg_replace('/[^a-z0-9_\-]/', '', strtolower((string) $k)); } }
+if (!function_exists('register_rest_route')) { function register_rest_route($ns, $route, $args = []) { $GLOBALS['WP_REST_ROUTES'][] = [$ns, $route, $args]; return true; } }
+if (!function_exists('esc_url')) { function esc_url($u) { return $u; } }
+if (!function_exists('esc_html_e')) { function esc_html_e($s, $d = null) { echo $s; } }
+class FfHealthDisks extends \FluxFiles\DiskManager
+{
+    public function __construct(public \Aws\S3\S3Client $client) { parent::__construct([]); }
+    public function s3Client(string $name): \Aws\S3\S3Client { return $this->client; }
+}
+/** An S3 client whose listObjectsV2 is scripted; $log collects the commands. */
+$ffHealthClient = function (array $responses, array &$log): \Aws\S3\S3Client {
+    $mock = new \Aws\MockHandler($responses);
+    return new \Aws\S3\S3Client([
+        'region' => 'us-east-1', 'version' => 'latest', 'credentials' => ['key' => 'k', 'secret' => 's'],
+        'handler' => function ($command, $request) use ($mock, &$log) { $log[] = [$command->getName(), $command->toArray()]; return $mock($command, $request); },
+    ]);
+};
+$ffHealthWith = function (array $opts, callable $fn) {
+    $keep = $GLOBALS['WP_OPTIONS']; $keepT = $GLOBALS['WP_TRANSIENTS'];
+    $GLOBALS['WP_OPTIONS'] = $opts + $keep;
+    $GLOBALS['WP_TRANSIENTS'] = [];
+    @unlink(FluxFilesPlugin::storagePath() . '/rate_limit.json');
+    try { return $fn(); } finally { $GLOBALS['WP_OPTIONS'] = $keep; $GLOBALS['WP_TRANSIENTS'] = $keepT; FluxFilesSiteHealth::$diskManagerFactory = null; }
+};
+
+test('Cloud test (ajaxTestDisk): runs BucketDoctor on a saved but UNTICKED disk, no token, checklist shape, nonce/cap/limit', function () use ($ffHealthWith, $ffAjax) {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+    $keepReq = $_REQUEST; $keepPost = $_POST; $keepCaps = $GLOBALS['WP_CAPS'];
+    $root = sys_get_temp_dir() . '/ff-health-' . uniqid();
+    try {
+        // Saved bucket, but `local` is the only ticked disk, and there is NO secret: minting a token would throw.
+        $ffHealthWith(['fluxfiles_s3_bucket' => 'b', 'fluxfiles_s3_key' => 'K', 'fluxfiles_s3_secret' => 'S', 'fluxfiles_disks' => ['local'], 'fluxfiles_secret' => '', '_test_user_id' => 9601], function () use ($admin, $ffAjax, $root) {
+            $built = [];
+            FluxFilesSiteHealth::$diskManagerFactory = function (array $cfg) use ($root, &$built) {
+                $built[] = $cfg;
+                return new \FluxFiles\DiskManager(['s3' => ['driver' => 'local', 'root' => $root]]);
+            };
+            $_REQUEST = ['_wpnonce' => 'wrong']; $_POST = ['disk' => 's3'];
+            assertEqual(403, $ffAjax(fn () => $admin->ajaxTestDisk())->http, 'bad nonce');
+            $_REQUEST['_wpnonce'] = 'nonce-fluxfiles_test_disk';
+            $GLOBALS['WP_CAPS']['manage_options'] = false;
+            assertEqual(403, $ffAjax(fn () => $admin->ajaxTestDisk())->http, 'non-admin');
+            $GLOBALS['WP_CAPS']['manage_options'] = true;
+            $_POST = ['disk' => 'bogus'];
+            assertEqual(400, $ffAjax(fn () => $admin->ajaxTestDisk())->http, 'unknown disk');
+            $_POST = ['disk' => 'r2'];
+            $d = $ffAjax(fn () => $admin->ajaxTestDisk());
+            assertTrue(!$d->ok && strpos($d->payload['message'], 'save first') !== false, 'unsaved disk: ' . json_encode($d->payload));
+
+            $_POST = ['disk' => 's3'];
+            $d = $ffAjax(fn () => $admin->ajaxTestDisk());
+            assertTrue($d->ok, json_encode($d->payload));
+            assertEqual('ok', $d->payload['summary']);
+            assertEqual(['s3'], array_keys($built[0]), 'the doctor ran on the saved config of that disk only');
+            assertEqual('b', $built[0]['s3']['bucket']);
+            $c = $d->payload['checks'][0];
+            assertEqual(['id', 'status', 'label', 'message', 'fix'], array_keys($c));
+            assertEqual('write', $c['id']);
+            assertEqual('Write', $c['label'], 'localized label');
+            assertEqual('ok', $c['status']);
+            assertEqual([], glob($root . '/_fluxfiles/.doctor/*') ?: [], 'the probe object is cleaned up');
+
+            // A failing doctor run is still a completed test with a fail summary and a fix hint.
+            $bad = $root . '-ro';
+            mkdir($bad); chmod($bad, 0555);
+            FluxFilesSiteHealth::$diskManagerFactory = fn (array $cfg) => new \FluxFiles\DiskManager(['s3' => ['driver' => 'local', 'root' => $bad]]);
+            $d = $ffAjax(fn () => $admin->ajaxTestDisk());
+            chmod($bad, 0755);
+            if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
+                assertTrue($d->ok && $d->payload['summary'] === 'fail', json_encode($d->payload));
+                assertTrue($d->payload['checks'][0]['fix'] !== '', 'fix hint present');
+            }
+
+            // A construction error (e.g. SFTP host refused) is reported, not thrown.
+            FluxFilesSiteHealth::$diskManagerFactory = function () { throw new \RuntimeException('host not allowed'); };
+            $d = $ffAjax(fn () => $admin->ajaxTestDisk());
+            assertTrue(!$d->ok && $d->payload['message'] === 'host not allowed', json_encode($d->payload));
+
+            // 5 per minute per user (this was run 4 times past the config checks; 2 more cross it).
+            FluxFilesSiteHealth::$diskManagerFactory = fn (array $cfg) => new \FluxFiles\DiskManager(['s3' => ['driver' => 'local', 'root' => $root]]);
+            $codes = [];
+            for ($i = 0; $i < 3; $i++) { $codes[] = $ffAjax(fn () => $admin->ajaxTestDisk())->http; }
+            assertEqual(429, end($codes), 'the 6th run in a minute is limited: ' . json_encode($codes));
+        });
+    } finally {
+        $_REQUEST = $keepReq; $_POST = $keepPost; $GLOBALS['WP_CAPS'] = $keepCaps;
+    }
+});
+
+test('Cloud test UI: per-check list rendered with textContent, probe write disclosed, no REST call or token in ajaxTestDisk', function () {
+    $js = (string) file_get_contents(__DIR__ . '/../assets/settings.js');
+    assertTrue(strpos($js, 'renderChecks') !== false && strpos($js, 'ff-check-fix') !== false, 'checklist renderer');
+    assertTrue(strpos($js, 'innerHTML') === false, 'textContent only');
+    $tpl = (string) file_get_contents(__DIR__ . '/../templates/settings.php');
+    assertTrue(strpos($tpl, '_fluxfiles/.doctor/') !== false && strpos($tpl, 'ff-test-checks') !== false, 'help text + list container');
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesAdmin.php');
+    $m = substr($src, (int) strpos($src, 'public function ajaxTestDisk'), 3200);
+    $m = substr($m, 0, (int) strpos($m, 'private static function siteOrigin'));
+    assertTrue(strpos($m, 'tokenForCurrentUser') === false && strpos($m, 'rest_do_request') === false, 'no token, no REST dispatch');
+    assertTrue(strpos($m, 'fluxfiles_disks') === false, 'the enabled-disks tick is not required');
+});
+
+test('Site Health: two async tests registered (storage always, AI only with a provider) with REST + direct callback', function () use ($ffHealthWith) {
+    $GLOBALS['WP_FILTERS']['site_status_tests'] = [];
+    $GLOBALS['WP_ADDED_ACTIONS']['rest_api_init'] = [];
+    FluxFilesSiteHealth::register();
+    assertTrue(in_array([FluxFilesSiteHealth::class, 'registerRoutes'], $GLOBALS['WP_ADDED_ACTIONS']['rest_api_init'], true), 'routes hooked');
+    foreach (['added_option', 'updated_option', 'deleted_option'] as $h) {
+        assertTrue(in_array([FluxFilesSiteHealth::class, 'onOptionChange'], $GLOBALS['WP_ADDED_ACTIONS'][$h] ?? [], true), $h);
+    }
+    $ffHealthWith(['fluxfiles_ai_provider' => ''], function () {
+        $t = apply_filters('site_status_tests', ['async' => []])['async'];
+        assertEqual(['fluxfiles_storage'], array_keys($t));
+        assertTrue($t['fluxfiles_storage']['has_rest'] === true && is_callable($t['fluxfiles_storage']['async_direct_test']), 'storage test shape');
+        assertEqual('http://wp.test/wp-json/fluxfiles/v1/health/storage', $t['fluxfiles_storage']['test']);
+    });
+    $ffHealthWith(['fluxfiles_ai_provider' => 'claude'], function () {
+        $t = apply_filters('site_status_tests', ['async' => []])['async'];
+        assertEqual(['fluxfiles_storage', 'fluxfiles_ai'], array_keys($t));
+        assertTrue($t['fluxfiles_ai']['has_rest'] === true && is_callable($t['fluxfiles_ai']['async_direct_test']), 'ai test shape');
+        assertEqual('http://wp.test/wp-json/fluxfiles/v1/health/ai', $t['fluxfiles_ai']['test']);
+    });
+    // REST routes gate on view_site_health_checks.
+    $GLOBALS['WP_REST_ROUTES'] = [];
+    FluxFilesSiteHealth::registerRoutes();
+    $routes = array_column($GLOBALS['WP_REST_ROUTES'], 2, 1);
+    assertEqual(['/health/storage', '/health/ai'], array_keys($routes));
+    $keep = $GLOBALS['WP_CAPS'];
+    try {
+        $GLOBALS['WP_CAPS'] = ['view_site_health_checks' => true];
+        assertTrue(call_user_func($routes['/health/ai']['permission_callback']) === true, 'view_site_health_checks allows');
+        $GLOBALS['WP_CAPS'] = ['manage_options' => true, 'read' => true];
+        assertTrue(call_user_func($routes['/health/ai']['permission_callback']) === false, 'manage_options alone is not enough');
+    } finally { $GLOBALS['WP_CAPS'] = $keep; }
+});
+
+test('Site Health storage: good / critical / recommended / local-only, read-only list of one item, cached and cleared on save', function () use ($ffHealthWith, $ffHealthClient) {
+    $ok = new \Aws\Result(['Contents' => []]);
+    // 1. S3 + R2 enabled, both answer: good; the call is a ListObjectsV2 with MaxKeys=1 and nothing else.
+    $ffHealthWith(['fluxfiles_disks' => ['local', 's3', 'r2'], 'fluxfiles_s3_bucket' => 'b', 'fluxfiles_r2_bucket' => 'c', 'fluxfiles_r2_account_id' => 'acc'], function () use ($ffHealthClient, $ok) {
+        $log = [];
+        $client = $ffHealthClient([$ok, $ok], $log);
+        $builds = 0;
+        FluxFilesSiteHealth::$diskManagerFactory = function () use ($client, &$builds) { $builds++; return new FfHealthDisks($client); };
+        $r = FluxFilesSiteHealth::testStorage();
+        assertEqual('good', $r['status']);
+        assertEqual(['ListObjectsV2', 'ListObjectsV2'], array_column($log, 0), 'only listings, never a write');
+        assertEqual([1, 1], array_map(fn ($c) => $c[1]['MaxKeys'], $log));
+        assertEqual([5, 5], array_map(fn ($c) => $c[1]['@http']['connect_timeout'] ?? null, $log), 'bounded connect timeout');
+        assertEqual([10, 10], array_map(fn ($c) => $c[1]['@http']['timeout'] ?? null, $log), 'bounded total timeout');
+        assertEqual([0, 0], array_map(fn ($c) => $c[1]['@retries'] ?? null, $log), 'no retries');
+        assertEqual('fluxfiles_storage', $r['test']);
+        assertEqual('green', $r['badge']['color']);
+        assertTrue(strpos($r['description'], 'S3 is reachable') !== false && strpos($r['description'], 'R2 is reachable') !== false, 'both disks listed');
+        assertEqual('', $r['actions'], 'nothing to fix');
+        // 2. Cached: a second call does not touch the storage.
+        FluxFilesSiteHealth::testStorage();
+        assertEqual(2, $builds, 'second call served from the transient');
+        assertTrue(isset($GLOBALS['WP_TRANSIENTS']['fluxfiles_health_storage']), 'cached');
+        // 3. Saving a disk setting clears it; an unrelated option does not.
+        FluxFilesSiteHealth::onOptionChange('blogname');
+        FluxFilesSiteHealth::onOptionChange('fluxfiles_ai_model');
+        assertTrue(isset($GLOBALS['WP_TRANSIENTS']['fluxfiles_health_storage']), 'unrelated options keep the cache');
+        foreach (['fluxfiles_disks', 'fluxfiles_s3_secret', 'fluxfiles_r2_endpoint', 'fluxfiles_sftp_host'] as $opt) {
+            $GLOBALS['WP_TRANSIENTS']['fluxfiles_health_storage'] = ['x'];
+            FluxFilesSiteHealth::onOptionChange($opt);
+            assertTrue(!isset($GLOBALS['WP_TRANSIENTS']['fluxfiles_health_storage']), $opt . ' clears it');
+        }
+    });
+    // 4. One disk fails: critical, with the error and a link to the Cloud tab.
+    $ffHealthWith(['fluxfiles_disks' => ['local', 's3'], 'fluxfiles_s3_bucket' => 'b'], function () use ($ffHealthClient) {
+        $log = [];
+        $fail = new \Aws\S3\Exception\S3Exception('x', new \Aws\Command('ListObjectsV2'), ['code' => 'InvalidAccessKeyId', 'message' => 'The AWS Access Key Id you provided does not exist']);
+        $client = $ffHealthClient([$fail], $log);
+        FluxFilesSiteHealth::$diskManagerFactory = fn () => new FfHealthDisks($client);
+        $r = FluxFilesSiteHealth::testStorage();
+        assertEqual('critical', $r['status']);
+        assertEqual('red', $r['badge']['color']);
+        assertTrue(strpos($r['description'], 'InvalidAccessKeyId') !== false, $r['description']);
+        assertTrue(strpos($r['actions'], 'options-general.php?page=fluxfiles#cloud') !== false, 'link to the Cloud tab');
+    });
+    // 5. Enabled but nothing saved: recommended, and no storage call at all.
+    $ffHealthWith(['fluxfiles_disks' => ['local', 'sftp'], 'fluxfiles_sftp_host' => ''], function () {
+        FluxFilesSiteHealth::$diskManagerFactory = function () { throw new \RuntimeException('must not connect'); };
+        $r = FluxFilesSiteHealth::testStorage();
+        assertEqual('recommended', $r['status']);
+        assertEqual('orange', $r['badge']['color']);
+    });
+    // 6. Local only: good, nothing to check.
+    $ffHealthWith(['fluxfiles_disks' => ['local']], function () {
+        FluxFilesSiteHealth::$diskManagerFactory = function () { throw new \RuntimeException('must not connect'); };
+        $r = FluxFilesSiteHealth::testStorage();
+        assertEqual('good', $r['status']);
+        assertTrue(strpos($r['description'], 'Only local storage') !== false, 'local only text');
+    });
+    // 7. An SFTP disk lists the root through the filesystem (no S3 client).
+    $ffHealthWith(['fluxfiles_disks' => ['local', 'sftp'], 'fluxfiles_sftp_host' => 'sftp.example.com'], function () {
+        $root = sys_get_temp_dir() . '/ff-health-sftp-' . uniqid();
+        $seen = null;
+        FluxFilesSiteHealth::$diskManagerFactory = function (array $cfg) use ($root, &$seen) { $seen = $cfg; return new \FluxFiles\DiskManager(['sftp' => ['driver' => 'local', 'root' => $root]]); };
+        // diskConfigs() hands the real sftp config; the factory stands in for the SFTP connection.
+        assertEqual('good', FluxFilesSiteHealth::testStorage()['status']);
+        assertEqual(5, $seen['sftp']['timeout'], 'SFTP connect timeout is bounded');
+    });
+});
+
+test('Site Health AI: model lookup only (never a vision call), status mapping, TTL by verdict, cleared on save, no key in output', function () use ($ffHealthWith) {
+    $key = 'sk-ant-SECRET-KEY-ABCDEF';
+    $opts = ['fluxfiles_ai_provider' => 'claude', 'fluxfiles_ai_api_key' => $key, 'fluxfiles_ai_model' => 'claude-x', 'fluxfiles_ai_base_url' => ''];
+    $remote = fn (int $code, string $body) => ['response' => ['code' => $code], 'headers' => [], 'body' => $body];
+    $run = function ($remoteRes) use ($ffHealthWith, $opts, $key) {
+        return $ffHealthWith($opts, function () use ($remoteRes, $key) {
+            $GLOBALS['WP_REMOTE'] = $remoteRes;
+            $GLOBALS['WP_REMOTE_CALL'] = null;
+            $r = FluxFilesSiteHealth::testAi();
+            [$url, $args] = $GLOBALS['WP_REMOTE_CALL'];
+            assertTrue(strpos($url, '/models/') !== false && $args['method'] === 'GET' && !isset($args['body']), 'a GET model lookup, no body: ' . $url);
+            assertTrue(strpos($url, '/messages') === false, 'never the vision endpoint');
+            assertTrue(strpos($url . json_encode($r), 'SECRET-KEY') === false, 'no key in the URL or the output');
+            return [$r, FluxFilesSiteHealth::probeAi()['ttl']];
+        });
+    };
+    // ok -> good, 12 h
+    [$r, $ttl] = $run($remote(200, '{"id":"claude-x","capabilities":{"image_input":{"supported":true}}}'));
+    assertEqual('good', $r['status'], $r['description']); assertEqual(43200, $ttl); assertEqual('fluxfiles_ai', $r['test']);
+    // deprecated -> recommended with the date
+    [$r, $ttl] = $run($remote(200, '{"id":"claude-x","lifecycle":{"status":"deprecated","retires_at":"2027-02-01"}}'));
+    assertEqual('recommended', $r['status']);
+    assertTrue(strpos($r['description'], 'deprecated') !== false && strpos($r['description'], '2027-02-01') !== false, $r['description']);
+    assertTrue(strpos($r['actions'], 'page=fluxfiles#ai') !== false, 'link to the AI tab');
+    // retired -> critical, 12 h
+    [$r, $ttl] = $run($remote(200, '{"id":"claude-x","lifecycle":{"status":"retired"}}'));
+    assertEqual('critical', $r['status']); assertEqual(43200, $ttl);
+    // bad key -> critical
+    [$r, $ttl] = $run($remote(401, '{"error":{"type":"authentication_error","message":"invalid x-api-key ' . $key . '"}}'));
+    assertEqual('critical', $r['status']);
+    assertTrue(strpos($r['description'], 'rejected the API key') !== false, $r['description']);
+    // rate limit / network -> recommended, 15 min
+    [$r, $ttl] = $run($remote(429, '{"error":{"type":"rate_limit_error","message":"slow down"}}'));
+    assertEqual('recommended', $r['status']); assertEqual(900, $ttl);
+    [$r, $ttl] = $run(new RuntimeException('cURL error 28: timed out'));
+    assertEqual('recommended', $r['status']); assertEqual(900, $ttl);
+    // no model lookup on a custom endpoint -> good with the "cannot confirm" note
+    $ffHealthWith(array_merge($opts, ['fluxfiles_ai_base_url' => 'https://93.184.216.34/v1']), function () {
+        $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 404], 'headers' => [], 'body' => 'nope'];
+        $r = FluxFilesSiteHealth::testAi();
+        assertEqual('good', $r['status'], $r['description']);
+        assertTrue(strpos($r['description'], 'Test connection') !== false, $r['description']);
+    });
+    // cached, and dropped when the AI settings change (and only those)
+    $ffHealthWith($opts, function () {
+        $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 200], 'headers' => [], 'body' => '{"id":"claude-x"}'];
+        FluxFilesSiteHealth::testAi();
+        $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 401], 'headers' => [], 'body' => '{}'];
+        assertEqual('good', FluxFilesSiteHealth::testAi()['status'], 'served from the transient');
+        FluxFilesSiteHealth::onOptionChange('fluxfiles_s3_bucket');
+        FluxFilesSiteHealth::onOptionChange('fluxfiles_ai_auto_tag');
+        assertTrue(isset($GLOBALS['WP_TRANSIENTS']['fluxfiles_health_ai']), 'unrelated options keep the cache');
+        foreach (['fluxfiles_ai_provider', 'fluxfiles_ai_api_key', 'fluxfiles_ai_model', 'fluxfiles_ai_base_url'] as $opt) {
+            $GLOBALS['WP_TRANSIENTS']['fluxfiles_health_ai'] = ['x'];
+            FluxFilesSiteHealth::onOptionChange($opt);
+            assertTrue(!isset($GLOBALS['WP_TRANSIENTS']['fluxfiles_health_ai']), $opt . ' clears it');
+        }
+        assertEqual('critical', FluxFilesSiteHealth::testAi()['status'], 're-checked after the save');
+    });
+});
+
+test('Site Health: a pending marker stops concurrent probes; manual tests drop the cached verdict and audit disk_doctor', function () use ($ffHealthWith, $ffAjax) {
+    $ffHealthWith(['fluxfiles_disks' => ['local', 's3'], 'fluxfiles_s3_bucket' => 'b'], function () {
+        $calls = 0;
+        FluxFilesSiteHealth::$diskManagerFactory = function () use (&$calls) { $calls++; throw new \RuntimeException('down'); };
+        $GLOBALS['WP_TRANSIENTS'][FluxFilesSiteHealth::STORAGE_PENDING] = 1;
+        $r = FluxFilesSiteHealth::testStorage();
+        assertEqual(0, $calls, 'no probe while another request is probing');
+        assertEqual('recommended', $r['status']);
+        assertTrue(!isset($GLOBALS['WP_TRANSIENTS'][FluxFilesSiteHealth::STORAGE_TRANSIENT]), 'nothing cached from the pending answer');
+        unset($GLOBALS['WP_TRANSIENTS'][FluxFilesSiteHealth::STORAGE_PENDING]);
+        assertEqual('critical', FluxFilesSiteHealth::testStorage()['status']);
+        assertEqual(1, $calls);
+        assertTrue(!isset($GLOBALS['WP_TRANSIENTS'][FluxFilesSiteHealth::STORAGE_PENDING]), 'pending marker released');
+    });
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+    $keepReq = $_REQUEST; $keepPost = $_POST;
+    $root = sys_get_temp_dir() . '/ff-health-aud-' . uniqid();
+    try {
+        $ffHealthWith(['fluxfiles_s3_bucket' => 'b', 'fluxfiles_disks' => ['local'], '_test_user_id' => 9611], function () use ($admin, $ffAjax, $root) {
+            FluxFilesSiteHealth::$diskManagerFactory = fn (array $cfg) => new \FluxFiles\DiskManager(['s3' => ['driver' => 'local', 'root' => $root]]);
+            $GLOBALS['WP_TRANSIENTS'][FluxFilesSiteHealth::STORAGE_TRANSIENT] = ['status' => 'critical', 'disks' => []];
+            $_REQUEST = ['_wpnonce' => 'nonce-fluxfiles_test_disk']; $_POST = ['disk' => 's3'];
+            assertTrue($ffAjax(fn () => $admin->ajaxTestDisk())->ok, 'test ran');
+            assertTrue(!isset($GLOBALS['WP_TRANSIENTS'][FluxFilesSiteHealth::STORAGE_TRANSIENT]), 'verdict dropped');
+            $api = new FluxFilesApi();
+            $prop = new ReflectionProperty($api, 'metaRepo');
+            $prop->setAccessible(true);
+            $entries = array_values(array_filter($prop->getValue($api)->readAudit('local', '9611'), fn ($e) => ($e['action'] ?? '') === 'disk_doctor'));
+            assertTrue(count($entries) >= 1, 'disk_doctor audited for the WP user id');
+            assertTrue(strpos(json_encode($entries[0]), 'disk=s3') !== false, json_encode($entries[0]));
+        });
+    } finally { $_REQUEST = $keepReq; $_POST = $keepPost; }
+    $ffHealthWith(['fluxfiles_ai_provider' => 'claude', 'fluxfiles_ai_api_key' => 'k', 'fluxfiles_ai_base_url' => '', '_test_user_id' => 9612], function () use ($admin, $ffAjax) {
+        $GLOBALS['WP_TRANSIENTS'][FluxFilesSiteHealth::AI_TRANSIENT] = ['status' => 'critical'];
+        $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 200], 'headers' => [], 'body' => '{"content":[{"type":"text","text":"ok"}]}'];
+        $_REQUEST = ['_wpnonce' => 'nonce-fluxfiles_test_ai'];
+        $ffAjax(fn () => $admin->ajaxTestAi());
+        assertTrue(!isset($GLOBALS['WP_TRANSIENTS'][FluxFilesSiteHealth::AI_TRANSIENT]), 'AI verdict dropped');
+    });
+    $_REQUEST = $keepReq;
+});
+
+test('S3 endpoint is SSRF-checked on save (allowlist honoured, stored value kept); R2 account id is 32 hex; Cloud test hides raw connection errors', function () use ($ffHealthWith) {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+    \FluxFiles\SsrfGuard::setAllowHosts('');
+    try {
+        $ffHealthWith(['fluxfiles_s3_endpoint' => 'https://old.example.com', 'fluxfiles_r2_account_id' => str_repeat('a', 32)], function () use ($admin) {
+            $GLOBALS['WP_SETTINGS_ERRORS'] = [];
+            assertEqual('https://old.example.com', $admin->sanitizeS3Endpoint('http://10.0.0.5:9000'), 'private IP refused, stored kept');
+            assertEqual('https://old.example.com', $admin->sanitizeS3Endpoint('http://127.0.0.1:6379'), 'loopback refused');
+            assertEqual('https://old.example.com', $admin->sanitizeS3Endpoint('http://localhost:9000'), 'localhost refused');
+            assertEqual(3, count($GLOBALS['WP_SETTINGS_ERRORS']), 'one notice per refusal');
+            assertEqual('fluxfiles_s3_endpoint', $GLOBALS['WP_SETTINGS_ERRORS'][0][0]);
+            assertEqual('', $admin->sanitizeS3Endpoint(''), 'blank clears (AWS)');
+            assertEqual('https://93.184.216.34:9000', $admin->sanitizeS3Endpoint('https://93.184.216.34:9000'), 'public address accepted');
+            \FluxFiles\SsrfGuard::setAllowHosts('minio.internal');
+            assertEqual('http://minio.internal:9000', $admin->sanitizeS3Endpoint('http://minio.internal:9000'), 'allow-listed host accepted');
+            \FluxFiles\SsrfGuard::setAllowHosts('');
+            // R2 account id
+            $GLOBALS['WP_SETTINGS_ERRORS'] = [];
+            $good = '0123456789abcdef0123456789ABCDEF';
+            assertEqual(strtolower($good), $admin->sanitizeR2AccountId($good));
+            foreach (['x@127.0.0.1:6379/#', 'abc', str_repeat('g', 32), str_repeat('a', 33)] as $bad) {
+                assertEqual(str_repeat('a', 32), $admin->sanitizeR2AccountId($bad), 'refused: ' . $bad);
+            }
+            assertEqual(4, count($GLOBALS['WP_SETTINGS_ERRORS']));
+            assertEqual('', $admin->sanitizeR2AccountId(''));
+        });
+    } finally { \FluxFiles\SsrfGuard::setAllowHosts(''); }
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesAdmin.php');
+    assertTrue(strpos($src, "'fluxfiles_s3_endpoint', ['type' => 'string', 'sanitize_callback' => [\$this, 'sanitizeS3Endpoint']") !== false, 'S3 endpoint sanitizer registered');
+    assertTrue(strpos($src, "'sanitizeR2AccountId'") !== false, 'R2 account id sanitizer registered');
+    // Raw cURL text never reaches the browser.
+    $m = new ReflectionMethod('FluxFilesAdmin', 'publicError'); $m->setAccessible(true);
+    $out = $m->invoke(null, 'cURL error 7: Failed to connect to 10.0.0.5 port 6379 after 3 ms: Connection refused');
+    assertTrue(strpos($out, '10.0.0.5') === false && strpos($out, 'Could not connect') !== false, $out);
+    assertEqual('Cannot write to the bucket.', $m->invoke(null, 'Cannot write to the bucket.'));
 });
 
 test('the media endpoint is core\'s MediaEndpoint with status_header() and X-Accel from the plugin\'s source', function () use ($ffPriv, $ffProp) {

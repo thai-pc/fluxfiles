@@ -48,6 +48,8 @@ class FluxFilesPlugin
 
         // Tools > Site Health > Info: the operator's "About" (versions, modules, tools).
         add_filter('debug_information', [self::class, 'siteHealthInfo']);
+        // ...and its tests: cloud storage + AI model (async, cached, read-only).
+        FluxFilesSiteHealth::register();
 
         // Admin
         if (is_admin()) {

@@ -67,6 +67,8 @@ $fluxfiles_render_section = static function (string $sid) use ($fluxfiles_all): 
             /* translators: %s: disk name, e.g. S3 */
             esc_html(sprintf(__('Test %s connection', 'fluxfiles'), strtoupper($test)))
         );
+        echo '<ul class="ff-test-checks" role="list"></ul>';
+        echo '<p class="description ff-test-help">' . esc_html__('Tests the saved settings, even before the disk is enabled. It writes and deletes one small probe object under _fluxfiles/.doctor/ in the bucket (or the SFTP root).', 'fluxfiles') . '</p>';
     }
     if ($sid === 'fluxfiles_ai') {
         printf(

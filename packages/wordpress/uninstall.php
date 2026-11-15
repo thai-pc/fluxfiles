@@ -253,6 +253,13 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
                 $wpdb->esc_like('_transient_fluxfiles_usage_') . '%',
                 $wpdb->esc_like('_transient_timeout_fluxfiles_usage_') . '%'
             ));
+            // Site Health verdict caches (fluxfiles_health_storage / _ai) and their pending markers.
+            $wpdb->query($wpdb->prepare( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+                'DELETE FROM %i WHERE option_name LIKE %s OR option_name LIKE %s',
+                $wpdb->options,
+                $wpdb->esc_like('_transient_fluxfiles_health_') . '%',
+                $wpdb->esc_like('_transient_timeout_fluxfiles_health_') . '%'
+            ));
             foreach (FluxFilesDbSchema::tableNames() as $table) {
                 // Without the opt-in only the rate-limit counters go; the tables that
                 // describe the stored files (metadata, trash, audit, holds) stay.
