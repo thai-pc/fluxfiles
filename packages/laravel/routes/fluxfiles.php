@@ -36,6 +36,7 @@ Route::post('crop', [FluxFilesController::class, 'crop']);
 Route::post('watermark', [FluxFilesController::class, 'watermark']);
 Route::post('watermark/remove', [FluxFilesController::class, 'watermarkRemove']);
 Route::post('ai-tag', [FluxFilesController::class, 'aiTag']);
+Route::post('ai/test', [FluxFilesController::class, 'aiTest']);
 Route::post('presign', [FluxFilesController::class, 'presign']);
 Route::get('meta', [FluxFilesController::class, 'meta']);
 

@@ -472,10 +472,7 @@ test('proxy route surface covers every core /api/fm route', function () {
         //   envelope). The embedded UI falls back to a plain upload when /tus
         //   404s, so proxy mode loses nothing it had before. A port would need the
         //   adapter's own staging dir + PATCH body streaming — not done in v1.
-        'tus',
-        // - ai/test (docs/design/CONNECTION-TEST-DESIGN.md): temporary, removed by the
-        //   Laravel PR once the floor is bumped to the core release that ships it.
-        'ai/test'];
+        'tus'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));
@@ -829,6 +826,7 @@ test('every successful write is audited + webhooked centrally, through AuditPoli
 require_once __DIR__ . '/laravel-http-stubs.php';
 require_once __DIR__ . '/../src/ClaimsResolver.php';
 require_once __DIR__ . '/../src/Http/Middleware/FluxFilesAuth.php';
+require_once __DIR__ . '/../src/AiTaggerFactory.php';
 require_once __DIR__ . '/../src/Http/Controllers/FluxFilesController.php';
 
 use FluxFiles\Laravel\Http\Controllers\FluxFilesController;
@@ -1907,6 +1905,158 @@ test('doctor: fluxfiles:doctor is registered and exits non-zero on a problem', f
     assertEqual(1, $ok, 'config drift also fails');
     assertTrue(!empty(array_filter($cmd2->out, fn ($l) => str_contains($l, 'config_missing_keys'))), 'drift reported');
 });
+
+// ── AI connection test (docs/design/CONNECTION-TEST-DESIGN.md §8) ─────────
+final class SmokeAiTransport implements \FluxFiles\HttpTransportInterface
+{
+    public static array $answer = [];
+    public static int $calls = 0;
+    public static array $urls = [];
+
+    public function request(string $method, string $url, array $headers = [], ?string $body = null, int $timeout = 30): array
+    {
+        self::$calls++;
+        self::$urls[] = $url;
+        return self::$answer;
+    }
+}
+$aiOk   = ['status' => 200, 'headers' => [], 'body' => json_encode(['content' => [['type' => 'text', 'text' => 'OK']]])];
+$aiAuth = ['status' => 401, 'headers' => [], 'body' => json_encode(['error' => ['message' => 'invalid x-api-key for org Acme Billing']])];
+$aiCfg  = ['fluxfiles.ai_provider' => 'claude', 'fluxfiles.ai_api_key' => 'sk-ant-SMOKESECRET12345', 'fluxfiles.ai_model' => 'claude-sonnet-4-5', 'fluxfiles.ai_base_url' => ''];
+$aiBind = function (array $answer): void {
+    SmokeAiTransport::$answer = $answer;
+    SmokeAiTransport::$calls = 0;
+    SmokeAiTransport::$urls = [];
+    $GLOBALS['LARAVEL_BINDINGS'][\FluxFiles\HttpTransportInterface::class] = new SmokeAiTransport();
+};
+$aiPost = function (array $over, array $input = ['disk' => 'local'], ?FluxFilesController $ctrl = null, string $user = 'ai-u1') use ($aiCfg) {
+    $ctrl ??= freshController();
+    return $ctrl->aiTest(new Request('POST', $input, bearer($over, $user), null, 'https://app.example.com', [], 'api/fm/ai/test'));
+};
+
+if (class_exists(\FluxFiles\AiTestEndpoint::class)) {
+    test('ai/test: proxied, 200 with ok result even when ai_auto_tag is off; no key in the response', function () use ($aiCfg, $aiOk, $aiBind, $aiPost) {
+        $aiBind($aiOk);
+        $r = withConfig($aiCfg, fn () => $aiPost(['perms' => ['read', 'write']]));
+        assertEqual(200, $r->getStatusCode());
+        $d = $r->getData()['data'];
+        assertEqual(true, $d['ok']);
+        assertEqual('claude', $d['provider']);
+        assertEqual(1, SmokeAiTransport::$calls, 'one provider call');
+        assertTrue(!str_contains((string) json_encode($r->getData()), 'SMOKESECRET'), 'key never in the response');
+        $routes = (string) file_get_contents(__DIR__ . '/../routes/fluxfiles.php');
+        assertTrue(str_contains($routes, "'ai/test', [FluxFilesController::class, 'aiTest']"), 'route registered');
+    });
+    test('ai/test: a failed test is a 200 diagnosis with the code + hint; detail only for an operator-grade token', function () use ($aiCfg, $aiAuth, $aiBind, $aiPost) {
+        $aiBind($aiAuth);
+        $op = withConfig($aiCfg, fn () => $aiPost(['perms' => ['read', 'write']], ['disk' => 'local'], null, 'ai-op'))->getData()['data'];
+        assertEqual(false, $op['ok']);
+        assertEqual('ai_auth', $op['code']);
+        assertTrue($op['hint'] !== '', 'hint present');
+        assertTrue(!empty($op['detail']) && str_contains($op['detail'], 'Acme Billing'), 'operator keeps the provider detail');
+        assertTrue(!str_contains((string) json_encode($op), 'SMOKESECRET'), 'no key');
+        foreach ([['prefix' => 'tenant-a/'], ['owner_only' => true]] as $i => $scope) {
+            $t = withConfig($aiCfg, fn () => $aiPost(['perms' => ['read', 'write']] + $scope, ['disk' => 'local'], null, 'ai-t' . $i))->getData()['data'];
+            assertEqual('ai_auth', $t['code']);
+            assertEqual(null, $t['detail'], 'tenant/owner_only gets no provider detail: ' . json_encode($scope));
+        }
+        $byobTok = (new FluxFilesManager())->tokenWithByob('ai-byob', ['mine' => ['driver' => 's3', 'bucket' => 'b', 'key' => 'k', 'secret' => 's', 'region' => 'us-east-1']], ['perms' => ['read', 'write'], 'disks' => ['local', 'mine']]);
+        $byob = withConfig($aiCfg, fn () => freshController()->aiTest(new Request('POST', ['disk' => 'local'], ['Authorization' => 'Bearer ' . $byobTok], null, 'https://app.example.com', [], 'api/fm/ai/test')))->getData()['data'];
+        assertEqual(null, $byob['detail'], 'BYOB token gets no provider detail');
+    });
+    test('ai/test: gate parity with /ai-tag (403 read-only, 403 disk, 400 not configured) and no provider call', function () use ($aiCfg, $aiOk, $aiBind, $aiPost) {
+        $aiBind($aiOk);
+        $ro = withConfig($aiCfg, fn () => $aiPost(['perms' => ['read']], ['disk' => 'local'], null, 'ai-ro'));
+        assertEqual(403, $ro->getStatusCode());
+        $nd = withConfig($aiCfg, fn () => $aiPost(['perms' => ['read', 'write']], ['disk' => 'other'], null, 'ai-nd'));
+        assertEqual(403, $nd->getStatusCode());
+        $nc = withConfig(['fluxfiles.ai_provider' => ''], fn () => $aiPost(['perms' => ['read', 'write']], ['disk' => 'local'], null, 'ai-nc'));
+        assertEqual(400, $nc->getStatusCode());
+        assertEqual('ai_not_configured', $nc->getData()['error_code'] ?? null);
+        assertEqual(0, SmokeAiTransport::$calls, 'a refused request never reaches the provider');
+        // /ai-tag itself reports the same coded error when unconfigured.
+        $tag = withConfig(['fluxfiles.ai_provider' => ''], fn () => freshController()->aiTag(new Request('POST', ['disk' => 'local', 'path' => 'a.png'], bearer(['perms' => ['read', 'write']], 'ai-tag'))));
+        assertEqual('ai_not_configured', $tag->getData()['error_code'] ?? null);
+    });
+    test('ai/test: the third call within a minute is 429 (ai_test bucket of 2), and a test is audited as ai_test', function () use ($aiCfg, $aiOk, $aiBind, $aiPost) {
+        $aiBind($aiOk);
+        $ctrl = freshController();
+        $codes = [];
+        withConfig($aiCfg, function () use (&$codes, $aiPost, $ctrl) {
+            for ($i = 0; $i < 3; $i++) {
+                $codes[] = $aiPost(['perms' => ['read', 'write']], ['disk' => 'local'], $ctrl, 'ai-rl')->getStatusCode();
+            }
+        });
+        assertEqual([200, 200, 429], $codes);
+        assertEqual(2, SmokeAiTransport::$calls, 'the limited call never reached the provider');
+        $all = '';
+        $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($GLOBALS['LARAVEL_CONFIG']['fluxfiles.disks']['local']['root'], \FilesystemIterator::SKIP_DOTS));
+        foreach ($it as $f) {
+            if (str_contains($f->getFilename(), 'audit')) {
+                $all .= (string) file_get_contents($f->getPathname());
+            }
+        }
+        assertTrue(str_contains($all, 'ai_test'), 'audit action ai_test recorded: ' . $all);
+        assertTrue(!str_contains($all, 'SMOKESECRET'), 'no key in the audit log');
+    });
+    test('doctor: the additive ai block needs write + a provider, makes no provider call', function () use ($aiCfg, $aiOk, $aiBind) {
+        $aiBind($aiOk);
+        $get = fn (array $perms) => withConfig(['fluxfiles.disks' => ['local' => ['driver' => 'local', 'root' => $GLOBALS['LARAVEL_CONFIG']['fluxfiles.disks']['local']['root'], 'url' => '/storage']]] + $aiCfg,
+            fn () => freshController()->diskDoctor(new Request('GET', ['disk' => 'local'], bearer(['perms' => $perms], 'ai-doc'))))->getData()['data'];
+        $d = $get(['read', 'write']);
+        assertEqual(['configured' => true, 'provider' => 'claude', 'model' => 'claude-sonnet-4-5'], $d['ai']);
+        assertEqual(0, SmokeAiTransport::$calls, 'no network call');
+        assertTrue(!str_contains((string) json_encode($d), 'SMOKESECRET'), 'no key');
+        $none = withConfig(['fluxfiles.ai_provider' => ''], fn () => freshController()->diskDoctor(new Request('GET', ['disk' => 'local'], bearer(['perms' => ['read', 'write']], 'ai-doc2'))))->getData()['data'];
+        assertTrue(!array_key_exists('ai', $none), 'no provider: no ai field');
+    });
+    test('fluxfiles:doctor --ai / --cheap: signature, ok line, failing transport exits non-zero, key and base URL never printed', function () use ($ffTmp, $aiCfg, $aiOk, $aiAuth, $aiBind) {
+        require_once __DIR__ . '/../src/Console/DoctorCommand.php';
+        $cmd = new \FluxFiles\Laravel\Console\DoctorCommand();
+        $sig = (new ReflectionProperty($cmd, 'signature'))->getValue($cmd);
+        assertTrue(str_contains($sig, '{--ai') && str_contains($sig, '{--cheap'), 'signature has --ai and --cheap');
+        $disks = ['fluxfiles.disks' => ['local' => ['driver' => 'local', 'root' => $ffTmp . '/site/storage/app/private']]];
+        $run = function (array $opts, array $cfg) use ($disks): array {
+            \Illuminate\Console\Command::$opts = ['no-probe' => true] + $opts;
+            $c = new \FluxFiles\Laravel\Console\DoctorCommand();
+            $code = withConfig($cfg + $disks, fn () => $c->handle());
+            return [$code, implode("\n", $c->out)];
+        };
+        // Without --ai nothing is called.
+        $aiBind($aiOk);
+        [, $out] = $run([], $aiCfg);
+        assertEqual(0, SmokeAiTransport::$calls);
+        assertTrue(!str_contains($out, ' ai - '), 'no ai line without --ai');
+        // --ai, healthy.
+        [, $out] = $run(['ai' => true], $aiCfg);
+        assertEqual(1, SmokeAiTransport::$calls, 'one vision call');
+        assertTrue(str_contains($out, 'OK    ai - claude/claude-sonnet-4-5'), $out);
+        // --ai --cheap: the model lookup, not a vision POST.
+        $aiBind(['status' => 200, 'headers' => [], 'body' => json_encode(['id' => 'claude-sonnet-4-5'])]);
+        [, $out] = $run(['ai' => true, 'cheap' => true], $aiCfg);
+        assertTrue(str_contains($out, 'ai - ') && !str_contains($out, 'FAIL  ai'), $out);
+        // Failing transport + a gateway base URL echoed in the provider text.
+        $aiBind(['status' => 502, 'headers' => [], 'body' => 'bad gateway from https://llm.internal.example:8443/v1/messages']);
+        [$code, $out] = $run(['ai' => true], ['fluxfiles.ai_base_url' => 'https://llm.internal.example:8443'] + $aiCfg);
+        assertEqual(1, $code, 'a failed AI test fails the command');
+        assertTrue(str_contains($out, 'FAIL  ai - ') && str_contains($out, 'fix: '), $out);
+        assertTrue(!str_contains($out, 'SMOKESECRET') && !str_contains($out, 'llm.internal.example'), 'no key/base URL/host printed: ' . $out);
+        // Not configured.
+        [$code, $out] = $run(['ai' => true], ['fluxfiles.ai_provider' => ''] + $aiCfg);
+        assertEqual(1, $code);
+        assertTrue(str_contains($out, 'ai_not_configured'), $out);
+    });
+    test('AiTaggerFactory: a container-bound transport is used, none bound uses the default', function () use ($aiCfg, $aiOk, $aiBind) {
+        $aiBind($aiOk);
+        $t = withConfig($aiCfg, fn () => \FluxFiles\Laravel\AiTaggerFactory::make());
+        assertTrue($t instanceof \FluxFiles\AiTagger, 'tagger built');
+        $t->testConnection();
+        assertEqual(1, SmokeAiTransport::$calls, 'bound transport carried the call');
+        unset($GLOBALS['LARAVEL_BINDINGS'][\FluxFiles\HttpTransportInterface::class]);
+        assertTrue(withConfig($aiCfg, fn () => \FluxFiles\Laravel\AiTaggerFactory::make()) instanceof \FluxFiles\AiTagger, 'default transport');
+        assertEqual(null, withConfig(['fluxfiles.ai_provider' => ''], fn () => \FluxFiles\Laravel\AiTaggerFactory::make()));
+    });
+}
 
 // ── `artisan about` section ──────────────────────────────────────────────
 require_once __DIR__ . '/../src/About.php';

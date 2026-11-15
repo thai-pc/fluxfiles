@@ -234,6 +234,24 @@ namespace {
         /** Container stub: the manager is a per-test singleton in $GLOBALS. */
         function app(?string $abstract = null)
         {
+            // $GLOBALS['LARAVEL_BINDINGS'][abstract] = object: a container binding (bound()/make()).
+            if ($abstract === null) {
+                return new class {
+                    public function bound(string $a): bool
+                    {
+                        return isset($GLOBALS['LARAVEL_BINDINGS'][$a]);
+                    }
+
+                    /** @return mixed */
+                    public function make(string $a)
+                    {
+                        return $GLOBALS['LARAVEL_BINDINGS'][$a];
+                    }
+                };
+            }
+            if (isset($GLOBALS['LARAVEL_BINDINGS'][$abstract])) {
+                return $GLOBALS['LARAVEL_BINDINGS'][$abstract];
+            }
             if ($abstract === \FluxFiles\Laravel\FluxFilesManager::class) {
                 return $GLOBALS['LARAVEL_MANAGER'] ??= new \FluxFiles\Laravel\FluxFilesManager();
             }

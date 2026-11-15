@@ -106,16 +106,7 @@ class FluxFilesController
     /** The configured AI tagger, or null when no provider is set. */
     private function aiTagger(): ?\FluxFiles\AiTagger
     {
-        $aiProvider = config('fluxfiles.ai_provider', env('FLUXFILES_AI_PROVIDER', ''));
-        if (empty($aiProvider)) {
-            return null;
-        }
-        return new \FluxFiles\AiTagger(
-            $aiProvider,
-            config('fluxfiles.ai_api_key', env('FLUXFILES_AI_API_KEY', '')),
-            config('fluxfiles.ai_model', env('FLUXFILES_AI_MODEL')) ?: null,
-            config('fluxfiles.ai_base_url', env('FLUXFILES_AI_BASE_URL')) ?: null
-        );
+        return \FluxFiles\Laravel\AiTaggerFactory::make();
     }
 
     /**
@@ -748,7 +739,7 @@ class FluxFilesController
             // Configure AI tagger if available
             $aiTagger = $this->aiTagger();
             if ($aiTagger === null) {
-                throw new ApiException('AI tagging is not configured', 400);
+                throw new ApiException('AI tagging is not configured', 400, 'ai_not_configured');
             }
             $fm->setAiTagger($aiTagger);
 
@@ -762,6 +753,25 @@ class FluxFilesController
             $result = $fm->aiTag($disk, $path);
 
             return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * AI connection test (core's POST /ai/test): one tiny paid vision call against the
+     * configured provider. Same eligibility as aiTag() (disk + write + a provider);
+     * `ai_auto_tag` plays no part. 2/min per user on top of the write bucket. The write
+     * is audited as `ai_test` by ok() like every other POST.
+     */
+    public function aiTest(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $this->rateLimitBucket($claims, 'ai_test', 2);
+
+            return $this->ok(\FluxFiles\AiTestEndpoint::run($claims, $this->aiTagger(), $request->all()));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
@@ -1518,6 +1528,11 @@ class FluxFilesController
             $report['summary'] = \FluxFiles\Laravel\Doctor::summarize($report['checks']);
             // It writes and deletes a probe object — logged like any other write.
             $this->logAuditQuiet($claims, 'disk_doctor', $disk, '');
+            // Additive, no network call: lets the UI offer a manual AI "Test connection".
+            $ai = \FluxFiles\AiTestEndpoint::doctorBlock($claims, $this->aiTagger());
+            if ($ai !== null) {
+                $report['ai'] = $ai;
+            }
 
             return $this->ok($report);
         } catch (ApiException $e) {

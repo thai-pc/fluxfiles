@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "4995b256d197fddd805f86de0739467e",
+    "content-hash": "169d817002accb76514f0f7e697d73db",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -452,16 +452,16 @@
         },
         {
             "name": "fluxfiles/fluxfiles",
-            "version": "v1.1.4",
+            "version": "v1.6.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thai-pc/fluxfiles-core.git",
-                "reference": "172ef2459a323ba8b7faadd9d059824ce4425da8"
+                "reference": "9f26c8865d20380ea620eb8927d2475762c0789d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/172ef2459a323ba8b7faadd9d059824ce4425da8",
-                "reference": "172ef2459a323ba8b7faadd9d059824ce4425da8",
+                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/9f26c8865d20380ea620eb8927d2475762c0789d",
+                "reference": "9f26c8865d20380ea620eb8927d2475762c0789d",
                 "shasum": ""
             },
             "require": {
@@ -537,7 +537,7 @@
                 "issues": "https://github.com/thai-pc/fluxfiles/issues",
                 "source": "https://github.com/thai-pc/fluxfiles"
             },
-            "time": "2026-11-07T14:29:54+00:00"
+            "time": "2026-11-15T05:14:24+00:00"
         },
         {
             "name": "fruitcake/php-cors",

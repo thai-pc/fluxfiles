@@ -491,6 +491,32 @@ return [
 ];
 ```
 
+#### Testing the AI connection
+
+`POST {route_prefix}/ai/test` (body `{"disk": "local"}`) sends one tiny real vision call
+to the configured provider and answers `200` with `{ok, provider, model, latency_ms, code,
+hint, ...}` whether it passed or failed (a failed test is a successful diagnosis; `code` is
+e.g. `ai_auth`, `ai_model_not_found`, `ai_quota`). It needs the same token as `/ai-tag`
+(the disk, `write`, a configured provider); `ai_auto_tag` is not required. It is a paid
+call, so it has its own limit of 2 per minute per user, and it is audited as `ai_test`. The
+provider's own error text (`detail`) is returned only to an unscoped, non-BYOB,
+non-`owner_only` token, never to a tenant. The key is never in any response.
+`GET {route_prefix}/disk/doctor` gains an additive `ai` block (`provider`, `model`) for
+tokens that can write, without any network call.
+
+From the shell, with the same `config/fluxfiles.php` settings:
+
+```bash
+php artisan fluxfiles:doctor --ai            # one tiny vision call (paid)
+php artisan fluxfiles:doctor --ai --cheap    # only look the model up at the provider (free)
+```
+
+It prints `OK    ai - claude/claude-sonnet-4-5 (812 ms)` or `FAIL  ai - <code> ...` with a
+`fix:` line, and a failure makes the command exit non-zero. It never prints the key; the
+base URL and its host are replaced by `<base-url>` / `<host>`. To route the call through
+your own HTTP client (or fake it in tests), bind a `FluxFiles\HttpTransportInterface`
+in the container. The base URL is operator config, so there is no SSRF guard here, as in core.
+
 (Abridged — the published file also carries the rate limits — read/write, `/img`,
 `/stream`, URL import (`FLUXFILES_IMPORT_RATE_LIMIT`, default 10/min; a token's
 `import_rate_limit` wins) and `/usage` + `/duplicates` (2/min: this proxy recomputes
@@ -635,7 +661,7 @@ rely on it.
 
 **Verify it.** `php artisan fluxfiles:doctor` flags every local disk root that sits
 inside the web root and probes `/_fluxfiles/index.json` over HTTP (`--no-probe` to
-skip the probe; non-zero exit on a problem). The same static checks appear as
+skip the probe; non-zero exit on a problem; `--ai` adds a live AI connection test, see "Testing the AI connection"). The same static checks appear as
 warnings in `GET {route_prefix}/disk/doctor`. It also lists keys missing from a
 stale published `config/fluxfiles.php`.
 
