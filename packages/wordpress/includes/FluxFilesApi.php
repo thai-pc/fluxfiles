@@ -1048,6 +1048,22 @@ class FluxFilesApi
         }
     }
 
+    /**
+     * Best-effort audit line for an administrator action that has no token (the Settings
+     * screen's Cloud test). Actor = the WordPress user id, which is what a token's `sub` would
+     * be. Written under the `local` disk with the tested disk in the detail: an S3/SFTP disk
+     * keeps its audit log inside itself, and the disk under test may be exactly the one that
+     * is unreachable. Never throws.
+     */
+    public static function auditAdminQuiet(string $userId, string $action, string $detail): void
+    {
+        try {
+            $api = new self();
+            (new AuditLogStorage($api->metaRepo, ['local']))->log($userId, $action, 'local', '', null, null, $detail);
+        } catch (\Throwable $e) {
+        }
+    }
+
     /** logAudit() for paths where a log failure must never fail the request itself. */
     private function logAuditQuiet(\FluxFiles\Claims $claims, string $action, string $disk, string $key, ?string $detail = null): void
     {

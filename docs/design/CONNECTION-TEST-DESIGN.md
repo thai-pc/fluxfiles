@@ -515,6 +515,11 @@ transport. The `adapter-core-floor` guard enforces the `^1.6.0` floor.
    diagnostics from webhooks globally in a separate change if that is unwanted.
 6. **Site Health storage check is list-only** (no write/delete probe). Permission drift on
    PutObject is caught only by the manual Cloud test or `fluxfiles doctor`.
+7. **Core follow-up: `BucketDoctor` has no timeouts.** Its S3 calls inherit the SDK defaults
+   (no connect/total timeout, 3 retries), so the Cloud test against a dead endpoint can run for
+   minutes. Give it `@http` defaults and `@retries`, and skip the remaining S3 checks after a
+   connection-class reachability failure. The WordPress Site Health probe already bounds its own
+   call (5 s connect, 10 s total, no retries; SFTP connect timeout 5 s).
 
 Sources:
 

@@ -372,6 +372,7 @@ test('DB: without the opt-in only rate_limits is dropped; with it every table', 
         assertTrue(strpos($sql, 'wp_fluxfiles_' . $tbl . '`') === false, "keeps {$tbl}");
     }
     assertTrue(strpos(str_replace('\\', '', $sql), '_transient_fluxfiles_usage_') !== false, 'usage transients removed');
+    assertTrue(strpos(str_replace('\\', '', $sql), '_transient_fluxfiles_health_') !== false && strpos(str_replace('\\', '', $sql), '_transient_timeout_fluxfiles_health_') !== false, 'Site Health transients removed');
     $u = scenario($cfg + ['options' => $optIn], $runUninstall);
     $sql = implode("\n", array_column($u['queries'], 'sql'));
     foreach (['file_metadata', 'directories', 'trash', 'audit_log', 'audit_chain_head', 'legal_holds', 'rate_limits'] as $tbl) {

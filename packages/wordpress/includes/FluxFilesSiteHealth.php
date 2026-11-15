@@ -22,6 +22,9 @@ class FluxFilesSiteHealth
     public const NS = 'fluxfiles/v1';
     public const STORAGE_TRANSIENT = 'fluxfiles_health_storage';
     public const AI_TRANSIENT = 'fluxfiles_health_ai';
+    /** Set while a storage probe runs, so concurrent Site Health visits do not stack probes. */
+    public const STORAGE_PENDING = 'fluxfiles_health_storage_pending';
+    public const PENDING_TTL = 2 * MINUTE_IN_SECONDS;
     public const STORAGE_TTL = HOUR_IN_SECONDS;
     public const AI_TTL = 12 * HOUR_IN_SECONDS;
     /** A failure that may pass on its own (network, rate limit, ...) is re-checked sooner. */
@@ -94,6 +97,12 @@ class FluxFilesSiteHealth
         return current_user_can('view_site_health_checks');
     }
 
+    /** Forget a cached verdict ('storage' or 'ai'), e.g. after the admin ran the manual test. */
+    public static function clearCache(string $which): void
+    {
+        delete_transient($which === 'ai' ? self::AI_TRANSIENT : self::STORAGE_TRANSIENT);
+    }
+
     /** Drop the cached verdict when the settings it was computed from change. */
     public static function onOptionChange($option): void
     {
@@ -116,7 +125,17 @@ class FluxFilesSiteHealth
     {
         $r = get_transient(self::STORAGE_TRANSIENT);
         if (!is_array($r) || !isset($r['status'], $r['disks'])) {
-            $r = self::probeStorage();
+            if (get_transient(self::STORAGE_PENDING)) {
+                // Another request is already probing: answer without another connection attempt.
+                return self::result('fluxfiles_storage', __('Cloud storage check is running', 'fluxfiles'), 'recommended',
+                    '<p>' . esc_html__('A check of the cloud storage is already in progress. Reload this page in a minute.', 'fluxfiles') . '</p>', '');
+            }
+            set_transient(self::STORAGE_PENDING, 1, self::PENDING_TTL);
+            try {
+                $r = self::probeStorage();
+            } finally {
+                delete_transient(self::STORAGE_PENDING);
+            }
             set_transient(self::STORAGE_TRANSIENT, $r, self::STORAGE_TTL);
         }
         return self::storageResult($r);
@@ -152,15 +171,36 @@ class FluxFilesSiteHealth
         return ['status' => $status, 'disks' => $disks];
     }
 
-    /** List one item: S3 `MaxKeys=1`, SFTP connects and lists the root. Never writes. */
+    /**
+     * The cheapest read that proves the credentials work, bounded so a dead endpoint cannot
+     * hang Site Health. S3: `ListObjectsV2` with `MaxKeys=1`, 5 s to connect, 10 s in total,
+     * no retries. SFTP: connect + authenticate + stat the root (`directoryExists`, no
+     * directory listing); the connect timeout is 5 s, and the adapter's own retry (3 attempts)
+     * is core's. Never writes.
+     */
     private static function listOne(string $id, array $config): void
     {
+        if (($config['driver'] ?? '') === 'sftp') {
+            $config['timeout'] = 5;
+        }
         $dm = self::diskManagerFor($id, $config);
         if (($config['driver'] ?? '') === 's3') {
-            $dm->s3Client($id)->listObjectsV2(['Bucket' => (string) ($config['bucket'] ?? ''), 'MaxKeys' => 1]);
+            $dm->s3Client($id)->listObjectsV2([
+                'Bucket'   => (string) ($config['bucket'] ?? ''),
+                'MaxKeys'  => 1,
+                '@http'    => ['connect_timeout' => 5, 'timeout' => 10],
+                '@retries' => 0,
+            ]);
             return;
         }
-        foreach ($dm->disk($id)->listContents('', false) as $item) {
+        $fs = $dm->disk($id);
+        if (method_exists($fs, 'directoryExists')) {
+            if (!$fs->directoryExists('')) {
+                throw new \RuntimeException('The SFTP root folder does not exist or is not readable');
+            }
+            return;
+        }
+        foreach ($fs->listContents('', false) as $item) {
             break;
         }
     }

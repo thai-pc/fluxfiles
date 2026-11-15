@@ -108,8 +108,8 @@
         var b = e.target.closest('.ff-test-disk');
         if (!b) { return; }
         var out = b.parentNode.querySelector('.ff-test-result');
-        var list = b.closest('.ff-card').querySelector('.ff-test-checks');
         var card = b.closest('.ff-card');
+        var list = card ? card.querySelector('.ff-test-checks') : null;
         var unsaved = false;
         if (card) {
             Array.prototype.forEach.call(card.querySelectorAll('input:not([type=hidden]),select'), function (el) {

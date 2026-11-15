@@ -244,10 +244,6 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
             }
         }
 
-        // Site Health verdict caches.
-        delete_transient('fluxfiles_health_storage');
-        delete_transient('fluxfiles_health_ai');
-
         // Usage cache transients (fluxfiles_usage_<md5>) and their timeouts.
         if (isset($wpdb) && is_object($wpdb)) {
             // One-off cleanup of this plugin's own transients at uninstall; there is nothing to cache.
@@ -256,6 +252,13 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
                 $wpdb->options,
                 $wpdb->esc_like('_transient_fluxfiles_usage_') . '%',
                 $wpdb->esc_like('_transient_timeout_fluxfiles_usage_') . '%'
+            ));
+            // Site Health verdict caches (fluxfiles_health_storage / _ai) and their pending markers.
+            $wpdb->query($wpdb->prepare( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+                'DELETE FROM %i WHERE option_name LIKE %s OR option_name LIKE %s',
+                $wpdb->options,
+                $wpdb->esc_like('_transient_fluxfiles_health_') . '%',
+                $wpdb->esc_like('_transient_timeout_fluxfiles_health_') . '%'
             ));
             foreach (FluxFilesDbSchema::tableNames() as $table) {
                 // Without the opt-in only the rate-limit counters go; the tables that
