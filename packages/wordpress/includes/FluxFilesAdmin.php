@@ -83,6 +83,7 @@ class FluxFilesAdmin
             'aiNonce'   => wp_create_nonce('fluxfiles_test_ai'),
             'i18n'      => [
                 'testing'   => __('Testing…', 'fluxfiles'),
+                'fix'       => __('Fix:', 'fluxfiles'),
                 'saveFirst' => __('Save your changes first; the test uses the saved settings.', 'fluxfiles'),
                 'copied'    => __('Copied', 'fluxfiles'),
                 'unsaved'   => __('You have unsaved changes', 'fluxfiles'),
@@ -92,8 +93,11 @@ class FluxFilesAdmin
     }
 
     /**
-     * AJAX: check that a cloud disk works with the SAVED settings by listing its root the
-     * same way the file manager does. Admin only; reports the storage error verbatim.
+     * AJAX: run the Bucket Doctor on a cloud disk built straight from the SAVED options
+     * ("Test connection" on the Cloud tab). Admin only and nonce-checked. No token is minted
+     * and no REST request is made, so nothing can be replayed or broadened, and it works
+     * before the disk is ticked under "Enabled disks". It writes and deletes one small probe
+     * object under `_fluxfiles/.doctor/`. 5 runs per minute per user.
      */
     public function ajaxTestDisk(): void
     {
@@ -106,34 +110,96 @@ class FluxFilesAdmin
         if (!in_array($disk, ['s3', 'r2', 'sftp'], true)) {
             wp_send_json_error(['message' => __('Unknown disk.', 'fluxfiles')], 400);
         }
-        if (!self::diskIsConfigured($disk)) {
+        $configs = FluxFilesPlugin::diskConfigs();
+        if (!self::diskIsConfigured($disk) || !isset($configs[$disk])) {
             wp_send_json_error(['message' => $disk === 'sftp'
                 ? __('Fill in the host and save first.', 'fluxfiles')
                 : __('Fill in the bucket and save first.', 'fluxfiles')]);
         }
-        if (!in_array($disk, (array) get_option('fluxfiles_disks', ['local']), true)) {
-            /* translators: %s: disk name, e.g. S3 */
-            wp_send_json_error(['message' => sprintf(__('Tick %s under Access › Enabled disks and save, then test again.', 'fluxfiles'), strtoupper($disk))]);
+        try {
+            FluxFilesApi::userBucketLimit((string) get_current_user_id(), 'disk_test', 5);
+        } catch (\FluxFiles\ApiException $e) {
+            wp_send_json_error(['message' => __('Too many tests. Wait a minute and try again.', 'fluxfiles')], 429);
         }
         $start = microtime(true);
         try {
-            $req = new \WP_REST_Request('GET', '/fluxfiles/v1/api/fm/list');
-            $req->set_header('authorization', 'Bearer ' . FluxFilesPlugin::tokenForCurrentUser());
-            $req->set_param('disk', $disk);
-            $req->set_param('path', '');
-            $req->set_param('limit', 1);
-            $res = rest_do_request($req);
+            $dm = FluxFilesSiteHealth::diskManagerFor($disk, $configs[$disk]);
+            $report = (new \FluxFiles\BucketDoctor($dm, new \FluxFilesHttpTransport(), new \FluxFilesUrlFetcher()))
+                ->diagnose($disk, self::siteOrigin());
         } catch (\Throwable $e) {
-            wp_send_json_error(['message' => $e->getMessage()]);
+            wp_send_json_error(['message' => self::publicError($e->getMessage())]);
         }
         $ms = (int) round((microtime(true) - $start) * 1000);
-        if ($res->get_status() === 200) {
-            /* translators: %d: milliseconds */
-            wp_send_json_success(['message' => sprintf(__('Connected (%d ms).', 'fluxfiles'), $ms)]);
+        // The probe wrote and deleted an object: log it like the REST Doctor does (best-effort).
+        FluxFilesApi::auditAdminQuiet((string) get_current_user_id(), 'disk_doctor', 'disk=' . $disk);
+        FluxFilesSiteHealth::clearCache('storage');
+        $labels = self::checkLabels();
+        $checks = [];
+        foreach ((array) ($report['checks'] ?? []) as $c) {
+            $id = (string) ($c['id'] ?? '');
+            $checks[] = [
+                'id'      => $id,
+                'status'  => (string) ($c['status'] ?? 'info'),
+                'label'   => $labels[$id] ?? $id,
+                // Message and fix stay English, as in the core UI.
+                'message' => self::publicError((string) ($c['message'] ?? '')),
+                'fix'     => (string) ($c['fix'] ?? ''),
+            ];
         }
-        $data = $res->get_data();
-        $msg = is_array($data) ? (string) ($data['error'] ?? $data['message'] ?? '') : '';
-        wp_send_json_error(['message' => $msg !== '' ? $msg : sprintf('HTTP %d', $res->get_status())]);
+        $summary = (string) ($report['summary'] ?? 'ok');
+        if ($summary === 'fail') {
+            $msg = __('Some checks failed.', 'fluxfiles');
+        } elseif ($summary === 'warn') {
+            /* translators: %d: milliseconds */
+            $msg = sprintf(__('Connected, with warnings (%d ms).', 'fluxfiles'), $ms);
+        } else {
+            /* translators: %d: milliseconds */
+            $msg = sprintf(__('Connected (%d ms).', 'fluxfiles'), $ms);
+        }
+        wp_send_json_success(['message' => $msg, 'summary' => $summary, 'checks' => $checks]);
+    }
+
+    /**
+     * A connection-level failure (raw cURL text) names the host and port that refused or timed
+     * out, which would turn the test into a port scanner for whoever can save an endpoint. Say
+     * only that the connection failed.
+     */
+    private static function publicError(string $m): string
+    {
+        if (preg_match('/cURL error|Connection (refused|timed out)|Could not resolve|timed out after|Failed to connect/i', $m) === 1) {
+            return __('Could not connect to the endpoint. Check its address, and that this server can reach it.', 'fluxfiles');
+        }
+        return $m;
+    }
+
+    /** `scheme://host[:port]` of the site: the origin the CORS check asks the bucket about. */
+    private static function siteOrigin(): string
+    {
+        $p = wp_parse_url(home_url());
+        if (!is_array($p) || empty($p['scheme']) || empty($p['host'])) {
+            return '';
+        }
+        return $p['scheme'] . '://' . $p['host'] . (isset($p['port']) ? ':' . $p['port'] : '');
+    }
+
+    /**
+     * Localized name per Bucket Doctor check id.
+     *
+     * @return array<string,string>
+     */
+    public static function checkLabels(): array
+    {
+        return [
+            'reachability' => __('Connection', 'fluxfiles'),
+            'write'        => __('Write', 'fluxfiles'),
+            'read'         => __('Read', 'fluxfiles'),
+            'presign'      => __('Presigned download link', 'fluxfiles'),
+            'multipart'    => __('Large uploads (multipart)', 'fluxfiles'),
+            'cors'         => __('Browser uploads (CORS)', 'fluxfiles'),
+            'lifecycle'    => __('Clean-up of failed uploads', 'fluxfiles'),
+            'versioning'   => __('Versioning', 'fluxfiles'),
+            'delete'       => __('Delete', 'fluxfiles'),
+        ];
     }
 
     /**
@@ -158,6 +224,7 @@ class FluxFilesAdmin
             wp_send_json_error(['message' => __('Choose a provider and save first.', 'fluxfiles')]);
         }
         $r = $tagger->testConnection();
+        FluxFilesSiteHealth::clearCache('ai');
         if (!empty($r['ok'])) {
             /* translators: 1: provider name, 2: model name, 3: milliseconds */
             $msg = sprintf(__('Connection OK: %1$s, %2$s (%3$d ms).', 'fluxfiles'), (string) $r['provider'], (string) $r['model'], (int) $r['latency_ms']);
@@ -481,7 +548,7 @@ class FluxFilesAdmin
         register_setting('fluxfiles', 'fluxfiles_s3_region', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
         register_setting('fluxfiles', 'fluxfiles_s3_key', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
         register_setting('fluxfiles', 'fluxfiles_s3_secret', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeS3Secret']]);
-        register_setting('fluxfiles', 'fluxfiles_s3_endpoint', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeUrlOption']]);
+        register_setting('fluxfiles', 'fluxfiles_s3_endpoint', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeS3Endpoint']]);
         register_setting('fluxfiles', 'fluxfiles_s3_visibility', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeVisibility']]);
         register_setting('fluxfiles', 'fluxfiles_s3_public_url', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeUrlOption']]);
 
@@ -503,7 +570,7 @@ class FluxFilesAdmin
         $this->addField('fluxfiles_r2_public_url', esc_html__('Public URL (r2.dev / custom domain)', 'fluxfiles'), 'fluxfiles_r2', 'url', ['placeholder' => 'https://pub-xxxx.r2.dev']);
 
         register_setting('fluxfiles', 'fluxfiles_r2_bucket', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
-        register_setting('fluxfiles', 'fluxfiles_r2_account_id', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
+        register_setting('fluxfiles', 'fluxfiles_r2_account_id', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeR2AccountId']]);
         register_setting('fluxfiles', 'fluxfiles_r2_key', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeTextOption']]);
         register_setting('fluxfiles', 'fluxfiles_r2_secret', ['type' => 'string', 'sanitize_callback' => [$this, 'sanitizeR2Secret']]);
         register_setting('fluxfiles', 'fluxfiles_r2_visibility', ['type' => 'string', 'sanitize_callback' => [self::class, 'sanitizeVisibility']]);
@@ -984,15 +1051,8 @@ class FluxFilesAdmin
         if ($url === '') {
             return '';
         }
-        try {
-            // assertSafeUrl() refuses a `localhost`-style name outright; an operator who listed
-            // the endpoint in FLUXFILES_SSRF_ALLOW_HOSTS (a local Ollama) has opted in.
-            $parts = (array) wp_parse_url($url);
-            $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
-            if ($host === '' || !\FluxFiles\SsrfGuard::isAllowlistedHost($host, isset($parts['port']) ? (int) $parts['port'] : null)) {
-                \FluxFiles\SsrfGuard::assertSafeUrl($url);
-            }
-        } catch (\Throwable $e) {
+        $why = self::urlRefusal($url);
+        if ($why !== null) {
             add_settings_error(
                 'fluxfiles_ai_base_url',
                 'fluxfiles_ai_base_url_blocked',
@@ -1000,12 +1060,72 @@ class FluxFilesAdmin
                     /* translators: 1: the URL, 2: the reason */
                     esc_html__('The AI base URL %1$s was refused (%2$s); the previous one was kept. A private or local host must be listed in FLUXFILES_SSRF_ALLOW_HOSTS in wp-config.php.', 'fluxfiles'),
                     esc_html($url),
-                    esc_html($e->getMessage())
+                    esc_html($why)
                 )
             );
             return (string) get_option('fluxfiles_ai_base_url', '');
         }
         return $url;
+    }
+
+    /**
+     * S3 custom endpoint (MinIO, Spaces): http(s), blank allowed, and the same SSRF check as
+     * the AI base URL and the SFTP host. A refused value keeps the stored one.
+     */
+    public function sanitizeS3Endpoint($v): string
+    {
+        $url = self::sanitizeUrlOption($v);
+        if ($url === '') {
+            return '';
+        }
+        $why = self::urlRefusal($url);
+        if ($why !== null) {
+            add_settings_error(
+                'fluxfiles_s3_endpoint',
+                'fluxfiles_s3_endpoint_blocked',
+                sprintf(
+                    /* translators: 1: the URL, 2: the reason */
+                    esc_html__('The S3 endpoint %1$s was refused (%2$s); the previous one was kept. An endpoint on a private or local address (for example MinIO) must be listed in FLUXFILES_SSRF_ALLOW_HOSTS in wp-config.php.', 'fluxfiles'),
+                    esc_html($url),
+                    esc_html($why)
+                )
+            );
+            return (string) get_option('fluxfiles_s3_endpoint', '');
+        }
+        return $url;
+    }
+
+    /** Cloudflare R2 account id: 32 lowercase hex characters (it becomes part of a host name). */
+    public function sanitizeR2AccountId($v): string
+    {
+        $id = strtolower(trim(sanitize_text_field((string) $v)));
+        if ($id === '' || preg_match('/^[a-f0-9]{32}$/', $id) === 1) {
+            return $id;
+        }
+        add_settings_error(
+            'fluxfiles_r2_account_id',
+            'fluxfiles_r2_account_id_invalid',
+            esc_html__('The R2 account ID must be 32 hexadecimal characters (copy it from the Cloudflare dashboard); the previous one was kept.', 'fluxfiles')
+        );
+        return (string) get_option('fluxfiles_r2_account_id', '');
+    }
+
+    /**
+     * Why an outbound URL typed into a settings form is refused, or null when it may be used:
+     * SsrfGuard::assertSafeUrl() unless the operator listed the host in FLUXFILES_SSRF_ALLOW_HOSTS.
+     */
+    private static function urlRefusal(string $url): ?string
+    {
+        try {
+            $parts = (array) wp_parse_url($url);
+            $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
+            if ($host === '' || !\FluxFiles\SsrfGuard::isAllowlistedHost($host, isset($parts['port']) ? (int) $parts['port'] : null)) {
+                \FluxFiles\SsrfGuard::assertSafeUrl($url);
+            }
+        } catch (\Throwable $e) {
+            return $e->getMessage();
+        }
+        return null;
     }
 
     /** Sanitizer for the SFTP port: 1-65535, anything else is 22. */

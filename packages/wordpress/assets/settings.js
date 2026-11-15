@@ -109,6 +109,7 @@
         if (!b) { return; }
         var out = b.parentNode.querySelector('.ff-test-result');
         var card = b.closest('.ff-card');
+        var list = card ? card.querySelector('.ff-test-checks') : null;
         var unsaved = false;
         if (card) {
             Array.prototype.forEach.call(card.querySelectorAll('input:not([type=hidden]),select'), function (el) {
@@ -118,20 +119,52 @@
                 if (now !== was) { unsaved = true; }
             });
         }
-        if (unsaved) { out.setAttribute('data-state', 'bad'); out.textContent = t('saveFirst', 'Save first.'); return; }
+        if (unsaved) { out.setAttribute('data-state', 'bad'); out.textContent = t('saveFirst', 'Save first.'); if (list) { list.textContent = ''; } return; }
         b.disabled = true;
         out.removeAttribute('data-state');
         out.textContent = t('testing', 'Testing…');
+        if (list) { list.textContent = ''; }
         var body = new URLSearchParams({ action: 'fluxfiles_test_disk', _wpnonce: cfg.testNonce, disk: b.getAttribute('data-disk') });
         fetch(cfg.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body })
             .then(function (r) { return r.json(); })
             .then(function (j) {
-                out.setAttribute('data-state', j && j.success ? 'ok' : 'bad');
-                out.textContent = (j && j.data && j.data.message) || 'Error';
+                var d = (j && j.data) || {};
+                var state = !j || !j.success || d.summary === 'fail' ? 'bad' : (d.summary === 'warn' ? 'warn' : 'ok');
+                out.setAttribute('data-state', state);
+                out.textContent = d.message || 'Error';
+                renderChecks(list, d.checks);
             })
             .catch(function () { out.setAttribute('data-state', 'bad'); out.textContent = 'Error'; })
             .then(function () { b.disabled = false; });
     });
+
+    // One line per Bucket Doctor check. textContent only: the messages come from the storage.
+    function renderChecks(list, checks) {
+        if (!list) { return; }
+        var icons = { ok: '\u2713', warn: '\u26A0', fail: '\u2717', info: 'i' };
+        list.textContent = '';
+        (checks || []).forEach(function (c) {
+            var li = document.createElement('li');
+            li.className = 'ff-check';
+            li.setAttribute('data-status', c.status);
+            var icon = document.createElement('span');
+            icon.className = 'ff-check-icon';
+            icon.setAttribute('aria-hidden', 'true');
+            icon.textContent = icons[c.status] || 'i';
+            var label = document.createElement('strong');
+            label.textContent = c.label || c.id;
+            li.appendChild(icon);
+            li.appendChild(label);
+            li.appendChild(document.createTextNode(' ' + (c.message || '')));
+            if (c.fix) {
+                var fix = document.createElement('div');
+                fix.className = 'ff-check-fix';
+                fix.textContent = t('fix', 'Fix:') + ' ' + c.fix;
+                li.appendChild(fix);
+            }
+            list.appendChild(li);
+        });
+    }
 
     // ---------- AI connection test ----------
     root.addEventListener('click', function (e) {

@@ -132,7 +132,17 @@
 .ff-test-row { display: flex; align-items: center; gap: 10px; padding: 8px 0 4px; }
 .ff-test-result { font-weight: 500; }
 .ff-test-result[data-state="ok"] { color: #00701c; }
+.ff-test-result[data-state="warn"] { color: #8a6d00; }
 .ff-test-result[data-state="bad"] { color: var(--ff-bad); }
+.ff-test-checks { margin: 0; padding: 0; list-style: none; }
+.ff-test-checks:empty { display: none; }
+.ff-check { padding: 4px 0; }
+.ff-check-icon { display: inline-block; width: 1.4em; font-weight: 700; }
+.ff-check[data-status="ok"] .ff-check-icon { color: #00701c; }
+.ff-check[data-status="warn"] .ff-check-icon { color: #8a6d00; }
+.ff-check[data-status="fail"] .ff-check-icon { color: var(--ff-bad); }
+.ff-check-fix { margin-left: 1.4em; color: #50575e; }
+.ff-test-help { margin: 0 0 8px; }
 
 /* embed */
 .ff-snippet {
