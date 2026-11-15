@@ -19,6 +19,7 @@ use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
 use FluxFiles\StorageMetadataHandler;
 use FluxFiles\AiTagger;
+use FluxFiles\AiException;
 
 $green = "\033[32m"; $red = "\033[31m"; $yellow = "\033[33m"; $cyan = "\033[36m"; $reset = "\033[0m";
 $passed = 0; $failed = 0;
@@ -38,6 +39,12 @@ class StubAiTagger extends AiTagger
     public array $result = ['tags' => ['cat', 'animal'], 'title' => 'A Cat', 'alt_text' => 'a cat', 'caption' => 'a cute cat'];
     public int $calls = 0;
     public function analyze(string $imageData, string $mimeType): array { $this->calls++; return $this->result; }
+}
+
+/** Tagger whose provider always refuses: a retired model. */
+class FailingAiTagger extends AiTagger
+{
+    public function analyze(string $imageData, string $mimeType): array { throw new AiException('ai_model_not_found', ['provider' => 'claude', 'model' => 'm', 'default_model' => 'd'], 'HTTP 404'); }
 }
 
 function imgFile(int $w = 200, int $h = 150): string
@@ -353,6 +360,33 @@ test('auto-tag disabled by default (no env) → no ai_tags', function () {
     [$fm] = makeFM(new StubAiTagger('claude', 'k'));
     $r = $fm->upload('local', '', fileArr(imgFile(), 'noauto.png'), true);
     assertTrue(!isset($r['ai_tags']), 'no auto-tag when env unset');
+});
+
+test('auto-tag failure keeps the upload and reports ai_error with the code', function () {
+    $prev = $_ENV['FLUXFILES_AI_AUTO_TAG'] ?? null;
+    $_ENV['FLUXFILES_AI_AUTO_TAG'] = 'true';
+    \FluxFiles\Log::setSink(static function (string $m): void {});
+    try {
+        [$fm, $meta] = makeFM(new FailingAiTagger('claude', 'k'));
+        $r = $fm->upload('local', '', fileArr(imgFile(), 'fail.png'), true);
+        assertEqual('ai_model_not_found', $r['ai_error'] ?? null, 'upload result carries the code');
+        assertTrue(!isset($r['ai_tags']), 'no tags');
+        assertTrue(isset($r['key']) || isset($r['path']) || isset($r['name']), 'the upload itself succeeded');
+    } finally {
+        \FluxFiles\Log::setSink(null);
+        if ($prev === null) { unset($_ENV['FLUXFILES_AI_AUTO_TAG']); } else { $_ENV['FLUXFILES_AI_AUTO_TAG'] = $prev; }
+    }
+});
+
+test('manual aiTag surfaces the classified error (502 + code + params)', function () {
+    [$fm] = makeFM(new FailingAiTagger('claude', 'k'));
+    $fm->upload('local', '', fileArr(imgFile(), 'm.png'), true);
+    try { $fm->aiTag('local', 'm.png'); throw new \RuntimeException('should throw'); }
+    catch (ApiException $e) {
+        assertEqual('ai_model_not_found', $e->getErrorCode());
+        assertEqual(502, $e->getHttpCode());
+        assertEqual('d', $e->getErrorParams()['default_model'] ?? null);
+    }
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
