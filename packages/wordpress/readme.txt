@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.2.1
+Stable tag: 1.3.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -180,6 +180,13 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.3.0 =
+* New: "Test connection" on the AI settings tab. It sends one tiny test image with your saved settings and tells you exactly what is wrong (wrong API key, model retired or not found, model cannot read images, quota or rate limit, unreachable address) with a hint on how to fix it.
+* New: the Cloud storage "Test connection" now runs a full checklist (read, write and delete a small test file, browser upload/CORS, upload links) and works before you enable the disk.
+* New: two checks under Tools > Site Health, so WordPress warns you when a storage disk stops answering or your AI model is retired. The AI check only looks the model up and never sends an image, so it costs nothing.
+* AI tagging errors now say what went wrong instead of a generic "AI service returned an error".
+* Security: an AI base URL and a custom S3 endpoint are checked against private and local addresses when saved and again at call time; the R2 account ID must be a 32-character ID.
+
 = 1.2.1 =
 * Fix: AI tagging with Anthropic (Claude) failed when the Model field was left empty, because the default model had been retired by Anthropic. The default is now a current model. The OpenRouter default also moves to an alias that follows Google's latest Flash model.
 
@@ -305,6 +312,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+Adds connection tests and Site Health checks. If your AI base URL or S3 endpoint points at a local or private address (for example Ollama or MinIO on the same server), add that host to FLUXFILES_SSRF_ALLOW_HOSTS in wp-config.php.
 
 = 1.2.1 =
 Fixes AI tagging with Claude when no model is set (the old default model was retired). No change to your files or settings.
