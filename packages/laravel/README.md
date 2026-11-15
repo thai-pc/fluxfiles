@@ -515,7 +515,8 @@ It prints `OK    ai - claude/claude-sonnet-4-5 (812 ms)` or `FAIL  ai - <code> .
 `fix:` line, and a failure makes the command exit non-zero. It never prints the key; the
 base URL and its host are replaced by `<base-url>` / `<host>`. To route the call through
 your own HTTP client (or fake it in tests), bind a `FluxFiles\HttpTransportInterface`
-in the container. The base URL is operator config, so there is no SSRF guard here, as in core.
+in the container under the key `fluxfiles.ai_transport` (AI calls only; the generic interface is
+not consulted, because core uses it for mail and OIDC too). The base URL is operator config, so there is no SSRF guard here, as in core.
 
 (Abridged — the published file also carries the rate limits — read/write, `/img`,
 `/stream`, URL import (`FLUXFILES_IMPORT_RATE_LIMIT`, default 10/min; a token's

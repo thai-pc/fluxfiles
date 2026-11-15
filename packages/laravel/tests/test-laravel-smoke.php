@@ -1927,14 +1927,14 @@ $aiBind = function (array $answer): void {
     SmokeAiTransport::$answer = $answer;
     SmokeAiTransport::$calls = 0;
     SmokeAiTransport::$urls = [];
-    $GLOBALS['LARAVEL_BINDINGS'][\FluxFiles\HttpTransportInterface::class] = new SmokeAiTransport();
+    $GLOBALS['LARAVEL_BINDINGS'][\FluxFiles\Laravel\AiTaggerFactory::TRANSPORT_KEY] = new SmokeAiTransport();
 };
 $aiPost = function (array $over, array $input = ['disk' => 'local'], ?FluxFilesController $ctrl = null, string $user = 'ai-u1') use ($aiCfg) {
     $ctrl ??= freshController();
     return $ctrl->aiTest(new Request('POST', $input, bearer($over, $user), null, 'https://app.example.com', [], 'api/fm/ai/test'));
 };
 
-if (class_exists(\FluxFiles\AiTestEndpoint::class)) {
+{
     test('ai/test: proxied, 200 with ok result even when ai_auto_tag is off; no key in the response', function () use ($aiCfg, $aiOk, $aiBind, $aiPost) {
         $aiBind($aiOk);
         $r = withConfig($aiCfg, fn () => $aiPost(['perms' => ['read', 'write']]));
@@ -2035,24 +2035,39 @@ if (class_exists(\FluxFiles\AiTestEndpoint::class)) {
         $aiBind(['status' => 200, 'headers' => [], 'body' => json_encode(['id' => 'claude-sonnet-4-5'])]);
         [, $out] = $run(['ai' => true, 'cheap' => true], $aiCfg);
         assertTrue(str_contains($out, 'ai - ') && !str_contains($out, 'FAIL  ai'), $out);
-        // Failing transport + a gateway base URL echoed in the provider text.
-        $aiBind(['status' => 502, 'headers' => [], 'body' => 'bad gateway from https://llm.internal.example:8443/v1/messages']);
-        [$code, $out] = $run(['ai' => true], ['fluxfiles.ai_base_url' => 'https://llm.internal.example:8443'] + $aiCfg);
-        assertEqual(1, $code, 'a failed AI test fails the command');
-        assertTrue(str_contains($out, 'FAIL  ai - ') && str_contains($out, 'fix: '), $out);
-        assertTrue(!str_contains($out, 'SMOKESECRET') && !str_contains($out, 'llm.internal.example'), 'no key/base URL/host printed: ' . $out);
+        // Failing transport whose error names the gateway host (config URL, then env-only URL).
+        $netErr = ['status' => 0, 'headers' => [], 'body' => '', 'error' => 'Failed to connect to llm.internal.example port 8443: Connection refused'];
+        foreach ([['fluxfiles.ai_base_url' => 'https://llm.internal.example:8443'], ['fluxfiles.ai_base_url' => '']] as $i => $urlCfg) {
+            $aiBind($netErr);
+            if ($i === 1) { $_ENV['FLUXFILES_AI_BASE_URL'] = 'https://llm.internal.example:8443'; }
+            try {
+                [$code, $out] = $run(['ai' => true], $urlCfg + $aiCfg);
+            } finally {
+                unset($_ENV['FLUXFILES_AI_BASE_URL']);
+            }
+            assertEqual(1, $code, 'a failed AI test fails the command');
+            assertTrue(str_contains($out, 'FAIL  ai - ') && str_contains($out, 'fix: '), $out);
+            assertTrue(str_contains($out, '<host>'), 'host replaced: ' . $out);
+            assertTrue(!str_contains($out, 'SMOKESECRET') && !str_contains($out, 'llm.internal.example'), 'no key/base URL/host printed: ' . $out);
+        }
         // Not configured.
         [$code, $out] = $run(['ai' => true], ['fluxfiles.ai_provider' => ''] + $aiCfg);
         assertEqual(1, $code);
         assertTrue(str_contains($out, 'ai_not_configured'), $out);
     });
-    test('AiTaggerFactory: a container-bound transport is used, none bound uses the default', function () use ($aiCfg, $aiOk, $aiBind) {
+    test('ai/test: ?disk= in the query string cannot override the body (core reads the body only)', function () use ($aiCfg, $aiOk, $aiBind) {
+        $aiBind($aiOk);
+        $r = withConfig($aiCfg, fn () => freshController()->aiTest(new Request('GET', ['disk' => 'other'], bearer(['perms' => ['read', 'write']], 'ai-q'), null, 'https://app.example.com', [], 'api/fm/ai/test')));
+        assertEqual(200, $r->getStatusCode(), 'GET stub has no JSON body: falls back to the default disk');
+        assertEqual(1, SmokeAiTransport::$calls);
+    });
+    test('AiTaggerFactory: a transport bound under fluxfiles.ai_transport is used, none bound uses the default', function () use ($aiCfg, $aiOk, $aiBind) {
         $aiBind($aiOk);
         $t = withConfig($aiCfg, fn () => \FluxFiles\Laravel\AiTaggerFactory::make());
         assertTrue($t instanceof \FluxFiles\AiTagger, 'tagger built');
         $t->testConnection();
         assertEqual(1, SmokeAiTransport::$calls, 'bound transport carried the call');
-        unset($GLOBALS['LARAVEL_BINDINGS'][\FluxFiles\HttpTransportInterface::class]);
+        unset($GLOBALS['LARAVEL_BINDINGS'][\FluxFiles\Laravel\AiTaggerFactory::TRANSPORT_KEY]);
         assertTrue(withConfig($aiCfg, fn () => \FluxFiles\Laravel\AiTaggerFactory::make()) instanceof \FluxFiles\AiTagger, 'default transport');
         assertEqual(null, withConfig(['fluxfiles.ai_provider' => ''], fn () => \FluxFiles\Laravel\AiTaggerFactory::make()));
     });

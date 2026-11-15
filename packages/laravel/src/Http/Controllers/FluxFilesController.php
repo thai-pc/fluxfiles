@@ -771,7 +771,11 @@ class FluxFilesController
             $this->rateLimit($claims, true);
             $this->rateLimitBucket($claims, 'ai_test', 2);
 
-            return $this->ok(\FluxFiles\AiTestEndpoint::run($claims, $this->aiTagger(), $request->all()));
+            // The JSON body (or form post) only, like core and the audit step: ?disk= in the
+            // query string must not validate one disk while the audit records another.
+            $body = \FluxFiles\AuditPolicy::decodeBody((string) $request->getContent()) + $request->post();
+
+            return $this->ok(\FluxFiles\AiTestEndpoint::run($claims, $this->aiTagger(), $body));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }

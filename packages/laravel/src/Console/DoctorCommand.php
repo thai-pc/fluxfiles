@@ -20,7 +20,7 @@ class DoctorCommand extends Command
         {--ai : Also run a live AI connection test (one tiny vision call)}
         {--cheap : With --ai, only look the model up at the provider (free) instead of a vision call}';
 
-    protected $description = 'Check that _fluxfiles/ is not web-served and config/fluxfiles.php is up to date.';
+    protected $description = 'Check that _fluxfiles/ is not web-served and config/fluxfiles.php is up to date (--ai: also test the AI provider).';
 
     public function handle(): int
     {
@@ -78,7 +78,7 @@ class DoctorCommand extends Command
     private function aiCheck(bool $cheap): bool
     {
         $scrubs = [];
-        $base = trim((string) config('fluxfiles.ai_base_url', ''));
+        $base = \FluxFiles\Laravel\AiTaggerFactory::baseUrl();
         if ($base !== '') {
             $scrubs[rtrim($base, '/')] = '<base-url>';
             $parts = parse_url($base);
@@ -91,6 +91,8 @@ class DoctorCommand extends Command
             uksort($scrubs, static fn($a, $b) => strlen($b) <=> strlen($a));
         }
         $scrub = static fn(string $t): string => $scrubs === [] ? $t : strtr($t, $scrubs);
+        // Core exposes no getter for the current sink, so it is reset to the default afterwards
+        // (this adapter installs none).
         \FluxFiles\Log::setSink(static function (string $m) use ($scrub): void {
             fwrite(STDERR, $scrub($m) . "\n");
         });
