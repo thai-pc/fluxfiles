@@ -19,6 +19,7 @@ class FluxFilesAdmin
         add_action('admin_notices', [$this, 'renderNginxStorageNotice']);
         add_action('wp_ajax_fluxfiles_nginx_probe', [$this, 'ajaxNginxProbe']);
         add_action('wp_ajax_fluxfiles_test_disk', [$this, 'ajaxTestDisk']);
+        add_action('wp_ajax_fluxfiles_test_ai', [$this, 'ajaxTestAi']);
         add_action('wp_ajax_fluxfiles_dismiss_notice', [$this, 'ajaxDismissNotice']);
         add_action('admin_notices', [$this, 'renderUnconfiguredNotice']);
     }
@@ -79,6 +80,7 @@ class FluxFilesAdmin
         wp_localize_script('fluxfiles-settings', 'FluxFilesSettings', [
             'ajaxUrl'   => admin_url('admin-ajax.php'),
             'testNonce' => wp_create_nonce('fluxfiles_test_disk'),
+            'aiNonce'   => wp_create_nonce('fluxfiles_test_ai'),
             'i18n'      => [
                 'testing'   => __('Testing…', 'fluxfiles'),
                 'saveFirst' => __('Save your changes first; the test uses the saved settings.', 'fluxfiles'),
@@ -132,6 +134,64 @@ class FluxFilesAdmin
         $data = $res->get_data();
         $msg = is_array($data) ? (string) ($data['error'] ?? $data['message'] ?? '') : '';
         wp_send_json_error(['message' => $msg !== '' ? $msg : sprintf('HTTP %d', $res->get_status())]);
+    }
+
+    /**
+     * AJAX: one tiny real vision call against the SAVED AI settings ("Test connection" on the AI
+     * tab). Admin only, nonce-checked, 2 per minute per user (each run is a paid provider call).
+     * "Tag on upload" is not required. The administrator is the operator, so the redacted
+     * provider text is shown; the API key and base URL never are.
+     */
+    public function ajaxTestAi(): void
+    {
+        check_ajax_referer('fluxfiles_test_ai');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Not allowed.', 'fluxfiles')], 403);
+        }
+        try {
+            FluxFilesApi::userBucketLimit((string) get_current_user_id(), 'ai_test', 2);
+        } catch (\FluxFiles\ApiException $e) {
+            wp_send_json_error(['message' => __('Too many tests. Wait a minute and try again.', 'fluxfiles')], 429);
+        }
+        $tagger = FluxFilesApi::savedAiTagger();
+        if ($tagger === null) {
+            wp_send_json_error(['message' => __('Choose a provider and save first.', 'fluxfiles')]);
+        }
+        $r = $tagger->testConnection();
+        if (!empty($r['ok'])) {
+            /* translators: 1: provider name, 2: model name, 3: milliseconds */
+            $msg = sprintf(__('Connection OK: %1$s, %2$s (%3$d ms).', 'fluxfiles'), (string) $r['provider'], (string) $r['model'], (int) $r['latency_ms']);
+            wp_send_json_success(['message' => $msg]);
+        }
+        $code = (string) ($r['code'] ?? '');
+        $labels = self::aiErrorLabels();
+        $msg = $labels[$code] ?? __('The AI test failed.', 'fluxfiles');
+        // Hints and the redacted provider text stay English (as in the core UI).
+        $hint = (string) ($r['hint'] ?? '');
+        $detail = (string) ($r['detail'] ?? '');
+        wp_send_json_error(['message' => $msg, 'hint' => $hint, 'detail' => $detail, 'code' => $code]);
+    }
+
+    /**
+     * Localized text per AI error code (the same codes core's `error.*` keys carry).
+     *
+     * @return array<string,string>
+     */
+    public static function aiErrorLabels(): array
+    {
+        return [
+            'ai_not_configured' => __('AI tagging is not configured.', 'fluxfiles'),
+            'ai_auth'           => __('The AI provider rejected the API key.', 'fluxfiles'),
+            'ai_model_not_found' => __('The AI model was not found or has been retired.', 'fluxfiles'),
+            'ai_no_vision'      => __('This AI model does not accept images.', 'fluxfiles'),
+            'ai_quota'          => __('The AI provider account is out of credit or quota.', 'fluxfiles'),
+            'ai_rate_limited'   => __('The AI provider rate limit was reached.', 'fluxfiles'),
+            'ai_unavailable'    => __('The AI provider is temporarily unavailable.', 'fluxfiles'),
+            'ai_network'        => __('Could not reach the AI provider.', 'fluxfiles'),
+            'ai_blocked_host'   => __('The AI endpoint host is not allowed.', 'fluxfiles'),
+            'ai_bad_response'   => __('The AI endpoint returned an unexpected response.', 'fluxfiles'),
+            'ai_provider_error' => __('The AI provider returned an error.', 'fluxfiles'),
+        ];
     }
 
     /**

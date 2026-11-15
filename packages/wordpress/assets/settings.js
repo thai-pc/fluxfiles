@@ -132,4 +132,36 @@
             .catch(function () { out.setAttribute('data-state', 'bad'); out.textContent = 'Error'; })
             .then(function () { b.disabled = false; });
     });
+
+    // ---------- AI connection test ----------
+    root.addEventListener('click', function (e) {
+        var b = e.target.closest('.ff-test-ai');
+        if (!b) { return; }
+        var out = b.parentNode.querySelector('.ff-test-result');
+        var card = b.closest('.ff-card');
+        var unsaved = false;
+        if (card) {
+            Array.prototype.forEach.call(card.querySelectorAll('input:not([type=hidden]),select'), function (el) {
+                var now = el.type === 'checkbox' ? el.checked : el.value;
+                var was = el.type === 'checkbox' ? el.defaultChecked
+                    : (el.tagName === 'SELECT' ? (el.querySelector('option[selected]') || el.options[0] || {}).value : el.defaultValue);
+                if (now !== was) { unsaved = true; }
+            });
+        }
+        if (unsaved) { out.setAttribute('data-state', 'bad'); out.textContent = t('saveFirst', 'Save first.'); return; }
+        b.disabled = true;
+        out.removeAttribute('data-state');
+        out.textContent = t('testing', 'Testing…');
+        var body = new URLSearchParams({ action: 'fluxfiles_test_ai', _wpnonce: cfg.aiNonce });
+        fetch(cfg.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                var d = (j && j.data) || {};
+                out.setAttribute('data-state', j && j.success ? 'ok' : 'bad');
+                // textContent only: the provider text is untrusted.
+                out.textContent = [d.message || 'Error', d.hint, d.detail].filter(Boolean).join(' ');
+            })
+            .catch(function () { out.setAttribute('data-state', 'bad'); out.textContent = 'Error'; })
+            .then(function () { b.disabled = false; });
+    });
 })();

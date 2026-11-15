@@ -1625,9 +1625,6 @@ test('proxy route surface covers every core /api/fm route', function () {
         //   404s, so proxy mode loses nothing it had before. A port would need the
         //   adapter's own staging dir + PATCH body streaming — not done in v1.
         'tus',
-        // ai/test (docs/design/CONNECTION-TEST-DESIGN.md): temporary, removed by the
-        // WP PR once the floor is bumped to the core release that ships it.
-        'ai/test',
     ];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
@@ -3334,6 +3331,163 @@ test('fileManager(): the AI tagger is wired only for ai_auto_tag AND a configure
     } finally {
         if ($keep === null) { unset($GLOBALS['WP_OPTIONS']['fluxfiles_ai_provider']); } else { $GLOBALS['WP_OPTIONS']['fluxfiles_ai_provider'] = $keep; }
     }
+});
+
+// ── AI connection test (docs/design/CONNECTION-TEST-DESIGN.md §8) ──
+class AjaxDone extends RuntimeException { public function __construct(public bool $ok, public array $payload, public int $http = 200) { parent::__construct('ajax'); } }
+if (!function_exists('wp_send_json_success')) {
+    function wp_send_json_success($d = null, $c = 200) { throw new AjaxDone(true, (array) $d, $c); }
+    function wp_send_json_error($d = null, $c = 200) { throw new AjaxDone(false, (array) $d, $c); }
+}
+if (!function_exists('check_ajax_referer')) {
+    function check_ajax_referer($a = -1) { if (($_REQUEST['_wpnonce'] ?? '') !== 'nonce-' . $a) { throw new AjaxDone(false, ['message' => 'bad nonce'], 403); } return 1; }
+}
+if (!function_exists('wp_remote_request')) {
+    function wp_remote_request($url, $args = []) { $GLOBALS['WP_REMOTE_CALL'] = [$url, $args]; $r = $GLOBALS['WP_REMOTE']; if ($r instanceof Throwable) { throw $r; } return $r; }
+}
+if (!function_exists('is_wp_error')) { function is_wp_error($v) { return $v instanceof WP_Error; } }
+if (!function_exists('wp_remote_retrieve_headers')) { function wp_remote_retrieve_headers($r) { return $r['headers'] ?? []; } }
+if (!function_exists('wp_remote_retrieve_response_code')) { function wp_remote_retrieve_response_code($r) { return $r['response']['code'] ?? ''; } }
+if (!function_exists('wp_remote_retrieve_body')) { function wp_remote_retrieve_body($r) { return $r['body'] ?? ''; } }
+$ffAiWith = function (array $opts, callable $fn) {
+    $keep = $GLOBALS['WP_OPTIONS'];
+    $GLOBALS['WP_OPTIONS'] = $opts + $keep;
+    @unlink(FluxFilesPlugin::storagePath() . '/rate_limit.json');
+    try { return $fn(); } finally { $GLOBALS['WP_OPTIONS'] = $keep; }
+};
+$ffAiOk = ['response' => ['code' => 200], 'headers' => [], 'body' => '{"content":[{"type":"text","text":"OK"}]}'];
+$ffAjax = function (callable $fn): AjaxDone { try { $fn(); } catch (AjaxDone $d) { return $d; } throw new RuntimeException('handler did not answer'); };
+
+test('/ai/test is proxied and answers for a write token whose ai_auto_tag is off (gate parity with /ai-tag)', function () use ($ffAsUser, $ffAiWith, $ffAiOk) {
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($src, "'/ai/test'") !== false, 'route registered');
+    $GLOBALS['WP_REMOTE'] = $ffAiOk;
+    $n = 9410;
+    $call = function (array $claims, array $body = ['disk' => 'local']) use ($ffAsUser, &$n) { return $ffAsUser(++$n, $claims, fn () => (new FluxFilesApi())->handleAiTest(new WP_REST_Request($body))); };
+    $ffAiWith(['fluxfiles_ai_provider' => 'claude', 'fluxfiles_ai_api_key' => 'sk-ant-SECRET-KEY-ABCDEF', 'fluxfiles_ai_base_url' => ''], function () use ($call) {
+        foreach ([['ai_auto_tag' => false], []] as $claims) {
+            $r = $call(['perms' => ['read', 'write']] + $claims);
+            assertEqual(200, $r->get_status(), 'write + provider = 200 regardless of ai_auto_tag: ' . json_encode($r->get_data()));
+            $d = $r->get_data();
+            assertEqual(true, $d['data']['ok'] ?? null);
+            assertEqual('claude', $d['data']['provider'] ?? null);
+            assertTrue(strpos(json_encode($d), 'sk-ant-SECRET-KEY-ABCDEF') === false, 'the key is never in the response');
+        }
+        $r = $call(['perms' => ['read']]);
+        assertEqual(403, $r->get_status(), 'read-only token refused: ' . json_encode($r->get_data()));
+        assertEqual('permission_denied', $r->get_data()['error_code'] ?? null);
+        $r = $call(['perms' => ['read', 'write'], 'disks' => ['local']], ['disk' => 's3']);
+        assertEqual('disk_denied', $r->get_data()['error_code'] ?? null, 'a disk outside the token');
+    });
+    $ffAiWith(['fluxfiles_ai_provider' => ''], function () use ($call) {
+        $r = $call(['perms' => ['read', 'write']]);
+        assertEqual(400, $r->get_status());
+        assertEqual('ai_not_configured', $r->get_data()['error_code'] ?? null);
+    });
+});
+
+test('/ai/test is limited to 2 per minute per user', function () use ($ffAsUser, $ffAiWith, $ffAiOk) {
+    $GLOBALS['WP_REMOTE'] = $ffAiOk;
+    $ffAiWith(['fluxfiles_ai_provider' => 'claude', 'fluxfiles_ai_api_key' => 'k'], function () use ($ffAsUser) {
+        $codes = [];
+        for ($i = 0; $i < 3; $i++) {
+            $codes[] = $ffAsUser(9402, ['perms' => ['read', 'write']], fn () => (new FluxFilesApi())->handleAiTest(new WP_REST_Request(['disk' => 'local'])))->get_status();
+        }
+        assertEqual([200, 200, 429], $codes);
+    });
+});
+
+test('a failing provider is a 200 diagnosis with the classified code; /ai-tag-style handler returns ai_not_configured coded', function () use ($ffAsUser, $ffAiWith) {
+    $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 401], 'headers' => [], 'body' => '{"error":{"type":"authentication_error","message":"invalid x-api-key"}}'];
+    $ffAiWith(['fluxfiles_ai_provider' => 'claude', 'fluxfiles_ai_api_key' => 'sk-ant-SECRET-KEY-ABCDEF'], function () use ($ffAsUser) {
+        $r = $ffAsUser(9403, ['perms' => ['read', 'write']], fn () => (new FluxFilesApi())->handleAiTest(new WP_REST_Request(['disk' => 'local'])));
+        assertEqual(200, $r->get_status());
+        assertEqual('ai_auth', $r->get_data()['data']['code'] ?? null);
+    });
+    $ffAiWith(['fluxfiles_ai_provider' => ''], function () use ($ffAsUser) {
+        $r = $ffAsUser(9404, ['perms' => ['read', 'write']], fn () => (new FluxFilesApi())->handleAiTag(new WP_REST_Request(['disk' => 'local', 'path' => 'a.jpg'])));
+        assertEqual(400, $r->get_status());
+        assertEqual('ai_not_configured', $r->get_data()['error_code'] ?? null, 'handleAiTag carries a code');
+    });
+});
+
+test('savedAiTagger(): a base URL is SSRF-checked at call time (private host -> ai_blocked_host), redirects refused', function () use ($ffAiWith) {
+    \FluxFiles\SsrfGuard::setAllowHosts('');
+    $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 200], 'headers' => [], 'body' => '{}'];
+    $GLOBALS['WP_REMOTE_CALL'] = null;
+    $ffAiWith(['fluxfiles_ai_provider' => 'compatible', 'fluxfiles_ai_api_key' => 'k', 'fluxfiles_ai_model' => 'm', 'fluxfiles_ai_base_url' => 'http://10.0.0.5:8080/v1'], function () {
+        $r = FluxFilesApi::savedAiTagger()->testConnection();
+        assertEqual('ai_blocked_host', $r['code']);
+        assertTrue($GLOBALS['WP_REMOTE_CALL'] === null, 'wp_remote_request never reached');
+    });
+    // An allowlisted host that answers 3xx is refused, not followed.
+    \FluxFiles\SsrfGuard::setAllowHosts('llm.internal');
+    $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 302], 'headers' => ['location' => 'http://169.254.169.254/'], 'body' => ''];
+    try {
+        $ffAiWith(['fluxfiles_ai_provider' => 'compatible', 'fluxfiles_ai_api_key' => 'k', 'fluxfiles_ai_model' => 'm', 'fluxfiles_ai_base_url' => 'http://llm.internal/v1'], function () {
+            assertEqual('ai_blocked_host', FluxFilesApi::savedAiTagger()->testConnection()['code']);
+        });
+    } finally {
+        \FluxFiles\SsrfGuard::setAllowHosts('');
+    }
+});
+
+test('Settings AI test (ajaxTestAi): nonce, capability, limit, not-configured, ok and classified failure; never the key', function () use ($ffAiWith, $ffAiOk, $ffAjax) {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+    $keepReq = $_REQUEST; $keepCaps = $GLOBALS['WP_CAPS']; $keepUid = $GLOBALS['WP_OPTIONS']['_test_user_id'] ?? null;
+    $GLOBALS['WP_OPTIONS']['_test_user_id'] = 9501;
+    $key = 'sk-ant-SECRET-KEY-ABCDEF';
+    try {
+        $_REQUEST = ['_wpnonce' => 'nonce-fluxfiles_test_ai'];
+        $ffAiWith(['fluxfiles_ai_provider' => 'claude', 'fluxfiles_ai_api_key' => $key, 'fluxfiles_ai_base_url' => ''], function () use ($admin, $ffAiOk, $ffAjax) {
+            $_REQUEST['_wpnonce'] = 'wrong';
+            assertEqual(403, $ffAjax(fn () => $admin->ajaxTestAi())->http, 'bad nonce');
+            $_REQUEST['_wpnonce'] = 'nonce-fluxfiles_test_ai';
+            $GLOBALS['WP_CAPS']['manage_options'] = false;
+            $d = $ffAjax(fn () => $admin->ajaxTestAi());
+            assertTrue(!$d->ok && $d->http === 403, 'non-admin refused');
+            $GLOBALS['WP_CAPS']['manage_options'] = true;
+
+            $GLOBALS['WP_REMOTE'] = $ffAiOk;
+            $d = $ffAjax(fn () => $admin->ajaxTestAi());
+            assertTrue($d->ok, json_encode($d->payload));
+            assertTrue(strpos($d->payload['message'], 'claude') !== false && strpos($d->payload['message'], 'ms') !== false, 'provider and latency: ' . $d->payload['message']);
+
+            $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 401], 'headers' => [], 'body' => '{"error":{"type":"authentication_error","message":"invalid x-api-key ' . $GLOBALS['WP_OPTIONS']['fluxfiles_ai_api_key'] . '"}}'];
+            $d = $ffAjax(fn () => $admin->ajaxTestAi());
+            assertTrue(!$d->ok && ($d->payload['code'] ?? '') === 'ai_auth', json_encode($d->payload));
+            assertTrue(($d->payload['hint'] ?? '') !== '', 'hint present');
+            assertTrue(strpos(json_encode($d->payload), 'SECRET-KEY') === false, 'the key is redacted from message/hint/detail');
+
+            $d = $ffAjax(fn () => $admin->ajaxTestAi());
+            assertEqual(429, $d->http, 'third run in a minute is limited');
+        });
+        $ffAiWith(['fluxfiles_ai_provider' => ''], function () use ($admin, $ffAjax) {
+            $GLOBALS['WP_OPTIONS']['_test_user_id'] = 9502;
+            $d = $ffAjax(fn () => $admin->ajaxTestAi());
+            assertTrue(!$d->ok && strpos($d->payload['message'], 'save first') !== false, 'not configured: ' . json_encode($d->payload));
+        });
+    } finally {
+        $_REQUEST = $keepReq; $GLOBALS['WP_CAPS'] = $keepCaps; $GLOBALS['WP_OPTIONS']['_test_user_id'] = $keepUid;
+    }
+});
+
+test('Settings page: the AI card has the test button and enqueued JS carries the nonce (no inline script)', function () {
+    $tpl = (string) file_get_contents(__DIR__ . '/../templates/settings.php');
+    assertTrue(strpos($tpl, 'ff-test-ai') !== false, 'button');
+    assertTrue(strpos($tpl, '<script') === false, 'no inline script');
+    $js = (string) file_get_contents(__DIR__ . '/../assets/settings.js');
+    assertTrue(strpos($js, 'fluxfiles_test_ai') !== false && strpos($js, 'cfg.aiNonce') !== false, 'JS posts the AI nonce');
+    assertTrue(strpos($js, 'innerHTML') === false, 'renders with textContent only');
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+    $GLOBALS['WP_LOCALIZED'] = [];
+    if (!function_exists('wp_enqueue_style')) { function wp_enqueue_style(...$a) {} }
+    if (!function_exists('get_current_screen')) { function get_current_screen() { return null; } }
+    try { $admin->enqueueAssets('settings_page_fluxfiles'); } catch (\Throwable $e) { /* stubs: only the localized data matters */ }
+    $loc = $GLOBALS['WP_LOCALIZED']['fluxfiles-settings'][1] ?? null;
+    if ($loc !== null) { assertEqual('nonce-fluxfiles_test_ai', $loc['aiNonce'] ?? null); }
 });
 
 test('the media endpoint is core\'s MediaEndpoint with status_header() and X-Accel from the plugin\'s source', function () use ($ffPriv, $ffProp) {

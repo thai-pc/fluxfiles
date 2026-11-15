@@ -215,6 +215,10 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/ai-tag', array_merge($writeArgs, [
             'callback' => [$api, 'handleAiTag'],
         ]));
+        // AI connection test: same gate as /ai-tag, but "Tag on upload" plays no part.
+        register_rest_route($ns, $p . '/ai/test', array_merge($writeArgs, [
+            'callback' => [$api, 'handleAiTest'],
+        ]));
         register_rest_route($ns, $p . '/presign', array_merge($writeArgs, [
             'callback' => [$api, 'handlePresign'],
         ]));
@@ -896,16 +900,35 @@ class FluxFilesApi
         if (!$claims->aiAutoTag) {
             return null;
         }
+        return self::savedAiTagger();
+    }
+
+    /**
+     * The AI tagger built from the SAVED plugin options (null without a provider), shared by
+     * tagging, the /ai/test route, the Doctor block and the Settings button. The base URL is
+     * typed into a form by an administrator, so a call to it re-runs core's SSRF rule at call
+     * time (SsrfCheckedTransport). It cannot pin the checked IP: wp_remote_request() offers no
+     * resolve hook (and may run over Streams or a configured proxy), so a DNS change between
+     * the check and the request stays a residual risk, as it was for tagging before. Redirects
+     * are never followed (FluxFilesHttpTransport) and the decorator refuses a 3xx answer.
+     */
+    public static function savedAiTagger(?\FluxFiles\HttpTransportInterface $transport = null): ?\FluxFiles\AiTagger
+    {
         $aiProvider = get_option('fluxfiles_ai_provider', '');
         if (empty($aiProvider)) {
             return null;
+        }
+        $baseUrl = get_option('fluxfiles_ai_base_url', '') ?: null;
+        $transport = $transport ?? self::httpTransport();
+        if ($baseUrl !== null && class_exists(\FluxFiles\SsrfCheckedTransport::class)) {
+            $transport = new \FluxFiles\SsrfCheckedTransport($transport);
         }
         return new \FluxFiles\AiTagger(
             $aiProvider,
             get_option('fluxfiles_ai_api_key', ''),
             get_option('fluxfiles_ai_model', '') ?: null,
-            get_option('fluxfiles_ai_base_url', '') ?: null,
-            self::httpTransport()
+            $baseUrl,
+            $transport
         );
     }
 
@@ -922,7 +945,7 @@ class FluxFilesApi
      * limiter needs PDO + an unprefixed table; WordPress has `$wpdb` and prefixed
      * tables, hence FluxFilesRateLimiterStorage behind the same interface.
      */
-    private function limiter(int $readLimit, int $writeLimit): RateLimiterStorageInterface
+    private static function limiter(int $readLimit, int $writeLimit): RateLimiterStorageInterface
     {
         if (get_option('fluxfiles_storage_backend', 'json') === 'db') {
             // An auto-update does not reliably re-fire activation; make sure the
@@ -950,10 +973,19 @@ class FluxFilesApi
      */
     private function bucketLimit(\FluxFiles\Claims $claims, string $bucket, int $limit): void
     {
+        self::userBucketLimit((string) $claims->userId, $bucket, $limit);
+    }
+
+    /**
+     * The same per-user bucket for callers without claims (the admin-only AJAX buttons).
+     * Throws ApiException 429.
+     */
+    public static function userBucketLimit(string $userId, string $bucket, int $limit): void
+    {
         if ($limit <= 0) {
             return;
         }
-        $this->limiter($limit, $limit)->check($claims->userId, $bucket);
+        self::limiter($limit, $limit)->check($userId, $bucket);
     }
 
     /**
@@ -1557,21 +1589,10 @@ class FluxFilesApi
             $this->rateLimit($claims, true);
             $fm = $this->fileManager($claims);
 
-            $aiProvider = get_option('fluxfiles_ai_provider', '');
-            if (empty($aiProvider)) {
-                throw new ApiException('AI tagging is not configured', 400);
+            $aiTagger = self::savedAiTagger();
+            if ($aiTagger === null) {
+                throw new ApiException('AI tagging is not configured', 400, 'ai_not_configured');
             }
-
-            $aiTagger = new \FluxFiles\AiTagger(
-                $aiProvider,
-                get_option('fluxfiles_ai_api_key', ''),
-                get_option('fluxfiles_ai_model', '') ?: null,
-                // 4th arg — cores older than this plugin's floor ignore it (PHP drops
-                // extra arguments to a userland function), so the base-URL override is
-                // additive and needs no constraint bump.
-                get_option('fluxfiles_ai_base_url', '') ?: null,
-                self::httpTransport()
-            );
             $fm->setAiTagger($aiTagger);
 
             $body = $this->body($request);
@@ -1585,6 +1606,27 @@ class FluxFilesApi
             $result = $fm->aiTag($disk, $path);
             $this->auditOk($claims, 'ai-tag', $body, $result);
             $this->dispatchWebhook($claims, 'ai_tag', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * AI connection test (core's POST /ai/test): one tiny paid vision call against the saved
+     * provider. Eligibility is /ai-tag's (disk + write + a saved provider); "Tag on upload"
+     * is irrelevant. 2/min per user on top of the write bucket, like core's `ai_test`.
+     */
+    public function handleAiTest(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $this->bucketLimit($claims, 'ai_test', 2);
+            $body = $this->body($request);
+            $result = \FluxFiles\AiTestEndpoint::run($claims, self::savedAiTagger(), $body);
+            $this->auditOk($claims, 'ai/test', $body, $result);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -2111,6 +2153,11 @@ class FluxFilesApi
             $report = (new BucketDoctor($this->diskManager, self::httpTransport(), new \FluxFilesUrlFetcher()))->diagnose($disk, $origin ?: null);
             // It writes and deletes a probe object — logged like any other write.
             $this->logAuditQuiet($claims, 'disk_doctor', $disk, '');
+            // Additive, no network call: lets the UI offer a manual AI "Test connection".
+            $ai = \FluxFiles\AiTestEndpoint::doctorBlock($claims, self::savedAiTagger());
+            if ($ai !== null) {
+                $report['ai'] = $ai;
+            }
 
             return $this->ok($report);
         } catch (ApiException $e) {
