@@ -72,6 +72,7 @@ require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesDbMetadataHandler.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesRateLimiterStorage.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesHttpTransport.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesUrlFetcher.php';
+require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesAiTransport.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesMediaEndpoint.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesApi.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesShortcode.php';

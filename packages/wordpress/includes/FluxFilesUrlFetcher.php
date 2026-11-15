@@ -140,8 +140,26 @@ class FluxFilesUrlFetcher implements UrlFetcherInterface
         return [$scheme, strtolower(trim($p['host'], '[]')), (int) ($p['port'] ?? ($scheme === 'https' ? 443 : 80))];
     }
 
+    /** Pin a request's cURL handle to already-checked addresses (also used by FluxFilesAiTransport). */
+    public static function pinHandle($handle, array $pin): bool
+    {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt_array -- options on WordPress' own Requests cURL handle via the http_api_curl hook (DNS pin for SSRF safety)
+        return curl_setopt_array($handle, $pin + [CURLOPT_FOLLOWLOCATION => false]) === true;
+    }
+
+    /** The address a handle really connected to (SSRF backstop), or null when it cannot be read. */
+    public static function connectedIp($handle): ?string
+    {
+        try {
+            $ip = curl_getinfo($handle, CURLINFO_PRIMARY_IP); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- reads the connected IP of WordPress' own handle (SSRF backstop)
+        } catch (\Throwable $e) {
+            return null;
+        }
+        return is_string($ip) ? $ip : null;
+    }
+
     /** WordPress prefers its cURL transport; only that one lets us pin and verify the connection. */
-    private static function curlTransportUsable(bool $https): bool
+    public static function curlTransportUsable(bool $https): bool
     {
         if (!extension_loaded('curl')) {
             return false;

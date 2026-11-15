@@ -68,6 +68,12 @@ $fluxfiles_render_section = static function (string $sid) use ($fluxfiles_all): 
             esc_html(sprintf(__('Test %s connection', 'fluxfiles'), strtoupper($test)))
         );
     }
+    if ($sid === 'fluxfiles_ai') {
+        printf(
+            '<div class="ff-test-row"><button type="button" class="button ff-test-ai">%1$s</button> <span class="ff-test-result" role="status" aria-live="polite"></span></div>',
+            esc_html__('Test connection', 'fluxfiles')
+        );
+    }
     echo '</section>';
 };
 ?>
