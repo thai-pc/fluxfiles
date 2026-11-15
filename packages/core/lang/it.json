@@ -469,6 +469,7 @@
       "empty_trash": "Svuota cestino",
       "url_import": "Importa da URL",
       "ai_tag": "Tag IA",
+      "ai_test": "Test di connessione IA",
       "crop": "Ritaglia",
       "watermark": "Filigrana",
       "optimize": "Ottimizza",
@@ -558,6 +559,27 @@
     "no_tags": "Nessun tag AI. Clicca \"Genera tag AI\" per analizzare questa immagine.",
     "analyzing_image": "Analisi dell'immagine con AI...",
     "failed": "Tagging AI fallito: {message}"
+  },
+  "ai_test": {
+    "title": "Tagging IA",
+    "run": "Prova connessione",
+    "running": "Prova in corso...",
+    "ok": "Connessione OK ({ms} ms)",
+    "deprecated": "Il modello funziona ancora ma è obsoleto; cambialo prima del {retires_at}.",
+    "upload_failed": "Tagging automatico non riuscito: {message}",
+    "hint": {
+      "ai_not_configured": "Imposta FLUXFILES_AI_PROVIDER (e BASE_URL/MODEL per compatible).",
+      "ai_auth": "Controlla la chiave API (e che possa usare questo modello/regione).",
+      "ai_model_not_found": "Svuota l'impostazione del modello per usare quello predefinito del provider ({default_model}) o inserisci un modello vision attuale.",
+      "ai_no_vision": "Questo modello non accetta immagini; scegli un modello vision.",
+      "ai_quota": "Aggiungi credito o alza il limite di spesa presso il provider.",
+      "ai_rate_limited": "Limite di frequenza del provider; riprova più tardi o carica meno file.",
+      "ai_unavailable": "Interruzione o sovraccarico del provider; riprova più tardi.",
+      "ai_network": "Controlla l'URL base, il DNS e il firewall/proxy in uscita.",
+      "ai_blocked_host": "Host privato/locale: aggiungilo a FLUXFILES_SSRF_ALLOW_HOSTS.",
+      "ai_bad_response": "L'endpoint non parla l'API prevista; controlla provider e URL base.",
+      "ai_provider_error": "Controlla l'URL base e il modello."
+    }
   },
   "copy": {
     "copied": "URL copiato negli appunti"

@@ -469,6 +469,7 @@
       "empty_trash": "Empty trash",
       "url_import": "Import from URL",
       "ai_tag": "AI tag",
+      "ai_test": "AI connection test",
       "crop": "Crop",
       "watermark": "Watermark",
       "optimize": "Optimize",
@@ -558,6 +559,27 @@
     "no_tags": "No AI tags yet. Click \"Generate AI Tags\" to analyze this image.",
     "analyzing_image": "Analyzing image with AI...",
     "failed": "AI tagging failed: {message}"
+  },
+  "ai_test": {
+    "title": "AI tagging",
+    "run": "Test connection",
+    "running": "Testing...",
+    "ok": "Connection OK ({ms} ms)",
+    "deprecated": "The model still works but is deprecated; switch before {retires_at}.",
+    "upload_failed": "Auto-tagging failed: {message}",
+    "hint": {
+      "ai_not_configured": "Set FLUXFILES_AI_PROVIDER (and BASE_URL/MODEL for compatible).",
+      "ai_auth": "Check the API key (and that it may use this model/region).",
+      "ai_model_not_found": "Clear the model setting to use the provider default ({default_model}), or enter a current vision model.",
+      "ai_no_vision": "This model does not accept images; choose a vision model.",
+      "ai_quota": "Add credits or raise the spending limit at the provider.",
+      "ai_rate_limited": "Provider rate limit; retry later or lower upload volume.",
+      "ai_unavailable": "Provider outage or overload; retry later.",
+      "ai_network": "Check the base URL, DNS and the outbound firewall/proxy.",
+      "ai_blocked_host": "Private/local host: add it to FLUXFILES_SSRF_ALLOW_HOSTS.",
+      "ai_bad_response": "The endpoint is not speaking the expected API; check the provider and base URL.",
+      "ai_provider_error": "Check the base URL and model."
+    }
   },
   "copy": {
     "copied": "URL copied to clipboard"

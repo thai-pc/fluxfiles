@@ -169,6 +169,8 @@ function fluxFilesApp() {
         doctorReport: null,
         doctorLoading: false,
         doctorError: '',
+        aiTestResult: null,
+        aiTesting: false,
 
         // Trash panel
         showTrash: false,
@@ -1853,6 +1855,7 @@ function fluxFilesApp() {
             let succeeded = 0;
             let autoSavedBytes = 0; // bytes the server auto-optimized away on upload
             let scannedClean = 0;   // uploads the server virus-scanned and found clean
+            let aiFailCode = '';    // first auto-tag failure code of this batch (one toast, not N)
             for (let i = 0; i < total; i++) {
                 const file = files[i];
                 this.uploadCurrentIndex = i + 1;
@@ -1883,6 +1886,7 @@ function fluxFilesApp() {
                     // Server auto-optimized the image on upload (paid module) → tally savings.
                     if (res && res.optimized && res.saved_bytes > 0) autoSavedBytes += res.saved_bytes;
                     if (res && res.virus_scanned) scannedClean++;
+                    if (res && res.ai_error && !aiFailCode) aiFailCode = String(res.ai_error);
 
                     succeeded++;
                     setOverall(i + 1, 0); // snap to the file boundary
@@ -1901,6 +1905,11 @@ function fluxFilesApp() {
             this.uploadCurrentIndex = 0;
             this.uploadTotal = 0;
             this.uploadPhase = 'uploading';
+            if (aiFailCode) {
+                const k = 'error.' + aiFailCode;
+                const m = this.t(k);
+                this.showToast(this.t('ai_test.upload_failed', { message: m === k ? aiFailCode : m }), 'info', 5000);
+            }
             if (scannedClean > 0 && autoSavedBytes === 0) {
                 this.showToast(this.t('virus.uploads_clean', { count: scannedClean }), 'success');
             }
@@ -3083,6 +3092,7 @@ function fluxFilesApp() {
             this.showDoctor = true;
             this.doctorReport = null;
             this.doctorError = '';
+            this.aiTestResult = null; // never auto-runs: every AI test is a paid provider call
             await this.loadDoctor();
         },
 
@@ -3115,6 +3125,41 @@ function fluxFilesApp() {
             } finally {
                 this.doctorLoading = false;
             }
+        },
+
+        // Manual AI connection test (one tiny real vision call, 2/min server-side).
+        // A failed test is HTTP 200 with ok:false; only the gate itself throws.
+        async runAiTest() {
+            if (this.aiTesting) return;
+            this.aiTesting = true;
+            this.aiTestResult = null;
+            try {
+                this.aiTestResult = await this.api('POST', '/api/fm/ai/test', { disk: this.currentDisk });
+            } catch (e) {
+                this.aiTestResult = { ok: false, code: null, message: e.message || this.t('error.generic') };
+            } finally {
+                this.aiTesting = false;
+            }
+        },
+
+        // Localised line for an AI test failure: the error.<code> headline.
+        aiTestMessage(r) {
+            if (!r || r.ok) return '';
+            const k = 'error.' + r.code;
+            const v = r.code ? this.t(k, r.params || {}) : '';
+            return v && v !== k ? v : (r.message || this.t('error.generic'));
+        },
+
+        // Localised fix hint by code. The "model not found" hint that depends on the
+        // default model (none, or the failing one) is server-written English: keep it.
+        aiTestHint(r) {
+            if (!r || r.ok || !r.code) return '';
+            const p = r.params || {};
+            const generic = r.code === 'ai_model_not_found'
+                && (p.reason === 'api_version' || !p.default_model || p.model === p.default_model);
+            const k = 'ai_test.hint.' + r.code;
+            const v = generic ? k : this.t(k, p);
+            return v !== k ? v : (r.hint || '');
         },
 
         closeDoctor() {

@@ -2241,6 +2241,25 @@
                                 </li>
                             </template>
                         </ul>
+                        <template x-if="doctorReport.ai">
+                            <div class="ff-doctor-ai">
+                                <div class="ff-doctor-ai-head">
+                                    <div class="ff-doctor-msg"><b x-text="t('ai_test.title')"></b> — <span x-text="doctorReport.ai.provider + ' · ' + doctorReport.ai.model"></span></div>
+                                    <button class="ff-btn ff-btn-ghost" @click="runAiTest()" :disabled="aiTesting" x-text="aiTesting ? t('ai_test.running') : t('ai_test.run')"></button>
+                                </div>
+                                <template x-if="aiTestResult">
+                                    <div class="ff-doctor-check" :class="aiTestResult.ok ? (aiTestResult.warning ? 'is-warn' : 'is-ok') : 'is-fail'">
+                                        <span class="ff-doctor-dot" x-text="aiTestResult.ok ? (aiTestResult.warning ? '!' : '✓') : '✕'"></span>
+                                        <div>
+                                            <div class="ff-doctor-msg" x-text="aiTestResult.ok ? t('ai_test.ok', { ms: aiTestResult.latency_ms }) : aiTestMessage(aiTestResult)"></div>
+                                            <div class="ff-doctor-fix" x-show="!aiTestResult.ok && aiTestHint(aiTestResult)" x-text="aiTestHint(aiTestResult)"></div>
+                                            <div class="ff-doctor-fix" x-show="aiTestResult.ok && aiTestResult.warning" x-text="t('ai_test.deprecated', { retires_at: aiTestResult.retires_at || '' })"></div>
+                                            <pre class="ff-doctor-ai-detail" x-show="!aiTestResult.ok && aiTestResult.detail" x-text="aiTestResult.detail"></pre>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
                         <template x-if="doctorReport.remediation && doctorReport.remediation.cors">
                             <div class="ff-doctor-remed">
                                 <div class="ff-doctor-remed-head">

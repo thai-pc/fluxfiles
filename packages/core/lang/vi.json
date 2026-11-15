@@ -469,6 +469,7 @@
       "empty_trash": "Làm trống thùng rác",
       "url_import": "Nhập từ URL",
       "ai_tag": "Gắn thẻ AI",
+      "ai_test": "Kiểm tra kết nối AI",
       "crop": "Cắt ảnh",
       "watermark": "Đóng dấu",
       "optimize": "Tối ưu",
@@ -558,6 +559,27 @@
     "no_tags": "Chưa có AI tags. Nhấn \"Tạo AI Tags\" để phân tích ảnh này.",
     "analyzing_image": "Đang phân tích ảnh bằng AI...",
     "failed": "Gắn nhãn AI thất bại: {message}"
+  },
+  "ai_test": {
+    "title": "Gắn thẻ AI",
+    "run": "Kiểm tra kết nối",
+    "running": "Đang kiểm tra...",
+    "ok": "Kết nối OK ({ms} ms)",
+    "deprecated": "Mô hình vẫn hoạt động nhưng đã lỗi thời; hãy đổi trước {retires_at}.",
+    "upload_failed": "Tự động gắn thẻ thất bại: {message}",
+    "hint": {
+      "ai_not_configured": "Đặt FLUXFILES_AI_PROVIDER (và BASE_URL/MODEL cho compatible).",
+      "ai_auth": "Kiểm tra khóa API (và quyền dùng mô hình/khu vực này).",
+      "ai_model_not_found": "Xóa cài đặt mô hình để dùng mặc định của nhà cung cấp ({default_model}), hoặc nhập một mô hình thị giác hiện hành.",
+      "ai_no_vision": "Mô hình này không nhận ảnh; hãy chọn mô hình có thị giác.",
+      "ai_quota": "Nạp thêm tín dụng hoặc tăng hạn mức chi tiêu tại nhà cung cấp.",
+      "ai_rate_limited": "Chạm giới hạn của nhà cung cấp; thử lại sau hoặc giảm lượng tải lên.",
+      "ai_unavailable": "Nhà cung cấp gặp sự cố hoặc quá tải; thử lại sau.",
+      "ai_network": "Kiểm tra base URL, DNS và tường lửa/proxy đi ra.",
+      "ai_blocked_host": "Máy chủ riêng/nội bộ: thêm vào FLUXFILES_SSRF_ALLOW_HOSTS.",
+      "ai_bad_response": "Endpoint không dùng đúng API mong đợi; kiểm tra nhà cung cấp và base URL.",
+      "ai_provider_error": "Kiểm tra base URL và mô hình."
+    }
   },
   "copy": {
     "copied": "Đã sao chép URL"

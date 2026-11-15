@@ -469,6 +469,7 @@
       "empty_trash": "Prullenbak legen",
       "url_import": "Importeren vanaf URL",
       "ai_tag": "AI-tag",
+      "ai_test": "AI-verbindingstest",
       "crop": "Bijsnijden",
       "watermark": "Watermerk",
       "optimize": "Optimaliseren",
@@ -558,6 +559,27 @@
     "no_tags": "Nog geen AI-tags. Klik op \"AI-tags genereren\" om deze afbeelding te analyseren.",
     "analyzing_image": "Afbeelding wordt geanalyseerd met AI...",
     "failed": "AI-tagging mislukt: {message}"
+  },
+  "ai_test": {
+    "title": "AI-tagging",
+    "run": "Verbinding testen",
+    "running": "Testen...",
+    "ok": "Verbinding OK ({ms} ms)",
+    "deprecated": "Het model werkt nog maar is verouderd; schakel over vóór {retires_at}.",
+    "upload_failed": "Automatisch taggen mislukt: {message}",
+    "hint": {
+      "ai_not_configured": "Stel FLUXFILES_AI_PROVIDER in (en BASE_URL/MODEL voor compatible).",
+      "ai_auth": "Controleer de API-sleutel (en of deze dit model/deze regio mag gebruiken).",
+      "ai_model_not_found": "Wis de modelinstelling om de standaard van de provider ({default_model}) te gebruiken, of voer een actueel vision-model in.",
+      "ai_no_vision": "Dit model accepteert geen afbeeldingen; kies een vision-model.",
+      "ai_quota": "Voeg tegoed toe of verhoog de bestedingslimiet bij de provider.",
+      "ai_rate_limited": "Ratelimiet van de provider; probeer later opnieuw of upload minder.",
+      "ai_unavailable": "Storing of overbelasting bij de provider; probeer later opnieuw.",
+      "ai_network": "Controleer de basis-URL, DNS en uitgaande firewall/proxy.",
+      "ai_blocked_host": "Privé-/lokale host: voeg toe aan FLUXFILES_SSRF_ALLOW_HOSTS.",
+      "ai_bad_response": "Het eindpunt spreekt niet de verwachte API; controleer provider en basis-URL.",
+      "ai_provider_error": "Controleer de basis-URL en het model."
+    }
   },
   "copy": {
     "copied": "URL gekopieerd naar klembord"

@@ -469,6 +469,7 @@
       "empty_trash": "清空回收站",
       "url_import": "从URL导入",
       "ai_tag": "AI标签",
+      "ai_test": "AI 连接测试",
       "crop": "裁剪",
       "watermark": "水印",
       "optimize": "优化",
@@ -558,6 +559,27 @@
     "no_tags": "暂无 AI 标签。点击\"生成 AI 标签\"来分析此图片。",
     "analyzing_image": "正在使用 AI 分析图片...",
     "failed": "AI 标注失败：{message}"
+  },
+  "ai_test": {
+    "title": "AI 标签",
+    "run": "测试连接",
+    "running": "测试中...",
+    "ok": "连接正常（{ms} 毫秒）",
+    "deprecated": "该模型仍可用但已弃用，请在 {retires_at} 前切换。",
+    "upload_failed": "自动打标签失败：{message}",
+    "hint": {
+      "ai_not_configured": "设置 FLUXFILES_AI_PROVIDER（compatible 还需 BASE_URL/MODEL）。",
+      "ai_auth": "检查 API 密钥（以及它是否可使用该模型/区域）。",
+      "ai_model_not_found": "清除模型设置以使用提供商默认模型（{default_model}），或填写当前的视觉模型。",
+      "ai_no_vision": "该模型不支持图片，请选择视觉模型。",
+      "ai_quota": "向提供商充值或提高支出上限。",
+      "ai_rate_limited": "提供商速率限制；请稍后重试或减少上传量。",
+      "ai_unavailable": "提供商故障或过载；请稍后重试。",
+      "ai_network": "检查基础 URL、DNS 以及出站防火墙/代理。",
+      "ai_blocked_host": "私有/本地主机：请添加到 FLUXFILES_SSRF_ALLOW_HOSTS。",
+      "ai_bad_response": "该端点未使用预期的 API；请检查提供商和基础 URL。",
+      "ai_provider_error": "检查基础 URL 和模型。"
+    }
   },
   "copy": {
     "copied": "已复制URL到剪贴板"

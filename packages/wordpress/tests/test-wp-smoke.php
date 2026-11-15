@@ -1625,6 +1625,9 @@ test('proxy route surface covers every core /api/fm route', function () {
         //   404s, so proxy mode loses nothing it had before. A port would need the
         //   adapter's own staging dir + PATCH body streaming — not done in v1.
         'tus',
+        // ai/test (docs/design/CONNECTION-TEST-DESIGN.md): temporary, removed by the
+        // WP PR once the floor is bumped to the core release that ships it.
+        'ai/test',
     ];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));

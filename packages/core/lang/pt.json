@@ -469,6 +469,7 @@
       "empty_trash": "Esvaziar lixeira",
       "url_import": "Importar de URL",
       "ai_tag": "Etiqueta IA",
+      "ai_test": "Teste de conexão de IA",
       "crop": "Recortar",
       "watermark": "Marca d'água",
       "optimize": "Otimizar",
@@ -558,6 +559,27 @@
     "no_tags": "Nenhuma tag de IA ainda. Clique em \"Gerar tags com IA\" para analisar esta imagem.",
     "analyzing_image": "Analisando imagem com IA...",
     "failed": "Falha na marcação por IA: {message}"
+  },
+  "ai_test": {
+    "title": "Etiquetagem por IA",
+    "run": "Testar conexão",
+    "running": "Testando...",
+    "ok": "Conexão OK ({ms} ms)",
+    "deprecated": "O modelo ainda funciona, mas está obsoleto; troque antes de {retires_at}.",
+    "upload_failed": "Falha na etiquetagem automática: {message}",
+    "hint": {
+      "ai_not_configured": "Defina FLUXFILES_AI_PROVIDER (e BASE_URL/MODEL para compatible).",
+      "ai_auth": "Verifique a chave de API (e se ela pode usar este modelo/região).",
+      "ai_model_not_found": "Limpe a configuração do modelo para usar o padrão do provedor ({default_model}) ou informe um modelo de visão atual.",
+      "ai_no_vision": "Este modelo não aceita imagens; escolha um modelo de visão.",
+      "ai_quota": "Adicione créditos ou aumente o limite de gastos no provedor.",
+      "ai_rate_limited": "Limite de taxa do provedor; tente mais tarde ou envie menos arquivos.",
+      "ai_unavailable": "Queda ou sobrecarga do provedor; tente mais tarde.",
+      "ai_network": "Verifique a URL base, o DNS e o firewall/proxy de saída.",
+      "ai_blocked_host": "Host privado/local: adicione-o a FLUXFILES_SSRF_ALLOW_HOSTS.",
+      "ai_bad_response": "O endpoint não fala a API esperada; verifique o provedor e a URL base.",
+      "ai_provider_error": "Verifique a URL base e o modelo."
+    }
   },
   "copy": {
     "copied": "URL copiada para a área de transferência"

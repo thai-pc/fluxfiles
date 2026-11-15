@@ -469,6 +469,7 @@
       "empty_trash": "Papierkorb leeren",
       "url_import": "Aus URL importieren",
       "ai_tag": "KI-Tag",
+      "ai_test": "KI-Verbindungstest",
       "crop": "Zuschneiden",
       "watermark": "Wasserzeichen",
       "optimize": "Optimieren",
@@ -558,6 +559,27 @@
     "no_tags": "Noch keine KI-Tags vorhanden. Klicken Sie auf \"KI-Tags erzeugen\", um dieses Bild zu analysieren.",
     "analyzing_image": "Bild wird mit KI analysiert...",
     "failed": "KI-Tagging fehlgeschlagen: {message}"
+  },
+  "ai_test": {
+    "title": "KI-Tagging",
+    "run": "Verbindung testen",
+    "running": "Wird getestet...",
+    "ok": "Verbindung OK ({ms} ms)",
+    "deprecated": "Das Modell funktioniert noch, ist aber veraltet; wechseln Sie vor dem {retires_at}.",
+    "upload_failed": "Automatisches Tagging fehlgeschlagen: {message}",
+    "hint": {
+      "ai_not_configured": "FLUXFILES_AI_PROVIDER setzen (und BASE_URL/MODEL für compatible).",
+      "ai_auth": "API-Schlüssel prüfen (und ob er dieses Modell/diese Region nutzen darf).",
+      "ai_model_not_found": "Modelleinstellung leeren, um den Standard des Anbieters ({default_model}) zu nutzen, oder ein aktuelles Vision-Modell eintragen.",
+      "ai_no_vision": "Dieses Modell akzeptiert keine Bilder; wählen Sie ein Vision-Modell.",
+      "ai_quota": "Guthaben aufladen oder das Ausgabenlimit beim Anbieter erhöhen.",
+      "ai_rate_limited": "Ratenlimit des Anbieters; später erneut versuchen oder weniger hochladen.",
+      "ai_unavailable": "Ausfall oder Überlastung beim Anbieter; später erneut versuchen.",
+      "ai_network": "Base-URL, DNS und ausgehende Firewall/Proxy prüfen.",
+      "ai_blocked_host": "Privater/lokaler Host: zu FLUXFILES_SSRF_ALLOW_HOSTS hinzufügen.",
+      "ai_bad_response": "Der Endpunkt spricht nicht die erwartete API; Anbieter und Base-URL prüfen.",
+      "ai_provider_error": "Base-URL und Modell prüfen."
+    }
   },
   "copy": {
     "copied": "URL in die Zwischenablage kopiert"
