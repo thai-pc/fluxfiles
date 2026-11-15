@@ -124,6 +124,27 @@ class AiTagger
         $this->baseUrl = rtrim($baseUrl !== '' ? $baseUrl : (string) ($spec['base'] ?? ''), '/');
     }
 
+    /**
+     * The tagger an operator configured through FLUXFILES_AI_* (index.php and the CLI share
+     * this, so the two never parse the env differently). Null when no provider is set.
+     *
+     * @param array<string,mixed> $env usually $_ENV
+     */
+    public static function fromEnv(array $env, ?HttpTransportInterface $transport = null): ?self
+    {
+        $provider = (string) ($env['FLUXFILES_AI_PROVIDER'] ?? '');
+        if ($provider === '') {
+            return null;
+        }
+        return new self(
+            $provider,
+            (string) ($env['FLUXFILES_AI_API_KEY'] ?? ''),
+            isset($env['FLUXFILES_AI_MODEL']) ? (string) $env['FLUXFILES_AI_MODEL'] : null,
+            isset($env['FLUXFILES_AI_BASE_URL']) ? (string) $env['FLUXFILES_AI_BASE_URL'] : null,
+            $transport
+        );
+    }
+
     /** Provider names accepted by `analyze()`, for docs and error messages. */
     public static function supportedProviders(): array
     {
