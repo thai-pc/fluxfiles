@@ -466,6 +466,19 @@ if ($command === 'doctor') {
         fwrite(STDERR, "Disk '{$dDisk}' is not configured.\n");
         exit(1);
     }
+    // The probe is written to (and deleted from) the real disk. Run as another user than the
+    // web server, it can leave a root-owned `_fluxfiles/` the web user cannot write to.
+    if (function_exists('posix_geteuid')) {
+        $dRoot = (string) ($dConfigs[$dDisk]['root'] ?? '');
+        $dEuid = posix_geteuid();
+        if (($dConfigs[$dDisk]['driver'] ?? 'local') === 'local') {
+            if ($dEuid === 0) {
+                fwrite(STDERR, "WARNING: running as root; files this creates on the disk will be owned by root. Run it as the web server user (sudo -u www-data php bin/fluxfiles doctor).\n");
+            } elseif ($dRoot !== '' && is_dir($dRoot) && fileowner($dRoot) !== $dEuid) {
+                fwrite(STDERR, "WARNING: you are not the owner of the disk root; the check may report a false failure. Run it as the web server user (sudo -u www-data php bin/fluxfiles doctor).\n");
+            }
+        }
+    }
     try {
         $report = (new \FluxFiles\BucketDoctor(new DiskManager($dConfigs)))->diagnose($dDisk, $dOrigin);
     } catch (\Throwable $e) {
@@ -488,7 +501,8 @@ if ($command === 'doctor') {
 
 // `ai:test` — prove the configured AI provider works (FLUXFILES_AI_*). By default one tiny
 // real vision call (paid); --cheap only looks the model up at the provider (free), which is
-// what a scheduled health check should run. Never prints the API key or the base URL.
+// what a scheduled health check should run. Never prints the API key; the base URL and
+// its host are replaced by <base-url>/<host> in any error text.
 //   fluxfiles ai:test [--cheap] [--json]
 // Exit: 0 ok, 1 not configured/usage, 2 the test failed.
 if ($command === 'ai:test') {
@@ -503,6 +517,24 @@ if ($command === 'ai:test') {
     }
     \FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
     $tagger = \FluxFiles\AiTagger::fromEnv($_ENV);
+    // Never show the operator's gateway: a network error names its host, and a gateway's
+    // error body may echo the request path. Scrub the base URL, host:port and host.
+    $scrubs = [];
+    $aBase = trim((string) ($_ENV['FLUXFILES_AI_BASE_URL'] ?? ''));
+    if ($aBase !== '') {
+        $scrubs[rtrim($aBase, '/')] = '<base-url>';
+        $aParts = parse_url($aBase);
+        if (!empty($aParts['host'])) {
+            if (!empty($aParts['port'])) { $scrubs[$aParts['host'] . ':' . $aParts['port']] = '<host>'; }
+            $scrubs[$aParts['host']] = '<host>';
+        }
+        uksort($scrubs, static fn($a, $b) => strlen($b) <=> strlen($a));
+    }
+    $scrub = static fn(string $t): string => $scrubs === [] ? $t : strtr($t, $scrubs);
+    // The library logs failures to stderr (error_log); same scrubbing, server logs stay as is.
+    \FluxFiles\Log::setSink(static function (string $m) use ($scrub): void {
+        fwrite(STDERR, $scrub($m) . "\n");
+    });
     if ($tagger === null) {
         $code = \FluxFiles\AiError::NOT_CONFIGURED;
         $res = [
@@ -513,6 +545,9 @@ if ($command === 'ai:test') {
         ];
     } else {
         $res = $cheap ? $tagger->checkModel() : $tagger->testConnection();
+        foreach (['message', 'hint', 'detail', 'warning'] as $f) {
+            if (is_string($res[$f] ?? null)) { $res[$f] = $scrub($res[$f]); }
+        }
     }
     $aExit = $res['ok'] ? 0 : (($res['code'] ?? '') === \FluxFiles\AiError::NOT_CONFIGURED ? 1 : 2);
     if ($aJson) {

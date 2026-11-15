@@ -25,11 +25,21 @@ fclose($s);
 $fake = proc_open([PHP_BINARY, '-S', $fakeAddr, __DIR__ . '/fixtures/fake-ai-provider.php'],
     [0 => ['pipe', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $p,
     __DIR__, array_merge(getenv(), ['FAKE_AI_SCENARIO_FILE' => $scenarioFile]));
-for ($i = 0; $i < 50; $i++) {
+register_shutdown_function(static function () use ($fake, $tmp): void {
+    if (is_resource($fake)) { proc_terminate($fake); }
+    exec('rm -rf ' . escapeshellarg($tmp));
+});
+$up = false;
+for ($i = 0; $i < 50 && !$up; $i++) {
     $c = @stream_socket_client('tcp://' . $fakeAddr, $e, $m, .2);
-    if ($c) { fclose($c); break; }
-    usleep(100000);
+    if ($c) { fclose($c); $up = true; } else { usleep(100000); }
 }
+if (!$up) {
+    fwrite(STDERR, "fake provider did not start on $fakeAddr\n");
+    exit(1);
+}
+// An empty .env in the cwd is the first match for the CLI's env lookup, so no developer .env is read.
+touch($tmp . '/.env');
 
 function cli(array $args, array $env): array
 {
@@ -41,7 +51,7 @@ function cli(array $args, array $env): array
         'FLUXFILES_AI_PROVIDER' => '', 'FLUXFILES_AI_API_KEY' => '',
         'FLUXFILES_AI_MODEL' => '', 'FLUXFILES_AI_BASE_URL' => '',
     ], $env);
-    // cwd = temp dir (no composer.json/.env there), so only the real env above counts.
+    // cwd = temp dir holding an empty .env (first match wins): only the env above counts.
     $proc = proc_open(array_merge([PHP_BINARY, $core . '/bin/fluxfiles'], $args),
         [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $tmp, $base);
     $out = stream_get_contents($pipes[1]);
@@ -104,6 +114,21 @@ test('ai:test --cheap runs the model lookup', function () use ($aiEnv) {
     // The fake serves no /models route: a 404 there is "no objection", not a failure.
     check($code === 0 && $j['ok'] === true, "exit $code: $out");
 });
+test('ai:test network failure never names the base URL host', function () {
+    foreach (['http://my-secret-gw.invalid:9/v1' => 'my-secret-gw', 'http://127.0.0.1:9/v1' => '127.0.0.1'] as $url => $needle) {
+        [$code, $out, $err] = cli(['ai:test'], [
+            'FLUXFILES_AI_PROVIDER' => 'compatible', 'FLUXFILES_AI_API_KEY' => 'k', 'FLUXFILES_AI_MODEL' => 'm',
+            'FLUXFILES_AI_BASE_URL' => $url,
+        ]);
+        check($code === 2, "exit $code: $out$err");
+        check(!str_contains($out . $err, $needle), "host leaked for $url: $out$err");
+        [, $json, $jerr] = cli(['ai:test', '--json'], [
+            'FLUXFILES_AI_PROVIDER' => 'compatible', 'FLUXFILES_AI_API_KEY' => 'k', 'FLUXFILES_AI_MODEL' => 'm',
+            'FLUXFILES_AI_BASE_URL' => $url,
+        ]);
+        check(!str_contains($json . $jerr, $needle), "host leaked in json for $url");
+    }
+});
 test('ai:test rejects unknown option -> exit 1', function () {
     [$code, , $err] = cli(['ai:test', '--bogus'], []);
     check($code === 1 && str_contains($err, 'Usage'), "exit $code");
@@ -130,7 +155,5 @@ test('doctor disk that cannot be opened -> exit 1', function () use ($tmp) {
     check($code === 1 && str_contains($err, 'Doctor could not run'), "exit $code: $out$err");
 });
 
-proc_terminate($fake);
-exec('rm -rf ' . escapeshellarg($tmp));
 echo "\n$passed passed, $failed failed\n";
 exit($failed > 0 ? 1 : 0);

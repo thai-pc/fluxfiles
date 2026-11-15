@@ -439,6 +439,27 @@ test('through AiTagger the refusal surfaces as ai_blocked_host', function () {
     catch (AiException $e) { assertEqual('ai_blocked_host', $e->getErrorCode()); assertEqual(502, $e->getHttpCode()); }
 });
 
+echo "{$yellow}► AiTagger::fromEnv(){$reset}\n";
+test('fromEnv: no provider -> null', function () {
+    assertTrue(AiTagger::fromEnv([]) === null);
+    assertTrue(AiTagger::fromEnv(['FLUXFILES_AI_PROVIDER' => '', 'FLUXFILES_AI_API_KEY' => 'k']) === null);
+});
+test('fromEnv: provider is normalised; empty model/base URL fall back to the defaults', function () {
+    $t = AiTagger::fromEnv(['FLUXFILES_AI_PROVIDER' => ' Claude ', 'FLUXFILES_AI_API_KEY' => 'k', 'FLUXFILES_AI_MODEL' => '', 'FLUXFILES_AI_BASE_URL' => '']);
+    $d = $t->describe();
+    assertEqual('claude', $d['provider']);
+    assertEqual($d['default_model'], $d['model']);
+    assertTrue($d['model'] !== '');
+});
+test('fromEnv: explicit model is kept, injected transport is the one used', function () {
+    $fake = new FakeTransport(['status' => 200, 'headers' => [], 'body' => (string) json_encode(['content' => [['type' => 'text', 'text' => 'OK']]])]);
+    $t = AiTagger::fromEnv(['FLUXFILES_AI_PROVIDER' => 'claude', 'FLUXFILES_AI_API_KEY' => 'k', 'FLUXFILES_AI_MODEL' => 'my-model', 'FLUXFILES_AI_BASE_URL' => 'https://gw.example/v1'], $fake);
+    assertEqual('my-model', $t->describe()['model']);
+    $t->testConnection();
+    assertEqual(1, count($fake->requests));
+    assertTrue(str_starts_with($fake->last()['url'], 'https://gw.example/v1'));
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

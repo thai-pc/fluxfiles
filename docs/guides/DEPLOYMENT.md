@@ -321,7 +321,13 @@ php bin/fluxfiles doctor [disk] [--origin=https://app.example] [--json]
 php bin/fluxfiles ai:test [--cheap] [--json]
 ```
 
-- `doctor` runs the same Bucket Doctor as the UI's Doctor panel on a disk from
+- `doctor` **writes and deletes a small probe on the real disk** (under `_fluxfiles/.doctor/`;
+  on S3 also a probe object and one multipart upload that it opens and aborts). Run it as the
+  web server user, never as root or a deploy user: `sudo -u www-data php bin/fluxfiles doctor`,
+  or in Docker `docker exec -u www-data <container> php bin/fluxfiles doctor`. Otherwise it can
+  leave a root-owned `_fluxfiles/` the web server cannot write to, or report a false failure
+  (the CLI warns on stderr when it runs as root or as a non-owner of the disk root).
+  It runs the same Bucket Doctor as the UI's Doctor panel on a disk from
   `config/disks.php` (default `local`; per-token BYOB disks are out of scope) and prints
   `OK|WARN|FAIL  <check> - message` with `fix:` lines. `--origin` also checks the bucket's
   CORS for that origin. Exit code 0 is ok or warnings only, 1 a usage/config problem
@@ -329,7 +335,10 @@ php bin/fluxfiles ai:test [--cheap] [--json]
 - `ai:test` checks the AI provider configured in `FLUXFILES_AI_*`. Without `--cheap` it sends
   one tiny real vision call (a few tokens, billed by the provider). `--cheap` only looks the
   model up at the provider: free, and it catches a retired model, a revoked key or a
-  model without vision. It never prints the API key or the base URL. Exit code 0 is ok, 1
+  model without vision. It never prints the API key, and the base URL and its host appear as `<base-url>`/`<host>` in error text.
+  On an endpoint with no model lookup (a gateway or proxy, `compatible`, `ollama`), `--cheap`
+  checks nothing: it prints `not verified` and still exits 0, so schedule the paid test there
+  (or watch for that line). Exit code 0 is ok, 1
   not configured/usage, 2 the test failed (the output names the code and the fix).
 
 `--cheap` is the one to schedule, for example daily:
