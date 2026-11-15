@@ -14,6 +14,11 @@ $scenario = trim((string) @file_get_contents((string) getenv('FAKE_AI_SCENARIO_F
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $key = $_SERVER['HTTP_X_API_KEY'] ?? preg_replace('/^Bearer\s+/i', '', (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
 
+// One line per request, so a test can prove a refused call never reached the provider.
+if (($log = (string) getenv('FAKE_AI_LOG_FILE')) !== '') {
+    file_put_contents($log, ($_SERVER['REQUEST_METHOD'] ?? '') . ' ' . $path . "\n", FILE_APPEND);
+}
+
 function reply(int $status, array $body): void
 {
     http_response_code($status);

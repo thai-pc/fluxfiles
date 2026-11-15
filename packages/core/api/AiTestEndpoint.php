@@ -22,7 +22,7 @@ final class AiTestEndpoint
     /**
      * One real tiny vision call. A failed test is a successful diagnosis: this returns the
      * result shape (HTTP 200) for pass and fail alike; only the gate throws. `detail` (the
-     * redacted provider text) is kept for an unscoped (admin) token only: a tenant gets
+     * redacted provider text) is kept for an unscoped, non-BYOB, non-owner_only token only: a tenant gets
      * code + hint, never the operator's provider/billing text.
      *
      * @param array<string,mixed> $body
@@ -30,9 +30,12 @@ final class AiTestEndpoint
      */
     public static function run(Claims $claims, ?AiTagger $tagger, array $body): array
     {
-        $disk = isset($body['disk']) && is_string($body['disk']) && $body['disk'] !== '' ? $body['disk'] : 'local';
-        if (!$claims->hasDisk($disk)) {
-            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+        // Validate the value the audit step will read too (`$body['disk'] ?? 'local'`), before
+        // any provider call: a normalised "" or 123 would run the paid test and then fail the
+        // request in the audit step, leaving no trace.
+        $disk = $body['disk'] ?? 'local';
+        if (!is_string($disk) || !$claims->hasDisk($disk)) {
+            throw new ApiException("Access denied to disk: " . (is_string($disk) ? $disk : ''), 403, 'disk_denied');
         }
         if (!$claims->hasPerm('write')) {
             throw new ApiException('Permission denied: write', 403, 'permission_denied');
@@ -42,7 +45,9 @@ final class AiTestEndpoint
         }
 
         $result = $tagger->testConnection();
-        if (trim($claims->pathPrefix, '/') !== '') {
+        // `detail` is the operator's provider text (billing/org names): only an operator-grade
+        // token keeps it, i.e. unscoped, no BYOB disk of its own and not owner_only.
+        if (trim($claims->pathPrefix, '/') !== '' || $claims->byobDisks !== [] || $claims->ownerOnly) {
             $result['detail'] = null;
         }
         return $result;

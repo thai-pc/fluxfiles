@@ -1905,11 +1905,6 @@ function fluxFilesApp() {
             this.uploadCurrentIndex = 0;
             this.uploadTotal = 0;
             this.uploadPhase = 'uploading';
-            if (aiFailCode) {
-                const k = 'error.' + aiFailCode;
-                const m = this.t(k);
-                this.showToast(this.t('ai_test.upload_failed', { message: m === k ? aiFailCode : m }), 'info', 5000);
-            }
             if (scannedClean > 0 && autoSavedBytes === 0) {
                 this.showToast(this.t('virus.uploads_clean', { count: scannedClean }), 'success');
             }
@@ -1919,6 +1914,12 @@ function fluxFilesApp() {
                         || ('Optimized — saved ' + this.formatSize(autoSavedBytes)),
                     'success'
                 );
+            }
+            // Last, so it is not overwritten by the success toasts above (single toast slot).
+            if (aiFailCode) {
+                const k = 'error.' + aiFailCode;
+                const m = this.t(k);
+                this.showToast(this.t('ai_test.upload_failed', { message: m === k ? aiFailCode : m }), 'info', 5000);
             }
             this.loadFiles();
         },

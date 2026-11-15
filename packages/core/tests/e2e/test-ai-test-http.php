@@ -24,6 +24,13 @@ $apiKey = 'sk-test-e2e-secret-KEY1234567890';
 $runId = bin2hex(random_bytes(6));
 $scenarioFile = tempnam(sys_get_temp_dir(), 'ff-ai-scn');
 file_put_contents($scenarioFile, 'ok');
+$hitLog = tempnam(sys_get_temp_dir(), 'ff-ai-hits');
+// Own storage: the audit log, rate-limit shards and uploads of this run never touch the repo's.
+$tmp = sys_get_temp_dir() . '/ff-ai-test-' . $runId;
+mkdir($tmp . '/uploads', 0777, true);
+mkdir($tmp . '/state', 0777, true);
+$disksFile = $tmp . '/disks.php';
+file_put_contents($disksFile, "<?php\nreturn ['local' => ['driver' => 'local', 'root' => " . var_export($tmp . '/uploads', true) . ", 'url' => '/storage/uploads']];\n");
 
 function freeAddress(): string
 {
@@ -50,6 +57,7 @@ function waitFor(string $address): void
         }
         usleep(100000);
     }
+    throw new RuntimeException("Test server did not start on $address");
 }
 
 $fakeAddr = freeAddress();
@@ -64,10 +72,12 @@ $baseEnv = array_merge(getenv(), [
     'FLUXFILES_AI_MODEL' => '',
     'FLUXFILES_AI_BASE_URL' => '',
     'FLUXFILES_AI_AUTO_TAG' => '',
+    'FLUXFILES_DISKS_CONFIG' => $disksFile,
+    'FLUXFILES_STORAGE_PATH' => $tmp . '/state',
 ]);
 $procs = [];
 $procs[] = boot([PHP_BINARY, '-S', $fakeAddr, __DIR__ . '/fixtures/fake-ai-provider.php'],
-    array_merge(getenv(), ['FAKE_AI_SCENARIO_FILE' => $scenarioFile]), __DIR__);
+    array_merge(getenv(), ['FAKE_AI_SCENARIO_FILE' => $scenarioFile, 'FAKE_AI_LOG_FILE' => $hitLog]), __DIR__);
 $procs[] = boot([PHP_BINARY, '-d', 'variables_order=EGPCS', '-S', $onAddr, 'router.php'], array_merge($baseEnv, [
     'FLUXFILES_AI_PROVIDER' => 'claude',
     'FLUXFILES_AI_API_KEY' => $apiKey,
@@ -178,6 +188,23 @@ try {
         check($st === 403 && $j['error_code'] === 'permission_denied', "perm: $st " . json_encode($j));
     });
 
+    test('bad disk value is refused BEFORE any provider call (""/123/[]/unknown -> 403 disk_denied)', function () use ($onAddr, $hitLog) {
+        scenario('ok');
+        file_put_contents($hitLog, '');
+        foreach ([['disk' => ''], ['disk' => 123], ['disk' => []], ['disk' => 's3']] as $i => $body) {
+            [$st, $j, $raw] = request($onAddr, 'POST', 'ai/test', token('baddisk' . $i), $body);
+            check($st === 403 && ($j['error_code'] ?? '') === 'disk_denied', json_encode($body) . " -> $st $raw");
+        }
+        clearstatcache();
+        check(trim((string) file_get_contents($hitLog)) === '', 'a refused request reached the provider');
+    });
+
+    test('detail is withheld from an unscoped owner_only token', function () use ($onAddr) {
+        scenario('badkey');
+        [$st, $j, $raw] = request($onAddr, 'POST', 'ai/test', token('ownly', ['prefix' => '', 'owner_only' => true]), []);
+        check($st === 200 && $j['data']['code'] === 'ai_auth' && $j['data']['detail'] === null, "$st $raw");
+    });
+
     test('gate: no provider configured -> 400 ai_not_configured', function () use ($offAddr) {
         [$st, $j] = request($offAddr, 'POST', 'ai/test', token('off'), []);
         check($st === 400 && $j['error_code'] === 'ai_not_configured', "$st " . json_encode($j));
@@ -242,16 +269,12 @@ try {
         proc_close($p);
     }
     @unlink($scenarioFile);
-    foreach (array_keys($prefixes) as $prefix) {
-        $dir = $core . '/storage/uploads/' . $prefix;
-        if (is_dir($dir)) {
-            $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
-            foreach ($it as $f) {
-                $f->isDir() ? rmdir($f->getPathname()) : unlink($f->getPathname());
-            }
-            rmdir($dir);
-        }
+    @unlink($hitLog);
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($tmp, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+    foreach ($it as $f) {
+        $f->isDir() ? rmdir($f->getPathname()) : unlink($f->getPathname());
     }
+    rmdir($tmp);
 }
 echo "$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);
