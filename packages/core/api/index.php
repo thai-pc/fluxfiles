@@ -347,16 +347,7 @@ try {
     $fm = new FileManager($diskManager, $claims, $metaRepo);
 
     // AI Tagger (optional) — built when the operator configured a provider.
-    $aiTagger = null;
-    $aiProvider = $_ENV['FLUXFILES_AI_PROVIDER'] ?? '';
-    if ($aiProvider !== '') {
-        $aiTagger = new \FluxFiles\AiTagger(
-            $aiProvider,
-            $_ENV['FLUXFILES_AI_API_KEY'] ?? '',
-            $_ENV['FLUXFILES_AI_MODEL'] ?? null,
-            $_ENV['FLUXFILES_AI_BASE_URL'] ?? null
-        );
-    }
+    $aiTagger = \FluxFiles\AiTagger::fromEnv($_ENV);
 
     // Quota, stream secret, optimizer, AI, versioning, virus/DLP (fail-closed — the
     // module gate lives inside the callbacks), all in one place.

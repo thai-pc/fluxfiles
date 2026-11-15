@@ -434,12 +434,117 @@ if ($command === 'notify:run') {
     exit($report['failed'] === [] ? 0 : 2);
 }
 
+// `doctor` — run the Bucket Doctor on an operator-configured disk (same checks as the
+// Doctor panel). BYOB disks are token-borne, so only disks from config/disks.php. It
+// writes no audit entry: there are no claims and the operator's shell is already trusted.
+//   fluxfiles doctor [disk] [--origin=https://app.example] [--json]
+// Exit: 0 ok or warnings only, 1 usage/config, 2 any failed check.
+if ($command === 'doctor') {
+    $dUsage = "Usage: fluxfiles doctor [disk] [--origin=https://app.example] [--json]\n";
+    $dDisk = null;
+    $dOrigin = null;
+    $dJson = false;
+    foreach (array_slice($argv, 2) as $arg) {
+        if ($arg === '--json') { $dJson = true; }
+        elseif (preg_match('/^--origin=(.+)$/s', $arg, $m)) { $dOrigin = $m[1]; }
+        elseif ($arg !== '' && $arg[0] !== '-' && $dDisk === null) { $dDisk = $arg; }
+        else {
+            fwrite(STDERR, $dUsage);
+            exit(1);
+        }
+    }
+    \FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
+    \FluxFiles\SsrfGuard::setAllowHosts((string) ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''));
+    try {
+        $dConfigs = \FluxFiles\DiskConfig::load(__DIR__ . '/../config/disks.php');
+    } catch (\FluxFiles\ApiException $e) {
+        fwrite(STDERR, ($e instanceof \FluxFiles\DiskConfigException ? $e->getDetail() : $e->getMessage()) . "\n");
+        exit(1);
+    }
+    $dDisk ??= 'local';
+    if (!isset($dConfigs[$dDisk])) {
+        fwrite(STDERR, "Disk '{$dDisk}' is not configured.\n");
+        exit(1);
+    }
+    try {
+        $report = (new \FluxFiles\BucketDoctor(new DiskManager($dConfigs)))->diagnose($dDisk, $dOrigin);
+    } catch (\Throwable $e) {
+        fwrite(STDERR, 'Doctor could not run: ' . $e->getMessage() . "\n");
+        exit(1);
+    }
+    if ($dJson) {
+        fwrite(STDOUT, json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+    } else {
+        fwrite(STDOUT, "Disk {$report['disk']} ({$report['driver']}): {$report['summary']}\n");
+        foreach ($report['checks'] as $c) {
+            fwrite(STDOUT, sprintf("%-4s  %s - %s\n", strtoupper((string) $c['status']), $c['id'], $c['message']));
+            if (!empty($c['fix'])) {
+                fwrite(STDOUT, "      fix: {$c['fix']}\n");
+            }
+        }
+    }
+    exit($report['summary'] === 'fail' ? 2 : 0);
+}
+
+// `ai:test` — prove the configured AI provider works (FLUXFILES_AI_*). By default one tiny
+// real vision call (paid); --cheap only looks the model up at the provider (free), which is
+// what a scheduled health check should run. Never prints the API key or the base URL.
+//   fluxfiles ai:test [--cheap] [--json]
+// Exit: 0 ok, 1 not configured/usage, 2 the test failed.
+if ($command === 'ai:test') {
+    $cheap = $aJson = false;
+    foreach (array_slice($argv, 2) as $arg) {
+        if ($arg === '--cheap') { $cheap = true; }
+        elseif ($arg === '--json') { $aJson = true; }
+        else {
+            fwrite(STDERR, "Usage: fluxfiles ai:test [--cheap] [--json]\n");
+            exit(1);
+        }
+    }
+    \FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
+    $tagger = \FluxFiles\AiTagger::fromEnv($_ENV);
+    if ($tagger === null) {
+        $code = \FluxFiles\AiError::NOT_CONFIGURED;
+        $res = [
+            'ok' => false, 'check' => $cheap ? 'model' : 'vision', 'provider' => '', 'model' => '',
+            'verified' => false, 'latency_ms' => 0, 'code' => $code, 'params' => [],
+            'message' => 'AI tagging is not configured', 'hint' => \FluxFiles\AiError::hint($code),
+            'warning' => null, 'retires_at' => null, 'detail' => null,
+        ];
+    } else {
+        $res = $cheap ? $tagger->checkModel() : $tagger->testConnection();
+    }
+    $aExit = $res['ok'] ? 0 : (($res['code'] ?? '') === \FluxFiles\AiError::NOT_CONFIGURED ? 1 : 2);
+    if ($aJson) {
+        fwrite(STDOUT, json_encode($res, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+    } elseif ($res['ok']) {
+        $line = "OK    ai - {$res['provider']}/{$res['model']} ({$res['latency_ms']} ms)";
+        if (!$res['verified']) {
+            $line .= ' - not verified: this endpoint has no model lookup, run without --cheap';
+        }
+        fwrite(STDOUT, $line . "\n");
+        if (!empty($res['warning'])) {
+            fwrite(STDOUT, "WARN  ai - {$res['warning']}" . (!empty($res['retires_at']) ? " (retires {$res['retires_at']})" : '') . "\n");
+        }
+    } else {
+        $who = $res['provider'] !== '' ? "{$res['provider']}/{$res['model']}" : 'not configured';
+        fwrite(STDOUT, "FAIL  ai - {$res['code']} ({$who}): {$res['message']}\n");
+        fwrite(STDOUT, "      fix: {$res['hint']}\n");
+        if (!empty($res['detail'])) {
+            fwrite(STDOUT, "      detail: {$res['detail']}\n");
+        }
+    }
+    exit($aExit);
+}
+
 if (!in_array($command, ['index', 'seed'], true)) {
     fwrite(STDERR, "Usage:\n"
         . "  fluxfiles serve [--host=127.0.0.1] [--port=8080]\n"
         . "  fluxfiles about [--json]\n"
         . "  fluxfiles update <module> [--check] [--force] [--no-refresh]\n"
         . "  fluxfiles license refresh [--check|--print] [--json]\n"
+        . "  fluxfiles doctor [disk] [--origin=https://app.example] [--json]\n"
+        . "  fluxfiles ai:test [--cheap] [--json]\n"
         . "  fluxfiles notify:run [--disk=local] [--prefix=<p>]... [--prefixes-file=<path>] [--discover] [--dry-run] [--max=50]\n"
         . "  fluxfiles index --disk=local [--path=prefix] [--owner=user-id] [--readonly] [--overwrite] [--dry-run] [--hash] [--variants] [--persist-metadata]\n");
     exit(1);

@@ -311,6 +311,33 @@ The server warns before this becomes a problem. When the index passes
 per disk. The usage dashboard also shows operators (tokens with no `prefix`) a
 banner.
 
+## CLI health checks
+
+Two commands check the integrations from the shell (standalone installs; they read the
+same `.env` / `FLUXFILES_*` variables as the server, and write no audit entry).
+
+```bash
+php bin/fluxfiles doctor [disk] [--origin=https://app.example] [--json]
+php bin/fluxfiles ai:test [--cheap] [--json]
+```
+
+- `doctor` runs the same Bucket Doctor as the UI's Doctor panel on a disk from
+  `config/disks.php` (default `local`; per-token BYOB disks are out of scope) and prints
+  `OK|WARN|FAIL  <check> - message` with `fix:` lines. `--origin` also checks the bucket's
+  CORS for that origin. Exit code 0 is ok or warnings only, 1 a usage/config problem
+  (unknown disk, unreadable disk config), 2 a failed check.
+- `ai:test` checks the AI provider configured in `FLUXFILES_AI_*`. Without `--cheap` it sends
+  one tiny real vision call (a few tokens, billed by the provider). `--cheap` only looks the
+  model up at the provider: free, and it catches a retired model, a revoked key or a
+  model without vision. It never prints the API key or the base URL. Exit code 0 is ok, 1
+  not configured/usage, 2 the test failed (the output names the code and the fix).
+
+`--cheap` is the one to schedule, for example daily:
+
+```cron
+15 6 * * *  cd /var/www/fluxfiles && php bin/fluxfiles ai:test --cheap || echo "FluxFiles AI check failed" | mail -s "FluxFiles AI" ops@example.com
+```
+
 ## Scheduled e-mail notices (cron)
 
 Expiry warnings, intake digests and document-request reminders are sent by a sweep, and
