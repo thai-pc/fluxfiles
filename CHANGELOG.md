@@ -12,6 +12,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - WordPress: an AI base URL typed into the settings form is now re-checked against the SSRF rule at call time (core's `SsrfCheckedTransport`), for tagging and the test. A new `FluxFilesAiTransport` also pins the checked addresses onto WordPress' cURL handle (`http_api_curl`, as URL import does) and verifies the address actually connected to; on a Streams transport, or when WordPress sends the call through a configured proxy (`WP_PROXY_*`), only the call-time check applies. An allow-listed host is neither pinned nor post-checked (the operator named it). Any 3xx answer from the endpoint is refused (never followed) with a "use the final URL" hint, e.g. `https://` instead of `http://`.
 - WordPress upgrade note: a base URL pointing at localhost or a private address (for example a local Ollama set through WP-CLI before the settings field existed) now needs the host listed in `FLUXFILES_SSRF_ALLOW_HOSTS` in `wp-config.php`, otherwise tagging answers `ai_blocked_host`.
 - WordPress: `POST /ai-tag` without a configured provider now answers with the coded `ai_not_configured` instead of an uncoded 400.
+- WordPress: requires `fluxfiles/fluxfiles` `^1.6.1` (core 1.6.1 carries the Plugin Check exemption the bundled `SsrfCheckedTransport.php` needs).
+
+## [1.0.41] — 2026-11-15
+
+> Released: `core-v1.6.1` (Plugin Check exemption in `SsrfCheckedTransport.php`; comment-only, no behaviour change).
+
+### Fixed
+- Core: `SsrfCheckedTransport.php` lacked the `parse_url` Plugin Check exemption that `SsrfGuard`/`DiskManager` carry, so a WordPress build bundling core 1.6.0 failed Plugin Check (`WordPress.WP.AlternativeFunctions.parse_url_parse_url`). Comment-only change; no behaviour change.
 
 ## [1.0.40] — 2026-11-15
 
