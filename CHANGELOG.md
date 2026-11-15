@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.39] — 2026-11-15
+
+> Released: `core-v1.5.1` (AI default-model fix), `wordpress-v1.2.1` (bundles core 1.5.1). CI runners pinned to `ubuntu-24.04` (Playwright 1.60 cannot install Chromium on the Ubuntu 26.04 `ubuntu-latest` image).
+
 ### Fixed
 - Core AI tagging: the default model of the `claude`/`anthropic` provider was the dated snapshot `claude-sonnet-4-20250514`, which Anthropic retired on 2026-06-15, so every install that never set `FLUXFILES_AI_MODEL` got an error on each tagging call. The default is now `claude-sonnet-5-5`. The `openrouter` default moves from the pinned `google/gemini-2.5-flash` to OpenRouter's `~google/gemini-flash-latest` alias (same reason the `gemini` provider already uses `gemini-flash-latest`). An explicit `FLUXFILES_AI_MODEL` is unaffected. A test now fails on any dated-snapshot default.
 

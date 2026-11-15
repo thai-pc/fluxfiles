@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -180,6 +180,9 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.2.1 =
+* Fix: AI tagging with Anthropic (Claude) failed when the Model field was left empty, because the default model had been retired by Anthropic. The default is now a current model. The OpenRouter default also moves to an alias that follows Google's latest Flash model.
+
 = 1.2.0 =
 * New Media > FluxFiles page: the full file manager inside wp-admin, without placing a shortcode on a page.
 * SFTP settings: connect your own SFTP server as a disk (host, port, user, password or private key, root folder, host fingerprint pinning). The host is checked against private and local addresses unless you allow it in wp-config.php.
@@ -302,6 +305,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.2.1 =
+Fixes AI tagging with Claude when no model is set (the old default model was retired). No change to your files or settings.
 
 = 1.2.0 =
 Adds a Media > FluxFiles page and SFTP and AI tagging settings. Existing settings and files are unchanged.
