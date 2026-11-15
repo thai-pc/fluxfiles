@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.40] — 2026-11-15
+
+> Released: `core-v1.6.0` (AI error classification, `POST /api/fm/ai/test`, the Doctor AI row, CLI `doctor` / `ai:test`). The WordPress and Laravel adapters pick these up in their next releases (they do not proxy `/ai/test` yet).
+
 ### Added
 - Core AI tagging: provider failures are now classified instead of the generic `502 'AI service returned an error'`. A new `AiError` classifier maps every provider's response (Anthropic, Gemini, and the OpenAI-shaped gateways: OpenAI, OpenRouter, Groq, Mistral, xAI, Ollama, `compatible`) to a code: `ai_auth`, `ai_model_not_found`, `ai_no_vision`, `ai_quota`, `ai_rate_limited`, `ai_unavailable`, `ai_network`, `ai_blocked_host`, `ai_bad_response`, `ai_provider_error` (all with `error.*` strings in the 16 locales; `ai_not_configured` already existed). `POST /ai-tag` returns the code plus `error_params` `{provider, model, default_model}`, so the existing "AI tagging failed" toast says what to fix. Upstream failures are always HTTP 502, never 401/403/429 (the UI reads 401 as "our own token expired"). Provider text is redacted before it is logged (the key, key-shaped strings, bearer tokens, URL credentials).
 - Core AI tagging: an upload whose auto-tag failed still succeeds and now carries `ai_error: "<code>"` in its result.
