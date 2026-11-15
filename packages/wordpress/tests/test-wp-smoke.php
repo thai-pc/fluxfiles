@@ -48,7 +48,9 @@ if (!function_exists('wp_mkdir_p')) {
 if (!function_exists('wp_generate_password')) {
     function wp_generate_password($len = 12, $special = true) { return substr(bin2hex(random_bytes($len)), 0, $len); }
 }
-if (!function_exists('add_action')) { function add_action(...$a) {} }
+// Hooks added through add_action() are only recorded (WP_ADDED_ACTIONS[tag][]), never fired by do_action().
+$GLOBALS['WP_ADDED_ACTIONS'] = [];
+if (!function_exists('add_action')) { function add_action($tag, $cb = null, ...$a) { $GLOBALS['WP_ADDED_ACTIONS'][$tag][] = $cb; } }
 // Action registry for the extension-API tests: $GLOBALS['WP_ACTIONS'][tag][] = callable.
 $GLOBALS['WP_ACTIONS'] = [];
 if (!function_exists('do_action')) {
@@ -1050,6 +1052,7 @@ test('public routes delegate to the module dispatcher rather than reimplementing
 
 test('every outbound fetch in the plugin goes through the WordPress HTTP API (no cURL transport/fetcher left to default to)', function () {
     require_once __DIR__ . '/../includes/FluxFilesUrlFetcher.php';
+require_once __DIR__ . '/../includes/FluxFilesAiTransport.php';
     $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     assertTrue(strpos($api, 'new UrlImporter($claims, $fm, new \\FluxFilesUrlFetcher())') !== false, 'URL import gets the wp fetcher');
     assertTrue(strpos($api, 'new BucketDoctor($this->diskManager, self::httpTransport(), new \\FluxFilesUrlFetcher())') !== false, 'bucket doctor gets the wp transport + fetcher');
@@ -3355,6 +3358,12 @@ $ffAiWith = function (array $opts, callable $fn) {
     @unlink(FluxFilesPlugin::storagePath() . '/rate_limit.json');
     try { return $fn(); } finally { $GLOBALS['WP_OPTIONS'] = $keep; }
 };
+if (!function_exists('remove_action')) {
+    function remove_action($tag, $cb = null, ...$a) {
+        $GLOBALS['WP_ADDED_ACTIONS'][$tag] = array_values(array_filter($GLOBALS['WP_ADDED_ACTIONS'][$tag] ?? [], fn ($c) => $c !== $cb));
+        return true;
+    }
+}
 $ffAiOk = ['response' => ['code' => 200], 'headers' => [], 'body' => '{"content":[{"type":"text","text":"OK"}]}'];
 $ffAjax = function (callable $fn): AjaxDone { try { $fn(); } catch (AjaxDone $d) { return $d; } throw new RuntimeException('handler did not answer'); };
 
@@ -3378,6 +3387,14 @@ test('/ai/test is proxied and answers for a write token whose ai_auto_tag is off
         assertEqual('permission_denied', $r->get_data()['error_code'] ?? null);
         $r = $call(['perms' => ['read', 'write'], 'disks' => ['local']], ['disk' => 's3']);
         assertEqual('disk_denied', $r->get_data()['error_code'] ?? null, 'a disk outside the token');
+    });
+    // N2: provider text only for a site administrator.
+    $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 401], 'headers' => [], 'body' => '{"error":{"type":"authentication_error","message":"org Acme billing"}}'];
+    $ffAiWith(['fluxfiles_ai_provider' => 'claude', 'fluxfiles_ai_api_key' => 'k'], function () use ($call) {
+        assertTrue(strpos((string) ($call(['perms' => ['read', 'write']])->get_data()['data']['detail'] ?? ''), 'Acme') !== false, 'admin sees detail');
+        $GLOBALS['WP_CAPS']['manage_options'] = false;
+        try { $d = $call(['perms' => ['read', 'write']])->get_data()['data']; } finally { $GLOBALS['WP_CAPS']['manage_options'] = true; }
+        assertEqual(null, $d['detail'], 'a non-admin gets no detail');
     });
     $ffAiWith(['fluxfiles_ai_provider' => ''], function () use ($call) {
         $r = $call(['perms' => ['read', 'write']]);
@@ -3420,16 +3437,55 @@ test('savedAiTagger(): a base URL is SSRF-checked at call time (private host -> 
         assertEqual('ai_blocked_host', $r['code']);
         assertTrue($GLOBALS['WP_REMOTE_CALL'] === null, 'wp_remote_request never reached');
     });
-    // An allowlisted host that answers 3xx is refused, not followed.
-    \FluxFiles\SsrfGuard::setAllowHosts('llm.internal');
-    $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 302], 'headers' => ['location' => 'http://169.254.169.254/'], 'body' => ''];
-    try {
-        $ffAiWith(['fluxfiles_ai_provider' => 'compatible', 'fluxfiles_ai_api_key' => 'k', 'fluxfiles_ai_model' => 'm', 'fluxfiles_ai_base_url' => 'http://llm.internal/v1'], function () {
-            assertEqual('ai_blocked_host', FluxFilesApi::savedAiTagger()->testConnection()['code']);
-        });
-    } finally {
-        \FluxFiles\SsrfGuard::setAllowHosts('');
+    // A 3xx is refused (never followed) with its own, non-"blocked host" classification: an
+    // allowlisted host (not pinned) and a public one (pinned on cURL) alike.
+    foreach (['llm.internal' => 'http://llm.internal/v1', '' => 'https://93.184.216.34/v1'] as $allow => $base) {
+        \FluxFiles\SsrfGuard::setAllowHosts((string) $allow);
+        $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 301], 'headers' => ['location' => 'https://llm.example.com/v1'], 'body' => ''];
+        try {
+            $ffAiWith(['fluxfiles_ai_provider' => 'compatible', 'fluxfiles_ai_api_key' => 'k', 'fluxfiles_ai_model' => 'm', 'fluxfiles_ai_base_url' => $base], function () use ($base) {
+                $r = FluxFilesApi::savedAiTagger()->testConnection();
+                assertEqual('ai_network', $r['code'], $base);
+                assertTrue(strncmp((string) $r['detail'], 'redirect refused (HTTP 301)', 27) === 0, 'detail: ' . $r['detail']);
+                assertEqual(0, $GLOBALS['WP_REMOTE_CALL'][1]['redirection'], 'the transport never follows');
+            });
+        } finally {
+            \FluxFiles\SsrfGuard::setAllowHosts('');
+        }
     }
+});
+
+test('FluxFilesAiTransport: pins the checked addresses via http_api_curl (request-scoped), refuses a changed target, rejects a private DNS answer', function () {
+    if (!extension_loaded('curl')) { return; }
+    \FluxFiles\SsrfGuard::setAllowHosts('');
+    $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 200], 'headers' => [], 'body' => '{}'];
+    $GLOBALS['WP_ADDED_ACTIONS']['http_api_curl'] = [];
+    $seen = null;
+    // Capture the hook while the (synchronous) inner request runs.
+    $inner = new class implements \FluxFiles\HttpTransportInterface {
+        public $hooks = [];
+        public function request(string $method, string $url, array $headers = [], ?string $body = null, int $timeout = 30): array {
+            $this->hooks = $GLOBALS['WP_ADDED_ACTIONS']['http_api_curl'] ?? [];
+            return ['status' => 200, 'headers' => [], 'body' => '{}'];
+        }
+    };
+    $t = new FluxFilesAiTransport($inner);
+    $res = $t->request('POST', 'https://93.184.216.34/v1/x', [], '{}', 5);
+    assertEqual(200, $res['status']);
+    assertEqual(1, count($inner->hooks), 'one hook while the request runs');
+    assertEqual([], $GLOBALS['WP_ADDED_ACTIONS']['http_api_curl'], 'removed afterwards');
+    $hook = $inner->hooks[0];
+    $h = curl_init();
+    $hook($h, [], 'https://93.184.216.34/v1/x');   // same endpoint: pins without throwing
+    $threw = false;
+    try { $hook($h, [], 'https://169.254.169.254/v1/x'); } catch (\FluxFiles\ApiException $e) { $threw = true; }
+    assertTrue($threw, 'a different target is refused before it is sent');
+    // A private literal never reaches the inner transport.
+    $inner->hooks = ['untouched'];
+    $res = $t->request('POST', 'http://10.0.0.5/v1', [], '{}', 5);
+    assertEqual(0, $res['status']);
+    assertTrue(strncmp($res['error'], 'blocked_host:', 13) === 0, $res['error']);
+    assertEqual(['untouched'], $inner->hooks, 'inner not called');
 });
 
 test('Settings AI test (ajaxTestAi): nonce, capability, limit, not-configured, ok and classified failure; never the key', function () use ($ffAiWith, $ffAiOk, $ffAjax) {
@@ -3487,7 +3543,8 @@ test('Settings page: the AI card has the test button and enqueued JS carries the
     if (!function_exists('get_current_screen')) { function get_current_screen() { return null; } }
     try { $admin->enqueueAssets('settings_page_fluxfiles'); } catch (\Throwable $e) { /* stubs: only the localized data matters */ }
     $loc = $GLOBALS['WP_LOCALIZED']['fluxfiles-settings'][1] ?? null;
-    if ($loc !== null) { assertEqual('nonce-fluxfiles_test_ai', $loc['aiNonce'] ?? null); }
+    assertTrue($loc !== null, 'settings script data was localized');
+    assertEqual('nonce-fluxfiles_test_ai', $loc['aiNonce'] ?? null);
 });
 
 test('the media endpoint is core\'s MediaEndpoint with status_header() and X-Accel from the plugin\'s source', function () use ($ffPriv, $ffProp) {

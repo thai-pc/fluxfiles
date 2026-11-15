@@ -5,6 +5,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- WordPress: AI connection test. **Settings > FluxFiles > AI** gains a **Test connection** button (admin only, nonce, 2 runs/min per user; AJAX `fluxfiles_test_ai`, enqueued JS only) that runs one tiny real vision call against the SAVED provider settings and shows the provider, model and latency, or the classified error with its fix hint. "Tag on upload" is not required. The REST proxy gains `POST /ai/test` (same gate as `/ai-tag`, 2/min `ai_test` bucket, audited; the provider `detail` text is returned to site administrators only) and the Doctor report carries the additive `ai` block, both through core's shared `AiTestEndpoint`. Needs core 1.6.0 (the plugin floor is now `^1.6.0`).
+
+### Changed
+- WordPress: an AI base URL typed into the settings form is now re-checked against the SSRF rule at call time (core's `SsrfCheckedTransport`), for tagging and the test. A new `FluxFilesAiTransport` also pins the checked addresses onto WordPress' cURL handle (`http_api_curl`, as URL import does) and verifies the address actually connected to; on a Streams transport only the call-time check applies. Any 3xx answer from the endpoint is refused (never followed) with a "use the final URL" hint, e.g. `https://` instead of `http://`.
+- WordPress upgrade note: a base URL pointing at localhost or a private address (for example a local Ollama set through WP-CLI before the settings field existed) now needs the host listed in `FLUXFILES_SSRF_ALLOW_HOSTS` in `wp-config.php`, otherwise tagging answers `ai_blocked_host`.
+- WordPress: `POST /ai-tag` without a configured provider now answers with the coded `ai_not_configured` instead of an uncoded 400.
+
 ## [1.0.40] — 2026-11-15
 
 > Released: `core-v1.6.0` (AI error classification, `POST /api/fm/ai/test`, the Doctor AI row, CLI `doctor` / `ai:test`). The WordPress and Laravel adapters pick these up in their next releases (they do not proxy `/ai/test` yet).
@@ -17,11 +25,6 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - Core: `POST /api/fm/ai/test`, the AI connection test. One tiny real vision call, same eligibility as `/ai-tag` (disk in the token, `write`, a provider configured; `ai_auto_tag` plays no part), limited to 2/min per user, audited as `ai_test`. A failed test is still HTTP 200 with `{ok:false, code, hint}`; the redacted provider `detail` is returned to unscoped tokens only. Shared `AiTestEndpoint` helper so the Laravel/WordPress proxies can call it in one line. See `docs/design/CONNECTION-TEST-DESIGN.md`.
 - Core UI: the Doctor panel gains an "AI tagging" row (provider · model) with a manual **Test connection** button that renders the localised result and fix hint; it never runs on its own. `GET /disk/doctor` carries the additive `ai` block (no network call). An upload whose auto-tag failed now shows one warning toast per batch. `ai_test.*` strings in the 16 locales.
 - Core CLI: `fluxfiles doctor [disk] [--origin=<url>] [--json]` (the Bucket Doctor on a configured disk; exit 0 ok/warnings, 1 usage/config, 2 failed check) and `fluxfiles ai:test [--cheap] [--json]` (one real vision call, or `--cheap` for the free model lookup, suited to a daily cron; exit 0 ok, 1 not configured/usage, 2 failed; never prints the key or base URL). `AiTagger::fromEnv()` now builds the tagger for both `api/index.php` and the CLI. Documented in `docs/guides/DEPLOYMENT.md`.
-- WordPress: AI connection test. **Settings > FluxFiles > AI** gains a **Test connection** button (admin only, nonce, 2 runs/min per user; AJAX `fluxfiles_test_ai`, enqueued JS only) that runs one tiny real vision call against the SAVED provider settings and shows the provider, model and latency, or the classified error with its fix hint. "Tag on upload" is not required. The REST proxy gains `POST /ai/test` (same gate as `/ai-tag`, 2/min `ai_test` bucket, audited) and the Doctor report carries the additive `ai` block, both through core's shared `AiTestEndpoint`.
-
-### Changed
-- WordPress: an AI base URL typed into the settings form is now re-checked against the SSRF rule at call time (`SsrfCheckedTransport` around the WordPress HTTP transport) for tagging and the test, and a 3xx answer from the endpoint is refused (the decorator is hardened the same way in core). IP pinning is not possible through `wp_remote_request()` (no resolve hook; it may run over Streams or a configured proxy), so DNS changing between the check and the request remains a documented residual risk, as before.
-- WordPress: `POST /ai-tag` without a configured provider now answers with the coded `ai_not_configured` instead of an uncoded 400.
 
 ## [1.0.39] — 2026-11-15
 

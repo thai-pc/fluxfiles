@@ -169,6 +169,10 @@ class FluxFilesAdmin
         // Hints and the redacted provider text stay English (as in the core UI).
         $hint = (string) ($r['hint'] ?? '');
         $detail = (string) ($r['detail'] ?? '');
+        if (strncmp($detail, 'redirect refused', 16) === 0) {
+            // The endpoint answered with a redirect (typically http:// for an https-only host).
+            $hint = __('The endpoint redirected the request. Redirects are not followed: enter the final URL in the Base URL field (for example https:// instead of http://).', 'fluxfiles');
+        }
         wp_send_json_error(['message' => $msg, 'hint' => $hint, 'detail' => $detail, 'code' => $code]);
     }
 

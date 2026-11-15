@@ -906,11 +906,10 @@ class FluxFilesApi
     /**
      * The AI tagger built from the SAVED plugin options (null without a provider), shared by
      * tagging, the /ai/test route, the Doctor block and the Settings button. The base URL is
-     * typed into a form by an administrator, so a call to it re-runs core's SSRF rule at call
-     * time (SsrfCheckedTransport). It cannot pin the checked IP: wp_remote_request() offers no
-     * resolve hook (and may run over Streams or a configured proxy), so a DNS change between
-     * the check and the request stays a residual risk, as it was for tagging before. Redirects
-     * are never followed (FluxFilesHttpTransport) and the decorator refuses a 3xx answer.
+     * typed into a form by an administrator, so a call to it is checked again at call time
+     * (core's SsrfCheckedTransport), then FluxFilesAiTransport pins the checked addresses on
+     * WordPress' cURL handle, verifies the connected address and refuses any 3xx answer. On a
+     * Streams transport the pin is not available and the call-time check stands alone.
      */
     public static function savedAiTagger(?\FluxFiles\HttpTransportInterface $transport = null): ?\FluxFiles\AiTagger
     {
@@ -920,8 +919,8 @@ class FluxFilesApi
         }
         $baseUrl = get_option('fluxfiles_ai_base_url', '') ?: null;
         $transport = $transport ?? self::httpTransport();
-        if ($baseUrl !== null && class_exists(\FluxFiles\SsrfCheckedTransport::class)) {
-            $transport = new \FluxFiles\SsrfCheckedTransport($transport);
+        if ($baseUrl !== null) {
+            $transport = new \FluxFiles\SsrfCheckedTransport(new \FluxFilesAiTransport($transport));
         }
         return new \FluxFiles\AiTagger(
             $aiProvider,
@@ -1626,6 +1625,10 @@ class FluxFilesApi
             $this->bucketLimit($claims, 'ai_test', 2);
             $body = $this->body($request);
             $result = \FluxFiles\AiTestEndpoint::run($claims, self::savedAiTagger(), $body);
+            // The provider's own text (billing/org names) is for the site administrator only.
+            if (!current_user_can('manage_options')) {
+                $result['detail'] = null;
+            }
             $this->auditOk($claims, 'ai/test', $body, $result);
 
             return $this->ok($result);
