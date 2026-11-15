@@ -469,6 +469,7 @@
       "empty_trash": "Çöpü boşalt",
       "url_import": "URL'den içe aktar",
       "ai_tag": "AI etiketi",
+      "ai_test": "Yapay zeka bağlantı testi",
       "crop": "Kırp",
       "watermark": "Filigran",
       "optimize": "Optimize et",
@@ -558,6 +559,27 @@
     "no_tags": "Henüz AI etiketi yok. Bu görüntüyü analiz etmek için \"AI etiketleri oluştur\"a tıklayın.",
     "analyzing_image": "Görüntü AI ile analiz ediliyor...",
     "failed": "AI etiketleme başarısız: {message}"
+  },
+  "ai_test": {
+    "title": "Yapay zeka etiketleme",
+    "run": "Bağlantıyı sına",
+    "running": "Sınanıyor...",
+    "ok": "Bağlantı tamam ({ms} ms)",
+    "deprecated": "Model hâlâ çalışıyor ama kullanımdan kalkıyor; {retires_at} tarihinden önce değiştirin.",
+    "upload_failed": "Otomatik etiketleme başarısız: {message}",
+    "hint": {
+      "ai_not_configured": "FLUXFILES_AI_PROVIDER değerini ayarlayın (compatible için BASE_URL/MODEL de).",
+      "ai_auth": "API anahtarını kontrol edin (ve bu modeli/bölgeyi kullanabildiğinden emin olun).",
+      "ai_model_not_found": "Sağlayıcının varsayılanını ({default_model}) kullanmak için model ayarını temizleyin veya güncel bir görüntü modeli girin.",
+      "ai_no_vision": "Bu model görüntü kabul etmiyor; görüntü destekleyen bir model seçin.",
+      "ai_quota": "Sağlayıcıda kredi ekleyin veya harcama limitini yükseltin.",
+      "ai_rate_limited": "Sağlayıcı hız sınırı; daha sonra deneyin ya da daha az yükleyin.",
+      "ai_unavailable": "Sağlayıcıda kesinti veya aşırı yük; daha sonra deneyin.",
+      "ai_network": "Temel URL'yi, DNS'i ve giden güvenlik duvarını/proxy'yi kontrol edin.",
+      "ai_blocked_host": "Özel/yerel ana makine: FLUXFILES_SSRF_ALLOW_HOSTS'a ekleyin.",
+      "ai_bad_response": "Uç nokta beklenen API'yi konuşmuyor; sağlayıcıyı ve temel URL'yi kontrol edin.",
+      "ai_provider_error": "Temel URL'yi ve modeli kontrol edin."
+    }
   },
   "copy": {
     "copied": "URL panoya kopyalandı"

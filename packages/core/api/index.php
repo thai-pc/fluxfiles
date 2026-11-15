@@ -408,6 +408,12 @@ try {
             ->check($claims->userId, 'notify_test');
     }
 
+    // The AI connection test is a paid provider call per hit: 2/min per user.
+    if ($uri === '/api/fm/ai/test') {
+        \FluxFiles\RateLimiterFactory::make(2, 2, 60, $dbConn)
+            ->check($claims->userId, 'ai_test');
+    }
+
     // Audit log (lưu trong user storage)
     $auditLog = new AuditLogStorage($metaRepo, $claims->allowedDisks);
     $chunker = new \FluxFiles\ChunkUploader($diskManager);
@@ -453,7 +459,7 @@ try {
     }
 
     // Routing
-    $data = routeRequest($method, $uri, $fm, $metaRepo, $diskManager, $claims, $auditLog, $chunker, $quotaManager, $dbConn);
+    $data = routeRequest($method, $uri, $fm, $metaRepo, $diskManager, $claims, $auditLog, $chunker, $quotaManager, $dbConn, $aiTagger);
 
     // Log write actions
     if ($isWriteAction && $data !== null) {
@@ -552,7 +558,8 @@ function routeRequest(
     AuditLogStorage $auditLog,
     \FluxFiles\ChunkUploader $chunker,
     \FluxFiles\QuotaManager $quotaManager,
-    ?\FluxFiles\Db\Connection $dbConn = null
+    ?\FluxFiles\Db\Connection $dbConn = null,
+    ?\FluxFiles\AiTagger $aiTagger = null
 ) {
     // File operations
     if ($method === 'GET' && $uri === '/api/fm/list') {
@@ -942,6 +949,10 @@ function routeRequest(
     }
     if ($method === 'POST' && $uri === '/api/fm/notify/mute') {
         return \FluxFiles\NotifyEndpoint::mute($diskManager, $claims, $notifyBody());
+    }
+    // AI connection test: same eligibility as /ai-tag (disk + write + provider configured).
+    if ($method === 'POST' && $uri === '/api/fm/ai/test') {
+        return \FluxFiles\AiTestEndpoint::run($claims, $aiTagger, $notifyBody());
     }
     if ($method === 'POST' && $uri === '/api/fm/ai-vision') {
         $module = \FluxFiles\ModuleRegistry::require('ai', \FluxFiles\ModuleRegistry::license(), $claims);
@@ -1385,6 +1396,11 @@ function routeRequest(
         try {
             $auditLog->log($claims->userId, 'disk_doctor', $disk, '', null, null, null);
         } catch (\Throwable $ignored) {
+        }
+        // Additive, no network call: lets the UI offer a manual AI "Test connection".
+        $ai = \FluxFiles\AiTestEndpoint::doctorBlock($claims, $aiTagger);
+        if ($ai !== null) {
+            $report['ai'] = $ai;
         }
         return $report;
     }

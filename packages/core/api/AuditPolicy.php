@@ -36,6 +36,7 @@ final class AuditPolicy
         '/versions/restore' => 'version_restore',
         '/webhooks/test' => 'webhook_test',
         '/notify/test'   => 'notify_test',
+        '/ai/test'       => 'ai_test',
         '/notify/run'    => 'notify_run',
         '/notify/mute'   => 'notify_mute',
         '/virus/scan'    => 'virus_scan',
@@ -135,7 +136,7 @@ final class AuditPolicy
         // themselves — the prefix check could never match. Re-apply the same
         // prefixing FileManager used for the operation itself (idempotent, so
         // this is safe even if a path were already scoped).
-        if ($action === 'fixity_check') {
+        if ($action === 'fixity_check' || $action === 'ai_test') {
             // Names the whole scope (the tenant root) — the baseline anchor the audit-export
             // module looks up per scope. Never the request body's `path`: a tenant could
             // otherwise plant anchors in a nested scope and make its baseline read `stale`.
@@ -190,6 +191,13 @@ final class AuditPolicy
             case 'notify_test':
                 // Never the address: only whether the transport accepted it.
                 return is_array($data) ? (!empty($data['sent']) ? 'sent' : 'failed') . ' via ' . (string) ($data['transport'] ?? '') : null;
+            case 'ai_test':
+                // The verdict and what was tested; never the key, the provider's detail or the base URL.
+                return is_array($data)
+                    ? (!empty($data['ok']) ? 'ok' : (string) ($data['code'] ?? 'failed'))
+                        . ' ' . (string) ($data['provider'] ?? '') . '/' . (string) ($data['model'] ?? '')
+                        . (!empty($data['ok']) ? ' ' . (int) ($data['latency_ms'] ?? 0) . 'ms' : '')
+                    : null;
             case 'notify_mute':
                 return (is_scalar($body['module'] ?? null) ? (string) $body['module'] : '') . ':'
                     . (is_scalar($body['jti'] ?? null) ? (string) $body['jti'] : '')

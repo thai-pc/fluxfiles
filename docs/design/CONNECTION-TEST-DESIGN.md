@@ -47,7 +47,7 @@ storage. There is no `ModuleRegistry` gate and no licence.
 | Claim | Use |
 |---|---|
 | `perms` ∋ `write` | required for `/ai/test` and for the doctor `ai` block (as for `/ai-tag`) |
-| `prefix` | `trim(prefix,'/') === ''` (unscoped, admin) ⇒ response may include the redacted provider `detail` |
+| `prefix` | `trim(prefix,'/') === ''` (unscoped; plus no `byob_disks`, not `owner_only`) ⇒ response may include the redacted provider `detail` |
 | `disks` | the optional body `disk` (which disk's audit log gets the entry) must be allowed, as `/ai-tag` asserts its `disk` |
 
 `ai_auto_tag` is **not** read. It still only controls tagging on upload.
@@ -149,7 +149,7 @@ The fields are:
 
 - `check` is `vision` or `model`.
 - `ok:true` means `code:null`.
-- `detail` is the redacted provider text. The HTTP endpoint drops it for scoped tokens (§6).
+- `detail` is the redacted provider text. The HTTP endpoint drops it for non-operator-grade tokens (§6).
 - `message` and `hint` are English. Clients localize them by `code`.
 
 **Tagging surfaces the code.**
@@ -174,10 +174,10 @@ tagger whenever `FLUXFILES_AI_PROVIDER` is set (index.php ~350), with no claim i
 1. The global write bucket, then a new pre-route bucket `RateLimiterFactory::make(2, 2, 60, $dbConn)
    ->check($claims->userId, 'ai_test')`, next to the `notify_test` one (index.php ~405). Failure →
    `429 rate_limited`.
-2. `disk` is in the token → `403 disk_denied` (the same code `/ai-tag` uses).
+2. `disk` (missing → `local`; anything that is not a string, e.g. `""` or `123`, is refused as-is, never normalised) is in the token → `403 disk_denied` (the same code `/ai-tag` uses). This runs before any provider call and validates the same value the audit step reads.
 3. `write` perm → `403 permission_denied` (the same code `/ai-tag` uses).
 4. Tagger configured → `400 ai_not_configured`.
-5. Run `testConnection()`. If the token is scoped, unset `detail`. Return **200** with the result
+5. Run `testConnection()`. Unless the token is operator-grade (no prefix, no `byob_disks`, not `owner_only`), unset `detail`. Return **200** with the result
    shape, whether `ok` or not. A failed test is a successful diagnosis, as with `BucketDoctor`.
 
 All of this lives in a shared `packages/core/api/AiTestEndpoint.php`, the same pattern as

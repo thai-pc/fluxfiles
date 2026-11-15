@@ -75,6 +75,7 @@ php packages/core/tests/e2e/test-audit-coverage-http.php      # every mutating r
 php packages/core/tests/e2e/test-tus-http.php                 # resumable tus uploads — port 8123
 php packages/core/tests/e2e/test-sso-http.php                 # SSO bridge (OIDC exchange) — ports 8130-8135
 php packages/core/tests/e2e/test-dlp-http.php                 # DLP fail-closed gate — port 8151
+php packages/core/tests/e2e/test-ai-test-http.php            # POST /ai/test vs a fake provider (own temp storage) — ephemeral ports
 php packages/core/tests/e2e/test-write-policy-http.php        # quota/owner policy on writes (DB backend) — ephemeral port
 ```
 

@@ -472,7 +472,10 @@ test('proxy route surface covers every core /api/fm route', function () {
         //   envelope). The embedded UI falls back to a plain upload when /tus
         //   404s, so proxy mode loses nothing it had before. A port would need the
         //   adapter's own staging dir + PATCH body streaming — not done in v1.
-        'tus'];
+        'tus',
+        // - ai/test (docs/design/CONNECTION-TEST-DESIGN.md): temporary, removed by the
+        //   Laravel PR once the floor is bumped to the core release that ships it.
+        'ai/test'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

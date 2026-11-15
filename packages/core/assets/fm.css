@@ -2285,6 +2285,9 @@ body {
 .ff-doctor-check.is-info .ff-doctor-dot { background: var(--color-text-tertiary); }
 .ff-doctor-msg { font-size: 13px; }
 .ff-doctor-fix { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
+.ff-doctor-ai { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--color-border-tertiary, rgba(0, 0, 0, 0.08)); }
+.ff-doctor-ai-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ff-doctor-ai-detail { margin: 6px 0 0; font-size: 11px; white-space: pre-wrap; word-break: break-word; }
 .ff-doctor-remed { margin-top: 16px; }
 .ff-doctor-remed-head {
     display: flex;

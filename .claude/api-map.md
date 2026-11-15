@@ -92,13 +92,16 @@ All authenticated routes require `Authorization: Bearer <JWT>`.
   - JSON body: `disk`, `path`, `x`, `y`, `width`, `height`, optional `save_path`.
 
 - `POST /api/fm/ai-tag`
-  - JSON body: `disk`, `path`. Free; BYO provider key (`FLUXFILES_AI_*`).
+  - JSON body: `disk`, `path`. Free; BYO provider key (`FLUXFILES_AI_*`). A provider failure answers 502 with a classified `ai_*` code + `error_params {provider, model, default_model}` (never 401/403/429).
+
+- `POST /api/fm/ai/test` — body `{disk?}`
+  - Free/core connection test: one tiny real vision call. Same eligibility as `/ai-tag` (disk in token → `403 disk_denied`, `write` → `403 permission_denied`, provider configured → `400 ai_not_configured`); `ai_auto_tag` is not consulted. Per-user 2/min `ai_test` bucket on top of the write bucket (→ `429 rate_limited`). Answers **200** with `{ok, check, provider, model, verified, latency_ms, code, params, message, hint, warning, retires_at, detail}` for pass AND fail (a failed test is a successful diagnosis); `detail` (redacted provider text) only for an operator-grade token (no prefix, no BYOB disk, not `owner_only`); a non-string/unknown `disk` → `403 disk_denied` before any provider call. Audited as `ai_test`. Shared `AiTestEndpoint::run()`. Not proxied yet (WP/Laravel PRs follow).
 
 - `GET /api/fm/meta?disk=local&path=file.jpg`
   - Returns `size`, `modified`, `mime` and `type` (`file`|`dir`). `404 not_found` when no file or folder exists at the path; a folder answers 200 `type:'dir'` (size/modified are null on S3/SFTP, incl. prefix-only S3 folders). The token's scope root (tenant prefix, or the disk root) always answers 200 `type:'dir'`, matching `/list` returning an empty 200 for a new tenant. `type` is `null` when the existence probe itself failed (backend error), never a guess. Hidden paths → `path_denied`, `_fluxfiles/`/`_variants/` → 403 `system_path`. Before core-v1.1.6 a missing path answered 200 with null size/modified and there was no `type`.
 
 - `GET /api/fm/disk/doctor?disk=local&origin=`
-  - **Bucket Doctor**: diagnose a disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write` + the disk in the token. Useful to validate BYOB credentials before issuing a long-lived token.
+  - **Bucket Doctor**: diagnose a disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write` + the disk in the token. Useful to validate BYOB credentials before issuing a long-lived token. Additive `ai: {configured, provider, model}` when the token has `write` and an AI provider is configured (no network call; the UI's manual AI test button hangs off it).
 
 ## Trash (soft-delete)
 

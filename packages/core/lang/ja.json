@@ -469,6 +469,7 @@
       "empty_trash": "ゴミ箱を空にする",
       "url_import": "URLからインポート",
       "ai_tag": "AIタグ",
+      "ai_test": "AI 接続テスト",
       "crop": "切り抜き",
       "watermark": "透かし",
       "optimize": "最適化",
@@ -558,6 +559,27 @@
     "no_tags": "AIタグはまだありません。「AIタグを生成」をクリックして画像を分析してください。",
     "analyzing_image": "AIで画像を分析中...",
     "failed": "AIタグの生成に失敗しました：{message}"
+  },
+  "ai_test": {
+    "title": "AI タグ付け",
+    "run": "接続をテスト",
+    "running": "テスト中...",
+    "ok": "接続 OK ({ms} ms)",
+    "deprecated": "このモデルはまだ動作しますが非推奨です。{retires_at} までに切り替えてください。",
+    "upload_failed": "自動タグ付けに失敗しました: {message}",
+    "hint": {
+      "ai_not_configured": "FLUXFILES_AI_PROVIDER を設定してください (compatible の場合は BASE_URL/MODEL も)。",
+      "ai_auth": "API キーを確認してください (このモデル/リージョンを使えるかも)。",
+      "ai_model_not_found": "モデル設定を空にしてプロバイダーの既定 ({default_model}) を使うか、最新のビジョンモデルを入力してください。",
+      "ai_no_vision": "このモデルは画像に対応していません。ビジョンモデルを選んでください。",
+      "ai_quota": "プロバイダーでクレジットを追加するか、利用上限を引き上げてください。",
+      "ai_rate_limited": "プロバイダーのレート制限です。後で再試行するか、アップロード量を減らしてください。",
+      "ai_unavailable": "プロバイダーの障害または過負荷です。後で再試行してください。",
+      "ai_network": "ベース URL、DNS、送信側のファイアウォール/プロキシを確認してください。",
+      "ai_blocked_host": "プライベート/ローカルホスト: FLUXFILES_SSRF_ALLOW_HOSTS に追加してください。",
+      "ai_bad_response": "エンドポイントが想定された API で応答していません。プロバイダーとベース URL を確認してください。",
+      "ai_provider_error": "ベース URL とモデルを確認してください。"
+    }
   },
   "copy": {
     "copied": "URLをクリップボードにコピーしました"
