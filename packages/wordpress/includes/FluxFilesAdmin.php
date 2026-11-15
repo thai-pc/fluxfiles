@@ -83,6 +83,7 @@ class FluxFilesAdmin
             'aiNonce'   => wp_create_nonce('fluxfiles_test_ai'),
             'i18n'      => [
                 'testing'   => __('Testing…', 'fluxfiles'),
+                'fix'       => __('Fix:', 'fluxfiles'),
                 'saveFirst' => __('Save your changes first; the test uses the saved settings.', 'fluxfiles'),
                 'copied'    => __('Copied', 'fluxfiles'),
                 'unsaved'   => __('You have unsaved changes', 'fluxfiles'),
@@ -92,8 +93,11 @@ class FluxFilesAdmin
     }
 
     /**
-     * AJAX: check that a cloud disk works with the SAVED settings by listing its root the
-     * same way the file manager does. Admin only; reports the storage error verbatim.
+     * AJAX: run the Bucket Doctor on a cloud disk built straight from the SAVED options
+     * ("Test connection" on the Cloud tab). Admin only and nonce-checked. No token is minted
+     * and no REST request is made, so nothing can be replayed or broadened, and it works
+     * before the disk is ticked under "Enabled disks". It writes and deletes one small probe
+     * object under `_fluxfiles/.doctor/`. 5 runs per minute per user.
      */
     public function ajaxTestDisk(): void
     {
@@ -106,34 +110,80 @@ class FluxFilesAdmin
         if (!in_array($disk, ['s3', 'r2', 'sftp'], true)) {
             wp_send_json_error(['message' => __('Unknown disk.', 'fluxfiles')], 400);
         }
-        if (!self::diskIsConfigured($disk)) {
+        $configs = FluxFilesPlugin::diskConfigs();
+        if (!self::diskIsConfigured($disk) || !isset($configs[$disk])) {
             wp_send_json_error(['message' => $disk === 'sftp'
                 ? __('Fill in the host and save first.', 'fluxfiles')
                 : __('Fill in the bucket and save first.', 'fluxfiles')]);
         }
-        if (!in_array($disk, (array) get_option('fluxfiles_disks', ['local']), true)) {
-            /* translators: %s: disk name, e.g. S3 */
-            wp_send_json_error(['message' => sprintf(__('Tick %s under Access › Enabled disks and save, then test again.', 'fluxfiles'), strtoupper($disk))]);
+        try {
+            FluxFilesApi::userBucketLimit((string) get_current_user_id(), 'disk_test', 5);
+        } catch (\FluxFiles\ApiException $e) {
+            wp_send_json_error(['message' => __('Too many tests. Wait a minute and try again.', 'fluxfiles')], 429);
         }
         $start = microtime(true);
         try {
-            $req = new \WP_REST_Request('GET', '/fluxfiles/v1/api/fm/list');
-            $req->set_header('authorization', 'Bearer ' . FluxFilesPlugin::tokenForCurrentUser());
-            $req->set_param('disk', $disk);
-            $req->set_param('path', '');
-            $req->set_param('limit', 1);
-            $res = rest_do_request($req);
+            $dm = FluxFilesSiteHealth::diskManagerFor($disk, $configs[$disk]);
+            $report = (new \FluxFiles\BucketDoctor($dm, new \FluxFilesHttpTransport(), new \FluxFilesUrlFetcher()))
+                ->diagnose($disk, self::siteOrigin());
         } catch (\Throwable $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
         }
         $ms = (int) round((microtime(true) - $start) * 1000);
-        if ($res->get_status() === 200) {
-            /* translators: %d: milliseconds */
-            wp_send_json_success(['message' => sprintf(__('Connected (%d ms).', 'fluxfiles'), $ms)]);
+        $labels = self::checkLabels();
+        $checks = [];
+        foreach ((array) ($report['checks'] ?? []) as $c) {
+            $id = (string) ($c['id'] ?? '');
+            $checks[] = [
+                'id'      => $id,
+                'status'  => (string) ($c['status'] ?? 'info'),
+                'label'   => $labels[$id] ?? $id,
+                // Message and fix stay English, as in the core UI.
+                'message' => (string) ($c['message'] ?? ''),
+                'fix'     => (string) ($c['fix'] ?? ''),
+            ];
         }
-        $data = $res->get_data();
-        $msg = is_array($data) ? (string) ($data['error'] ?? $data['message'] ?? '') : '';
-        wp_send_json_error(['message' => $msg !== '' ? $msg : sprintf('HTTP %d', $res->get_status())]);
+        $summary = (string) ($report['summary'] ?? 'ok');
+        if ($summary === 'fail') {
+            $msg = __('Some checks failed.', 'fluxfiles');
+        } elseif ($summary === 'warn') {
+            /* translators: %d: milliseconds */
+            $msg = sprintf(__('Connected, with warnings (%d ms).', 'fluxfiles'), $ms);
+        } else {
+            /* translators: %d: milliseconds */
+            $msg = sprintf(__('Connected (%d ms).', 'fluxfiles'), $ms);
+        }
+        wp_send_json_success(['message' => $msg, 'summary' => $summary, 'checks' => $checks]);
+    }
+
+    /** `scheme://host[:port]` of the site: the origin the CORS check asks the bucket about. */
+    private static function siteOrigin(): string
+    {
+        $p = wp_parse_url(home_url());
+        if (!is_array($p) || empty($p['scheme']) || empty($p['host'])) {
+            return '';
+        }
+        return $p['scheme'] . '://' . $p['host'] . (isset($p['port']) ? ':' . $p['port'] : '');
+    }
+
+    /**
+     * Localized name per Bucket Doctor check id.
+     *
+     * @return array<string,string>
+     */
+    public static function checkLabels(): array
+    {
+        return [
+            'reachability' => __('Connection', 'fluxfiles'),
+            'write'        => __('Write', 'fluxfiles'),
+            'read'         => __('Read', 'fluxfiles'),
+            'presign'      => __('Presigned download link', 'fluxfiles'),
+            'multipart'    => __('Large uploads (multipart)', 'fluxfiles'),
+            'cors'         => __('Browser uploads (CORS)', 'fluxfiles'),
+            'lifecycle'    => __('Clean-up of failed uploads', 'fluxfiles'),
+            'versioning'   => __('Versioning', 'fluxfiles'),
+            'delete'       => __('Delete', 'fluxfiles'),
+        ];
     }
 
     /**

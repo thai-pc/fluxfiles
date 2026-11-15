@@ -244,6 +244,10 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
             }
         }
 
+        // Site Health verdict caches.
+        delete_transient('fluxfiles_health_storage');
+        delete_transient('fluxfiles_health_ai');
+
         // Usage cache transients (fluxfiles_usage_<md5>) and their timeouts.
         if (isset($wpdb) && is_object($wpdb)) {
             // One-off cleanup of this plugin's own transients at uninstall; there is nothing to cache.
