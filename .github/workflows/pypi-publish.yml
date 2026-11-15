@@ -8,7 +8,7 @@ on:
 jobs:
   publish:
     name: Publish fluxfiles-token
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: pypi
     permissions:
       # Required for PyPI Trusted Publishing (OIDC) — no long-lived

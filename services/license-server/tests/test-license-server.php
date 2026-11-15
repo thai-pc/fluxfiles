@@ -761,14 +761,14 @@ test('mail: lifetime says use-forever + 12 months of updates; renewal says exten
     assertTrue(str_contains($b, gmdate('Y-m-d', (int) $ren['expires'])), 'new date shown');
 });
 
-test('polar-setup: default catalogue is the 6 current products; lifetime/renewals only behind their flags', function () {
+test('polar-setup: default catalogue is the 4 current products (no standalone support: Polar AUP); lifetime/renewals only behind their flags', function () {
     $src = (string) file_get_contents(__DIR__ . '/../polar-setup.php');
     assertTrue(str_contains($src, "in_array('--with-lifetime', \$argv, true)"), 'flag exists');
     assertTrue(str_contains($src, "in_array('--with-renewals', \$argv, true)"), 'renewals flag exists');
     assertTrue(str_contains($src, 'CATALOGUE + ($withLifetime ? LIFETIME_CATALOGUE : []) + ($withRenewals ? RENEWAL_CATALOGUE : [])'), 'opt-in merge');
     preg_match('/const CATALOGUE = \[(.*?)\n\];/s', $src, $c); preg_match('/const LIFETIME_CATALOGUE = \[(.*?)\n\];/s', $src, $l); preg_match('/const RENEWAL_CATALOGUE = \[(.*?)\n\];/s', $src, $r);
     preg_match_all("/^    '([a-z-]+)' => \[/m", $c[1], $cm); preg_match_all("/^    '([a-z-]+)' => \[/m", $l[1], $lm); preg_match_all("/^    '([a-z-]+)' => \[/m", $r[1], $rm);
-    assertEqual(['pro','pro-monthly','studio','studio-monthly','support','support-monthly'], $cm[1], 'default products unchanged');
+    assertEqual(['pro','pro-monthly','studio','studio-monthly'], $cm[1], 'default products unchanged');
     assertEqual(['lifetime','pro-lifetime'], $lm[1]);
     assertEqual(['pro-renewal','studio-renewal'], $rm[1]);
     assertEqual(4, substr_count($l[1] . $r[1], "'recurring' => null"), 'all one-time');

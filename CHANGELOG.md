@@ -5,6 +5,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- Core AI tagging: the default model of the `claude`/`anthropic` provider was the dated snapshot `claude-sonnet-4-20250514`, which Anthropic retired on 2026-06-15, so every install that never set `FLUXFILES_AI_MODEL` got an error on each tagging call. The default is now `claude-sonnet-5-5`. The `openrouter` default moves from the pinned `google/gemini-2.5-flash` to OpenRouter's `~google/gemini-flash-latest` alias (same reason the `gemini` provider already uses `gemini-flash-latest`). An explicit `FLUXFILES_AI_MODEL` is unaffected. A test now fails on any dated-snapshot default.
+
+### Changed
+- Licence server (`services/license-server/`, not a tagged package): `polar-setup.php` no longer creates the standalone Priority Support products (`support`, `support-monthly`). Polar's acceptable-use policy rejects support sold on its own; the production products were archived on 2026-11-14. `Plans.php` still maps the `support` edition so any existing record keeps working.
+- WordPress adapter (dev only): `fluxfiles/fluxfiles` constraint `^1.5.0` and lock moved to v1.5.0 (the release zip already bundled core-v1.5.0 from the monorepo).
+
 ### Added
 - Licence server (`services/license-server/`, not a tagged package): the licence e-mail and renewal reminders of subscription licences (Polar subscription id, or `subscription` enforcement) now say the plan renews automatically and can be cancelled any time, with the annual/monthly consequence. New optional non-secret `FLUXFILES_SUBSCRIPTION_PORTAL_URL` (https only) adds the Polar customer-portal link; unset, the sentence is sent without it. One-time/lifetime licences are unchanged. The deploy allow-lists (`bootstrap.php`, `L-secret.sh`) must list the new var.
 - Licence server (`services/license-server/`, not a tagged package): `FLUXFILES_POLAR_IGNORE_PRODUCTS`, a comma-separated list of Polar product ids to acknowledge and ignore. An `order.paid` for such a product answers 200, issues no licence, sends no e-mail, raises no operations alert and is recorded as outcome `ignored_product` (its revenue shows under the plan label `ignored`), so a pay-what-you-want sponsorship product no longer hits the 503 "unmapped product" retry loop. An id in both this list and `FLUXFILES_POLAR_PLAN_MAP` keeps issuing (the map wins) and logs a config warning. Redelivery stays a no-op. The admin system status lists the ids as `ignored_products`. Deploy: add the variable to the server's `config.env` and reload.
