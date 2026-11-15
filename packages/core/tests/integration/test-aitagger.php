@@ -187,6 +187,17 @@ test('provider name is case- and whitespace-insensitive', function () {
     assertEqual('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent', endpointFor(new AiTagger('  GEMINI ', 'k')), 'trimmed + lowercased');
 });
 
+test('no default model is a dated snapshot (they retire and then fail every call)', function () {
+    // claude-sonnet-4-20250514 was retired on 2026-06-15; every install that never set
+    // FLUXFILES_AI_MODEL then got an error on each upload.
+    foreach (AiTagger::supportedProviders() as $p) {
+        $m = modelOf(new AiTagger($p, 'k'));
+        assertTrue(!preg_match('/-20\d{6}$/', $m), "provider '{$p}' defaults to a dated snapshot: {$m}");
+    }
+    assertEqual('claude-sonnet-5-5', modelOf(new AiTagger('claude', 'k')), 'claude default');
+    assertEqual('~google/gemini-flash-latest', modelOf(new AiTagger('openrouter', 'k')), 'openrouter default');
+});
+
 test('each provider resolves a default model without config', function () {
     foreach (AiTagger::supportedProviders() as $p) {
         if ($p === 'compatible') { continue; }   // by definition BYO model

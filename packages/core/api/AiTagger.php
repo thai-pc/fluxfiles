@@ -41,9 +41,10 @@ class AiTagger
      * @var array<string, array{api: string, model: string, base?: string}>
      */
     private const PROVIDERS = [
-        // Anthropic Messages API
-        'claude'     => ['api' => 'anthropic', 'model' => 'claude-sonnet-4-20250514'],
-        'anthropic'  => ['api' => 'anthropic', 'model' => 'claude-sonnet-4-20250514'],
+        // Anthropic Messages API. An undated model id: dated snapshots retire
+        // (claude-sonnet-4-20250514 was retired on 2026-06-15 and then failed every call).
+        'claude'     => ['api' => 'anthropic', 'model' => 'claude-sonnet-5-5'],
+        'anthropic'  => ['api' => 'anthropic', 'model' => 'claude-sonnet-5-5'],
 
         // Google Gemini generateContent. The `-latest` alias, not a pinned version:
         // Google retires point releases for new keys (gemini-2.5-flash already 404s with
@@ -54,7 +55,7 @@ class AiTagger
 
         // OpenAI and the gateways that speak its chat-completions shape
         'openai'     => ['api' => 'openai', 'model' => 'gpt-4o',                    'base' => 'https://api.openai.com/v1'],
-        'openrouter' => ['api' => 'openai', 'model' => 'google/gemini-2.5-flash',   'base' => 'https://openrouter.ai/api/v1'],
+        'openrouter' => ['api' => 'openai', 'model' => '~google/gemini-flash-latest', 'base' => 'https://openrouter.ai/api/v1'],
         'groq'       => ['api' => 'openai', 'model' => 'meta-llama/llama-4-scout-17b-16e-instruct', 'base' => 'https://api.groq.com/openai/v1'],
         'mistral'    => ['api' => 'openai', 'model' => 'pixtral-12b-2409',          'base' => 'https://api.mistral.ai/v1'],
         'xai'        => ['api' => 'openai', 'model' => 'grok-2-vision-1212',        'base' => 'https://api.x.ai/v1'],

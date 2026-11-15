@@ -82,20 +82,8 @@ const CATALOGUE = [
         'amount' => 1900,           // $19 / month — matches the landing
         'recurring' => 'month',
     ],
-    // Support = a standalone service subscription, no module unlock — for
-    // self-hosters who want a support relationship without buying Pro/Studio.
-    'support' => [
-        'name' => 'FluxFiles Priority Support',
-        'description' => 'Priority email support with faster response times. No software is unlocked — this is a service subscription for self-hosters who want a support relationship without buying a paid module.',
-        'amount' => 2900,           // $29 / year
-        'recurring' => 'year',
-    ],
-    'support-monthly' => [
-        'name' => 'FluxFiles Priority Support (monthly)',
-        'description' => 'Priority email support with faster response times. Billed monthly.',
-        'amount' => 300,            // $3 / month
-        'recurring' => 'month',
-    ],
+    // No standalone support product: Polar's acceptable-use policy rejects selling
+    // support on its own (the prod products were archived on 2026-11-14).
 ];
 
 /**
