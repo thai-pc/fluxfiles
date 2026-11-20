@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.48] — 2026-11-20
+
+> Released: `core-v1.6.4` (the browser SDK `/fluxfiles.js` is served by the Docker image and by Composer installs) and `tinymce-v1.0.3` (README: TinyMCE 4 to 8, browser-tested on 6, 7 and 8). Migration guide for Responsive FileManager and RichFilemanager.
+
 ### Fixed
 - Docker: the image did not contain the browser SDK, so `/fluxfiles.js` returned 404 and every embed that loads the SDK from the FluxFiles server (JS SDK, TinyMCE, CKEditor, Summernote) failed. `Dockerfile.prod` copies `packages/sdk/fluxfiles.js` and `fluxfiles.min.js` into the core root, nginx serves `/fluxfiles.min.js` like `/fluxfiles.js`, and the pre-push smoke test now checks both.
 
