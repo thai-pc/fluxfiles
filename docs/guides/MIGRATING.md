@@ -175,7 +175,7 @@ and [README](https://github.com/trippo/ResponsiveFilemanager/blob/master/README.
 
 | RFM | FluxFiles |
 |---|---|
-| External plugin for TinyMCE 4.x and CKEditor | [`@fluxfiles/tinymce`](../../packages/tinymce/README.md) (<!-- TINYMCE_VERSIONS -->TinyMCE 4–7<!-- /TINYMCE_VERSIONS -->), [`@fluxfiles/ckeditor4`](../../packages/ckeditor4/README.md) or [`@fluxfiles/ckeditor5`](../../packages/ckeditor5/README.md) (CKEditor 5 v42+) |
+| External plugin for TinyMCE 4.x and CKEditor | [`@fluxfiles/tinymce`](../../packages/tinymce/README.md) (TinyMCE 4–8), [`@fluxfiles/ckeditor4`](../../packages/ckeditor4/README.md) or [`@fluxfiles/ckeditor5`](../../packages/ckeditor5/README.md) (CKEditor 5 v42+) |
 | Standalone file manager (`dialog.php` in a popup or iframe) | JS SDK `FluxFiles.open({ mode: 'picker' })`, or `fluxfiles_embed()` for a server-rendered iframe ([PHP Embed Helper](../../README.md#php-embed-helper)) |
 | TinyMCE options `external_filemanager_path`, `filemanager_title`, `filemanager_access_key` | `fluxfiles_endpoint`, `fluxfiles_token`, `fluxfiles_disk` ([TinyMCE plugin options](../../packages/tinymce/README.md#configuration)). The access key has no equivalent: the signed token replaces it. |
 | `session_start()` in `config.php`; optional `USE_ACCESS_KEYS` (off by default) | A JWT minted by `fluxfiles_token()` on your server. FluxFiles answers `401` to any API call without a valid token, so there is no unprotected default to forget. |
@@ -222,6 +222,7 @@ After. Mint the token as in [step 4](#steps-common-to-every-migration), then:
 <script>
 tinymce.init({
     selector: '#editor',
+    license_key: 'gpl',   // self-hosted TinyMCE 7+ only
     external_plugins: { fluxfiles: '/node_modules/@fluxfiles/tinymce/plugin.min.js' },
     toolbar: 'undo redo | bold italic | fluxfiles | link image',
     fluxfiles_endpoint: 'https://fm.example.com',
@@ -246,7 +247,8 @@ CKEDITOR.replace('editor', {
 });
 ```
 
-After: drop both `filebrowser*Url` settings and load the FluxFiles plugin. It adds a
+After: drop both `filebrowser*Url` settings, load `https://fm.example.com/fluxfiles.js`
+and then the FluxFiles plugin. It adds a
 toolbar button and a **Browse FluxFiles** button inside CKEditor's own Image dialog:
 
 ```js
@@ -301,7 +303,7 @@ on an FTP server have to be copied to local, SFTP or S3 storage first.
   and S3/R2/SFTP storage.
 - **Changes:** PHP 8.1 or newer; no FTP storage; extract and download handle zip only;
   no general image editor; no switch to allow renaming without allowing other writes.
-- The TinyMCE plugin supports <!-- TINYMCE_VERSIONS -->TinyMCE 4–7<!-- /TINYMCE_VERSIONS -->.
+- The TinyMCE plugin supports TinyMCE 4–8.
 
 ---
 
@@ -541,7 +543,9 @@ function pickCover() {
 **TinyMCE.** Before, a `file_browser_callback` (TinyMCE 3/4) or `file_picker_callback`
 (TinyMCE 5+) opened RichFilemanager's `index.html` in a window. After, remove that
 callback and load the FluxFiles plugin, which registers its own `file_picker_callback`
-for the image, link and media dialogs (supported: <!-- TINYMCE_VERSIONS -->TinyMCE 4–7<!-- /TINYMCE_VERSIONS -->):
+for the image, link and media dialogs (supported: TinyMCE 4–8). Load
+`https://fm.example.com/fluxfiles.js` on the page before TinyMCE starts, and on
+self-hosted TinyMCE 7 or newer also set `license_key` (a TinyMCE requirement):
 
 ```js
 tinymce.init({
@@ -554,7 +558,8 @@ tinymce.init({
 });
 ```
 
-**CKEditor 4.** Remove `filebrowserBrowseUrl` and load the plugin:
+**CKEditor 4.** Remove `filebrowserBrowseUrl`, load `https://fm.example.com/fluxfiles.js`
+and then the plugin:
 
 ```js
 CKEDITOR.plugins.addExternal('fluxfiles', '/node_modules/@fluxfiles/ckeditor4/', 'plugin.min.js');
@@ -802,6 +807,6 @@ scripts are served.
 bucket, configure the `s3` or `r2` disk, index it with `--disk=s3` (or `r2`), and give
 the bucket a `public_url` so editor embeds get permanent URLs.
 
-**Which TinyMCE versions work?** The FluxFiles plugin supports <!-- TINYMCE_VERSIONS -->TinyMCE 4–7<!-- /TINYMCE_VERSIONS -->. CKEditor 4
+**Which TinyMCE versions work?** The FluxFiles plugin supports TinyMCE 4–8. CKEditor 4
 and CKEditor 5 (v42+) have their own plugins.
 
