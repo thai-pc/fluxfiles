@@ -51,14 +51,15 @@ if ($uri === '/public/index.html' || $uri === '/public/' || $uri === '/public') 
     return true;
 }
 
-// Serve the browser SDK from packages/sdk/ at the conventional /fluxfiles.js
-// (and minified /fluxfiles.min.js) path so test fixtures, README snippets, and
-// production setups can use the same URL regardless of monorepo vs. published
-// layout.
+// Serve the browser SDK at the conventional /fluxfiles.js (and minified
+// /fluxfiles.min.js) path. Core ships its own copy (packages/core/fluxfiles*.js,
+// kept equal to packages/sdk by tests/unit/test-sdk-copy.php), so the Composer
+// package and the Docker image serve it too; the packages/sdk fallback covers a
+// monorepo checkout.
 if ($uri === '/fluxfiles.js' || $uri === '/fluxfiles.min.js') {
     $name = basename($uri);
     $candidates = [
-        __DIR__ . '/' . $name,          // release ZIP (build-wordpress.sh copies it here)
+        __DIR__ . '/' . $name,          // core's own copy (Composer package, Docker image)
         __DIR__ . '/../sdk/' . $name,   // monorepo checkout
     ];
     foreach ($candidates as $path) {

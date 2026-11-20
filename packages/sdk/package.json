@@ -14,7 +14,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "esbuild fluxfiles.js --minify --legal-comments=none --outfile=fluxfiles.min.js",
+    "build": "esbuild fluxfiles.js --minify --legal-comments=none --outfile=fluxfiles.min.js && cp fluxfiles.js fluxfiles.min.js ../core/",
     "test": "vitest run"
   },
   "devDependencies": {
