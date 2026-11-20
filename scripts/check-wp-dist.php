@@ -134,6 +134,59 @@ foreach ($files as $rel => $_) {
     }
 }
 
+// ---- permitted file types --------------------------------------------------
+// WordPress.org's "Not permitted files" check (aws-crt-php/format-check.py,
+// zipstream-php/results.sarif in 1.3.0). An allow-list over the WHOLE zip, so a vendor bump
+// that ships a new helper/CI/report file fails here instead of in review. Keep it in step
+// with the `find ... -delete` allow-list in scripts/build-wordpress.sh.
+$allowedExt = ['php', 'js', 'css', 'json', 'xml', 'txt', 'md', 'png', 'svg', 'jpg', 'jpeg', 'gif', 'webp',
+    'ttf', 'woff', 'woff2', 'cnf', 'lock'];
+$allowedNames = '#^(LICENSE|LICENCE|COPYING|NOTICE|AUTHORS|VERSION|THIRD-PARTY-LICENSES)([-_.].*)?$#';
+foreach ($files as $rel => $_) {
+    $name = basename($rel);
+    $ext = strtolower((string) pathinfo($name, PATHINFO_EXTENSION));
+    if ($ext !== '' && in_array($ext, $allowedExt, true)) {
+        continue;
+    }
+    if (preg_match($allowedNames, $name) === 1) {
+        continue;
+    }
+    if (in_array($ext, ['pot', 'po', 'mo'], true) && preg_match('#(^|/)languages/#', $rel) === 1) {
+        continue;
+    }
+    $fail("file type not permitted by WordPress.org: $rel");
+}
+
+// ---- UI template: no literal script/stylesheet tags ---------------------------
+// Plugin Check ("Use wp_enqueue commands"): templates/ui-index.php prints registered
+// handles; a literal tag outside the inline heredoc would be flagged again.
+if (isset($files['templates/ui-index.php'])) {
+    $tpl = (string) file_get_contents($files['templates/ui-index.php']);
+    $tpl = (string) preg_replace("#<<<'FLUXFILES_JS'.*?\nFLUXFILES_JS#s", '', $tpl);
+    if (preg_match('#<script|<style|<link[^>]*rel\s*=\s*["\']?stylesheet#i', $tpl) === 1) {
+        $fail('templates/ui-index.php contains a literal <script>/<style>/<link rel="stylesheet"> (use wp_print_scripts/wp_print_styles)');
+    }
+}
+
+// ---- no literal script/stylesheet tags in shipped PHP -------------------------
+// Plugin Check's EnqueuedResources sniff reads every string token, so a regex or a
+// sample containing one is reported even when it is not output. Same patterns as above.
+foreach ($files as $rel => $abs) {
+    if (str_starts_with($rel, 'vendor/') || !str_ends_with($rel, '.php')) {
+        continue;
+    }
+    // Comments are fine (the sniff reads strings and inline HTML, not comments).
+    $text = '';
+    foreach (token_get_all((string) file_get_contents($abs)) as $tok) {
+        if (is_array($tok) && in_array($tok[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE, T_INLINE_HTML], true)) {
+            $text .= $tok[1] . "\n";
+        }
+    }
+    if (preg_match('#<script\b|<link[^>]*rel\s*=\s*\\\\?["\']?stylesheet#i', $text) === 1) {
+        $fail("$rel: literal <script>/<link rel=stylesheet> text in a string (use wp_register_* / wp_print_*; build a pattern from pieces)");
+    }
+}
+
 // ---- content scans (outside vendor/) ---------------------------------------
 $binary = '#\.(ttf|otf|woff2?|png|jpe?g|gif|webp|ico|mo|zip|gz)$#i';
 $strings = [

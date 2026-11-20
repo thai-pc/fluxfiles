@@ -5,6 +5,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- WordPress (WordPress.org review, round 2): the plugin zip no longer ships files WordPress.org does not permit (`aws-crt-php/format-check.py`, `zipstream-php/results.sarif`, `.rst` guides, `random_compat` `.pubkey`/`.asc`): `scripts/build-wordpress.sh` deletes every `vendor/` file outside an extension allow-list, and `scripts/check-wp-dist.php` enforces the same list over the whole zip (selftest extended).
+- WordPress: the UI iframe document (`templates/ui-index.php`) no longer contains literal `<script>` / `<link rel="stylesheet">` tags. Its styles and scripts are registered with `wp_register_style()` / `wp_register_script()` (`strategy => defer`, locale as `wp_add_inline_script( 'before' )`) and printed with `wp_print_styles()` / `wp_print_scripts()`, only our own handles (so the UI's assets now pass through WordPress's script/style loader filters, e.g. `script_loader_src`/`script_loader_tag`; an optimiser plugin that strips query strings or forces `async` on all scripts can affect the iframe); the build converts core's page and fails if a literal tag survives. The `phpcs:disable WordPress.WP.EnqueuedResources` header is gone.
+- WordPress: every `register_rest_route()` call now carries its `permission_callback` literally in its own args (no more shared `array_merge()` arrays), with a one-line reason on each public route. Behaviour is unchanged; a smoke test fails when a call lacks it.
+- WordPress: the language and text direction of the negotiated locale were never applied to the UI page's `<html>` tag (the lookup expected `<html lang="en">`, core's page has more attributes), so RTL locales such as Arabic were not flipped. Fixed and covered by a smoke test.
+- WordPress: `scripts/check-wp-dist.php` also fails on literal script/stylesheet tag text in any shipped PHP file, and the build's licence-name rule now matches the guard's.
+
 ## [1.0.44] — 2026-11-20
 
 > Released: `core-v1.6.2` (time-bounded Bucket Doctor; phpcs note on the rate limiter's lock file). CI is back on `ubuntu-latest` with Playwright 1.65.1.
