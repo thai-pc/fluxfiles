@@ -4,7 +4,7 @@ The free plugin ships no paid modules, licence, updater or engine settings. An a
 (the future FluxFiles Pro) plugs in through the hooks below. `FLUXFILES_EXT_API` is bumped only
 when a hook changes incompatibly; an add-on should refuse to boot when it is lower than the
 level it was written for. `FLUXFILES_CORE_VERSION` (string, stamped at build) is the bundled core
-release, or `'unknown'` in a dev checkout. Design: `docs/design/WPORG-SPLIT-DESIGN.md` section 2.3.
+release, or `'unknown'` in a dev checkout. Design: `fluxfiles-private-docs: design/WPORG-SPLIT-DESIGN.md` section 2.3.
 
 | Hook | Type / arguments | Fired or applied | Purpose |
 |---|---|---|---|

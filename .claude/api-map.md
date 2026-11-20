@@ -211,7 +211,7 @@ All of these are proxied by the Laravel and WordPress adapters.
 - `GET /api/fm/hold/status?disk=&path=` — **free/core**
   - Whether a path is currently on legal hold. Requires `read`; `reason`/`placed_by`/`placed_at` are included only with the `audit` permission.
 
-- `POST /api/fm/hold {disk, path, reason}` · `POST /api/fm/hold/release {disk, hold_id, reason}` · `GET /api/fm/hold/list?disk=&include_released=` — `legal-hold` (`allow_legal_hold`; `docs/design/RETENTION-LEGAL-HOLD-DESIGN.md`)
+- `POST /api/fm/hold {disk, path, reason}` · `POST /api/fm/hold/release {disk, hold_id, reason}` · `GET /api/fm/hold/list?disk=&include_released=` — `legal-hold` (`allow_legal_hold`; `fluxfiles-private-docs: design/RETENTION-LEGAL-HOLD-DESIGN.md`)
   - Management half of Legal Hold, gated by the `audit` permission. **Enforcement is free/core and license-independent**: `FileManager::assertNoActiveHold()` blocks delete/trash/rename/move/cross-move/purge on a held path, and (since core-v0.2.94) every in-place mutation of an existing held file — overwrite upload, chunk/presign PUT/POST and tus onto an existing key, `/content` PUT, `/chmod`, watermark burn/remove, extract-overwrite, `/optimize`, metadata edits, module writes — and keeps blocking even if the module is later uninstalled or its license lapses.
 
 - `POST /api/fm/retention/run {disk, dry_run?}` — `legal-hold` (`allow_legal_hold`), `audit` perm

@@ -85,7 +85,7 @@ class FileManager
      *            module/licence gate INSIDE the callback" contract as $virusScanner,
      *            so a tenant who asked for scanning but has no working engine gets an
      *            error on write rather than silently unscanned files. Extension/size
-     *            eligibility (§2.1 of docs/design/DLP-PII-REDACTION-DESIGN.md) is checked in
+     *            eligibility (§2.1 of fluxfiles-private-docs: design/DLP-PII-REDACTION-DESIGN.md) is checked in
      *            assertNoPii() BEFORE this is ever invoked. Never set → no scan, no cost. */
     private $dlpScanner = null;
 
@@ -184,7 +184,7 @@ class FileManager
      * local disk: `fn(string $localPath, string $name): array{clean:bool, entities:string[]}`.
      * Set only when the token carries `allow_dlp_scan`; the module/licence gate is
      * resolved inside the callback so its 501/402/403 surfaces on the write that
-     * needed it. See docs/design/DLP-PII-REDACTION-DESIGN.md.
+     * needed it. See fluxfiles-private-docs: design/DLP-PII-REDACTION-DESIGN.md.
      */
     public function setDlpScanner(callable $fn): void
     {
@@ -4936,7 +4936,7 @@ class FileManager
 
     /**
      * Legal hold enforcement — free/core and license-independent (see
-     * docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §2/§5). Unlike every other paid-module
+     * fluxfiles-private-docs: design/RETENTION-LEGAL-HOLD-DESIGN.md §2/§5). Unlike every other paid-module
      * hook on this class (virusScanner/dlpScanner/versionKeeper/…), this check
      * has NO installed/licensed/claim gate at all: once a hold exists in
      * holds.json, it blocks delete/trash/rename/move/cross-move/purge

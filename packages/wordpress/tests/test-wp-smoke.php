@@ -426,7 +426,7 @@ test('BYOB disks register for every route; the SSRF allow-list is applied', func
     assertEqual([], \FluxFiles\SsrfGuard::$allowHosts, 'cleared');
 });
 
-// DLP/PII redaction (docs/design/DLP-PII-REDACTION-DESIGN.md): the gate + its 4 tuning
+// DLP/PII redaction (fluxfiles-private-docs: design/DLP-PII-REDACTION-DESIGN.md): the gate + its 4 tuning
 // claims forward the same way as versioning/audit-export above (unconditional
 // gate, !empty() tuning claims) — this was a genuine gap (no assertion existed
 // for either virus OR dlp forwarding on this adapter before now).
@@ -463,7 +463,7 @@ test('fileManager() actually WIRES setDlpScanner() (not just a decodable claim) 
     assertEqual(5, substr_count($apiSrc, "'virus_unscannable'"), 'and the same 5 sites for virus_unscannable');
 });
 
-// Legal hold (docs/design/RETENTION-LEGAL-HOLD-DESIGN.md): the gate forwards like any
+// Legal hold (fluxfiles-private-docs: design/RETENTION-LEGAL-HOLD-DESIGN.md): the gate forwards like any
 // other paid-module claim. Enforcement itself needs no claim at all — it's
 // wired inside core's FileManager and inherited automatically since this
 // proxy builds the same class, unlike every other hook on this list.

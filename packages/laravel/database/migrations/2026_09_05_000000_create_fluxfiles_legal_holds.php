@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Schema;
  * allHolds()/getHold()/addHold()/releaseHold()/countActiveHolds()/
  * holdCovering()/holdBlocking() are a direct port of. Free/core storage
  * shape; the paid gate only covers placing/releasing a hold (§2 of
- * docs/design/RETENTION-LEGAL-HOLD-DESIGN.md), not this table.
+ * fluxfiles-private-docs: design/RETENTION-LEGAL-HOLD-DESIGN.md), not this table.
  */
 return new class extends Migration
 {

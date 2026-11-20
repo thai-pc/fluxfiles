@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Docs
+- Design specs for the paid modules and the Pro add-on moved out of this public repo into the owner's private docs repo; code comments now cite `fluxfiles-private-docs: design/<FILE>.md`. User-facing docs for those modules (FEATURES, CONFIG) are unchanged. A new guard, `tests/unit/test-no-paid-specs-public.php`, keeps `docs/design/` to free/core records.
+
 ## [1.0.49] — 2026-11-20
 
 > Released: `core-v1.6.5`. Security fixes from the pre-launch audit: tenant root rename, `prefix` dot segments, BYOB SFTP key paths, watermark logo size, demo trash purge, plus preview-only docs.

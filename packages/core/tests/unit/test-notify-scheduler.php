@@ -1,7 +1,7 @@
 <?php
 
 /**
- * `fluxfiles notify:run` (docs/design/INTAKE-DOCUMENT-REQUESTS-DESIGN.md §11): the
+ * `fluxfiles notify:run` (fluxfiles-private-docs: design/INTAKE-DOCUMENT-REQUESTS-DESIGN.md §11): the
  * claims NotifyScheduler builds (gates, perms, disk, prefix; no notify_* setting), the
  * multi-store sweep it drives through NotifyEndpoint::run() against a fake module, store
  * discovery on a local disk, and the CLI's usage handling and exit codes.
