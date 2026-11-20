@@ -12,6 +12,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - WordPress: the language and text direction of the negotiated locale were never applied to the UI page's `<html>` tag (the lookup expected `<html lang="en">`, core's page has more attributes), so RTL locales such as Arabic were not flipped. Fixed and covered by a smoke test.
 - WordPress: `scripts/check-wp-dist.php` also fails on literal script/stylesheet tag text in any shipped PHP file, and the build's licence-name rule now matches the guard's.
 
+## [1.0.44] — 2026-11-20
+
+> Released: `core-v1.6.2` (time-bounded Bucket Doctor; phpcs note on the rate limiter's lock file). CI is back on `ubuntu-latest` with Playwright 1.65.1.
+
+### Fixed
+- Bucket Doctor (`GET /api/fm/disk/doctor`, WP Cloud test, Laravel `disk/doctor`, `fluxfiles doctor`) is now time-bounded. Every S3 call carries per-command `@http` (5 s connect, 15 s total, each clamped to what is left of the budget) and `@retries` 0 (the disk's shared client used for file operations is unchanged); the presign probe fetch is capped at 8 s; the SFTP check uses a doctor-only connection (8 s timeout, one attempt instead of two; a tenant config cannot change that). After a connection-level failure (timeout, DNS, refused, TLS) the remaining checks are reported as skipped (`status: info` plus an additive `skipped: true`) and the summary is never `ok`. One run has a 45 s budget; the probe cleanup delete (3 s connect, 8 s total) always runs once the write succeeded, so the worst case is about 55 s. Previously a silent endpoint could hold one run for many minutes. The probe write now also sends the same ACL and content type as a real upload, so an ACL-disabled bucket still fails the write check.
+- WordPress.org review: a phpcs ignore note on the rate limiter's local lock-file `fopen()` (comment only, no behaviour change).
+
 ## [1.0.43] — 2026-11-15
 
 > Released: `laravel-v1.1.0` (core floor `^1.6.1`): AI connection test route, Doctor `ai` block, `fluxfiles:doctor --ai`.

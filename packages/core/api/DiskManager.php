@@ -60,6 +60,22 @@ class DiskManager
     }
 
     /**
+     * A throwaway SFTP filesystem for the Bucket Doctor: same disk config but a short
+     * connect timeout and a single attempt, so an unreachable host fails the check in
+     * seconds instead of holding the run for timeout x maxTries. Not cached, and the
+     * disk's normal adapter (used for file operations) is left untouched.
+     */
+    public function sftpDoctorDisk(string $name, int $timeout = 8): Filesystem
+    {
+        $cfg = $this->config($name);
+        if (($cfg['driver'] ?? '') !== 'sftp') {
+            throw new ApiException("Disk '{$name}' is not an SFTP disk", 400);
+        }
+        $cfg['timeout'] = max(1, min($timeout, (int) ($cfg['timeout'] ?? $timeout)));
+        return new Filesystem(self::buildSftpAdapter($cfg, 1));
+    }
+
+    /**
      * Presigned GET URL for an object on an S3-compatible disk, or null when the
      * disk isn't S3 or presigning fails. Lets a caller redirect (302) to the
      * bucket instead of proxying the bytes through the app server.
@@ -217,10 +233,10 @@ class DiskManager
      * @param array<string,mixed> $cfg host, port, username, password, private_key,
      *        private_key_passphrase, root
      */
-    private static function buildSftpAdapter(array $cfg)
+    private static function buildSftpAdapter(array $cfg, int $maxTries = 2)
     {
         $root = (string) ($cfg['root'] ?? '/');
-        return new \League\Flysystem\PhpseclibV3\SftpAdapter(self::buildSftpProvider($cfg), $root);
+        return new \League\Flysystem\PhpseclibV3\SftpAdapter(self::buildSftpProvider($cfg, $maxTries), $root);
     }
 
     /**
@@ -228,7 +244,7 @@ class DiskManager
      * host). Shared by the Flysystem adapter and the raw-connection path used for
      * chmod (which Flysystem only exposes as coarse public/private visibility).
      */
-    private static function buildSftpProvider(array $cfg): \League\Flysystem\PhpseclibV3\SftpConnectionProvider
+    private static function buildSftpProvider(array $cfg, int $maxTries = 2): \League\Flysystem\PhpseclibV3\SftpConnectionProvider
     {
         $host = (string) ($cfg['host'] ?? '');
         if ($host === '') {
@@ -279,7 +295,7 @@ class DiskManager
             'useAgent'            => false, // never reach for a local ssh-agent on the server
             'hostFingerprint'     => $hostFingerprint,
             'timeout'             => (int) ($cfg['timeout'] ?? 20),
-            'maxTries'            => 2,
+            'maxTries'            => $maxTries,
             'preferredAlgorithms' => !empty($cfg['strict_algorithms']) ? self::modernSshAlgorithms() : [],
         ]);
     }

@@ -69,6 +69,7 @@ class RateLimiterFileStorage implements RateLimiterStorageInterface
 
         // Use exclusive lock for atomic read-check-write
         $isNew = !file_exists($file);
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- local rate-limit lock file under the storage dir (flock needs a real handle); never a URL
         $fp = @fopen($file, 'c+');
         if ($fp === false) {
             throw new ApiException(
