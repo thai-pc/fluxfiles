@@ -78,6 +78,25 @@ function fluxfiles_token(
  *
  * @param array<string,mixed> $o
  */
+/**
+ * Fail fast on a prefix core would refuse (a `.`/`..` segment, a backslash or a
+ * NUL): core answers 401 for such a token, because "users/.." resolves to the
+ * disk root. Build prefixes from ids, not from user-typed text.
+ */
+function fluxfiles_assert_prefix(string $prefix): void
+{
+    if ($prefix === '') {
+        return;
+    }
+    $bad = strpbrk($prefix, "\\\0") !== false;
+    foreach (explode('/', $prefix) as $segment) {
+        $bad = $bad || $segment === '.' || $segment === '..';
+    }
+    if ($bad) {
+        throw new \InvalidArgumentException('FluxFiles: the prefix must not contain "." or ".." segments, a backslash or a NUL byte');
+    }
+}
+
 function _fluxfiles_build_token(array $o): string
 {
     // $_ENV when the host loaded a .env; otherwise the real env var (PHP leaves
@@ -95,6 +114,7 @@ function _fluxfiles_build_token(array $o): string
     // Role preset (DX sugar, docs/design/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base
     // payload array, because `perms` already has an unconditional default baked into
     // that array below — a plain "set if not present" guard would never fire for it.
+    fluxfiles_assert_prefix((string) $pick(['prefix'], ''));
     $roleDefaults = fluxfiles_role_preset($pick(['role'], null));
     $payload = [
         'sub'         => (string) $pick(['user', 'userId', 'sub'], ''),
@@ -290,6 +310,7 @@ function fluxfiles_byob_token(
     ?string $edition = null,
     ?string $role = null
 ): string {
+    fluxfiles_assert_prefix($prefix);
     $secret = $_ENV['FLUXFILES_SECRET'] ?? (string) getenv('FLUXFILES_SECRET');
     $now = time();
 
@@ -367,6 +388,7 @@ function fluxfiles_mixed_token(
     ?array $webp = null,
     ?array $usage = null
 ): string {
+    fluxfiles_assert_prefix($prefix);
     $secret = $_ENV['FLUXFILES_SECRET'] ?? (string) getenv('FLUXFILES_SECRET');
     $now = time();
 
