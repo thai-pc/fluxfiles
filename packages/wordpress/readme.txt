@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.3.1
+Stable tag: 1.3.2
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -180,6 +180,9 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.3.2 =
+* Optimisation plugins that rewrite script or style tags (removing version query strings, forcing async, rewriting the tag) no longer affect the file manager page.
+
 = 1.3.1 =
 * The file manager page now loads its scripts and styles through WordPress (wp_register_script / wp_print_scripts) instead of hard-coded tags.
 * Right-to-left languages (Arabic and others) now get the correct text direction and language in the file manager.
@@ -318,6 +321,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.3.2 =
+Keeps the file manager working next to optimisation plugins that rewrite script tags. No change to your files or settings.
 
 = 1.3.1 =
 Fixes right-to-left languages in the file manager and makes the storage test time-limited. No change to your files or settings.
