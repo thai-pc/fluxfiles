@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -180,6 +180,12 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.3.1 =
+* The file manager page now loads its scripts and styles through WordPress (wp_register_script / wp_print_scripts) instead of hard-coded tags.
+* Right-to-left languages (Arabic and others) now get the correct text direction and language in the file manager.
+* Storage "Test connection" no longer waits for minutes on an unreachable endpoint: every check is time-limited.
+* Smaller download: development files from bundled libraries are no longer included.
+
 = 1.3.0 =
 * New: "Test connection" on the AI settings tab. It sends one tiny test image with your saved settings and tells you exactly what is wrong (wrong API key, model retired or not found, model cannot read images, quota or rate limit, unreachable address) with a hint on how to fix it.
 * New: the Cloud storage "Test connection" now runs a full checklist (read, write and delete a small test file, browser upload/CORS, upload links) and works before you enable the disk.
@@ -312,6 +318,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.3.1 =
+Fixes right-to-left languages in the file manager and makes the storage test time-limited. No change to your files or settings.
 
 = 1.3.0 =
 Adds connection tests and Site Health checks. If your AI base URL or S3 endpoint points at a local or private address (for example Ollama or MinIO on the same server), add that host to FLUXFILES_SSRF_ALLOW_HOSTS in wp-config.php.
