@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.45] — 2026-11-20
+
+> Released: `wordpress-v1.3.1` (bundles core 1.6.2): WordPress.org review round 2 (UI assets through the script loader, vendor allow-list, literal `permission_callback` on every route), RTL `lang`/`dir` fix for the file manager page.
+
 ### Fixed
 - WordPress (WordPress.org review, round 2): the plugin zip no longer ships files WordPress.org does not permit (`aws-crt-php/format-check.py`, `zipstream-php/results.sarif`, `.rst` guides, `random_compat` `.pubkey`/`.asc`): `scripts/build-wordpress.sh` deletes every `vendor/` file outside an extension allow-list, and `scripts/check-wp-dist.php` enforces the same list over the whole zip (selftest extended).
 - WordPress: the UI iframe document (`templates/ui-index.php`) no longer contains literal `<script>` / `<link rel="stylesheet">` tags. Its styles and scripts are registered with `wp_register_style()` / `wp_register_script()` (`strategy => defer`, locale as `wp_add_inline_script( 'before' )`) and printed with `wp_print_styles()` / `wp_print_scripts()`, only our own handles (so the UI's assets now pass through WordPress's script/style loader filters, e.g. `script_loader_src`/`script_loader_tag`; an optimiser plugin that strips query strings or forces `async` on all scripts can affect the iframe); the build converts core's page and fails if a literal tag survives. The `phpcs:disable WordPress.WP.EnqueuedResources` header is gone.
