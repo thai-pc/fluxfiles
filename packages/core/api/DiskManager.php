@@ -71,9 +71,8 @@ class DiskManager
         if (($cfg['driver'] ?? '') !== 'sftp') {
             throw new ApiException("Disk '{$name}' is not an SFTP disk", 400);
         }
-        $cfg['timeout']   = min($timeout, (int) ($cfg['timeout'] ?? $timeout));
-        $cfg['max_tries'] = 1;
-        return new Filesystem(self::buildSftpAdapter($cfg));
+        $cfg['timeout'] = max(1, min($timeout, (int) ($cfg['timeout'] ?? $timeout)));
+        return new Filesystem(self::buildSftpAdapter($cfg, 1));
     }
 
     /**
@@ -234,10 +233,10 @@ class DiskManager
      * @param array<string,mixed> $cfg host, port, username, password, private_key,
      *        private_key_passphrase, root
      */
-    private static function buildSftpAdapter(array $cfg)
+    private static function buildSftpAdapter(array $cfg, int $maxTries = 2)
     {
         $root = (string) ($cfg['root'] ?? '/');
-        return new \League\Flysystem\PhpseclibV3\SftpAdapter(self::buildSftpProvider($cfg), $root);
+        return new \League\Flysystem\PhpseclibV3\SftpAdapter(self::buildSftpProvider($cfg, $maxTries), $root);
     }
 
     /**
@@ -245,7 +244,7 @@ class DiskManager
      * host). Shared by the Flysystem adapter and the raw-connection path used for
      * chmod (which Flysystem only exposes as coarse public/private visibility).
      */
-    private static function buildSftpProvider(array $cfg): \League\Flysystem\PhpseclibV3\SftpConnectionProvider
+    private static function buildSftpProvider(array $cfg, int $maxTries = 2): \League\Flysystem\PhpseclibV3\SftpConnectionProvider
     {
         $host = (string) ($cfg['host'] ?? '');
         if ($host === '') {
@@ -296,7 +295,7 @@ class DiskManager
             'useAgent'            => false, // never reach for a local ssh-agent on the server
             'hostFingerprint'     => $hostFingerprint,
             'timeout'             => (int) ($cfg['timeout'] ?? 20),
-            'maxTries'            => max(1, (int) ($cfg['max_tries'] ?? 2)),
+            'maxTries'            => $maxTries,
             'preferredAlgorithms' => !empty($cfg['strict_algorithms']) ? self::modernSshAlgorithms() : [],
         ]);
     }

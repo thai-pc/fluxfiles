@@ -36,6 +36,7 @@ class BucketDoctor
     private const TIMEOUT = 15;
     private const BUDGET_SECONDS = 45;
     private const PROBE_FETCH_TIMEOUT = 8;
+    private const DELETE_TIMEOUT = 8;
 
     private bool $connFailed = false;
     private float $deadline = 0.0;
@@ -73,17 +74,17 @@ class BucketDoctor
         $body     = 'fluxfiles-doctor-' . time();
         $checks   = [];
         $wrote    = false;
+        $wantsAcl = empty($config['endpoint']) && ($config['visibility'] ?? 'private') === 'public';
 
         // Every S3 call below goes straight through the client with per-command
         // http bounds (see bounds()) instead of Flysystem, so the disk's shared
         // client config — used for normal file operations — stays untouched.
         $this->connFailed = false;
         $this->deadline   = microtime(true) + self::BUDGET_SECONDS;
-        $bounds = $this->bounds();
 
         // 1. Reachability + list.
         try {
-            $s3->listObjectsV2(['Bucket' => $bucket, 'MaxKeys' => 1] + $bounds);
+            $s3->listObjectsV2(['Bucket' => $bucket, 'MaxKeys' => 1] + $this->bounds());
             $checks[] = $this->ok('reachability', 'Bucket is reachable and listable.');
         } catch (\Throwable $e) {
             $this->noteConnectionError($e);
@@ -96,7 +97,14 @@ class BucketDoctor
             $checks[] = $this->skip('write');
         } else {
             try {
-                $s3->putObject(['Bucket' => $bucket, 'Key' => $probeKey, 'Body' => $body] + $bounds);
+                // Same ACL a real upload sends (Flysystem's default), so an ACL-disabled
+                // "bucket owner enforced" bucket fails here too. The disk client's
+                // strip_acl middleware removes it for every non-native-AWS-public disk.
+                $s3->putObject([
+                    'Bucket' => $bucket, 'Key' => $probeKey, 'Body' => $body,
+                    'ContentType' => 'text/plain',
+                    'ACL' => $wantsAcl ? 'public-read' : 'private',
+                ] + $this->bounds());
                 $wrote = true;
                 $checks[] = $this->ok('write', 'Wrote a probe object.');
             } catch (\Throwable $e) {
@@ -112,7 +120,7 @@ class BucketDoctor
                 $checks[] = $this->skip('read');
             } else {
                 try {
-                    $got = (string) $s3->getObject(['Bucket' => $bucket, 'Key' => $probeKey] + $bounds)['Body'];
+                    $got = (string) $s3->getObject(['Bucket' => $bucket, 'Key' => $probeKey] + $this->bounds())['Body'];
                     $checks[] = $got === $body
                         ? $this->ok('read', 'Read the probe object back.')
                         : $this->warn('read', 'Read the probe back but the content differed.', null);
@@ -157,8 +165,8 @@ class BucketDoctor
             $checks[] = $this->skip('multipart');
         } else {
             try {
-                $mp = $s3->createMultipartUpload(['Bucket' => $bucket, 'Key' => $probeMp] + $bounds);
-                $s3->abortMultipartUpload(['Bucket' => $bucket, 'Key' => $probeMp, 'UploadId' => $mp['UploadId']] + $bounds);
+                $mp = $s3->createMultipartUpload(['Bucket' => $bucket, 'Key' => $probeMp] + $this->bounds());
+                $s3->abortMultipartUpload(['Bucket' => $bucket, 'Key' => $probeMp, 'UploadId' => $mp['UploadId']] + $this->bounds());
                 $checks[] = $this->ok('multipart', 'Multipart upload works (files larger than 10 MB).');
             } catch (\Throwable $e) {
                 $this->noteConnectionError($e);
@@ -181,35 +189,43 @@ class BucketDoctor
             $checks[] = $this->skip('versioning');
         } else {
             try {
-                $v = $s3->getBucketVersioning(['Bucket' => $bucket] + $bounds);
+                $v = $s3->getBucketVersioning(['Bucket' => $bucket] + $this->bounds());
                 $checks[] = $this->info('versioning', 'Versioning: ' . ($v['Status'] ?? 'Disabled') . '.');
             } catch (\Throwable $e) {
                 $this->noteConnectionError($e);
-                $checks[] = $this->info('versioning', 'Could not read versioning (s3:GetBucketVersioning not granted).');
+                $checks[] = $this->info('versioning', $this->connFailed
+                    ? 'Could not read versioning (the storage endpoint did not answer).'
+                    : 'Could not read versioning (s3:GetBucketVersioning not granted).');
             }
         }
 
-        // Cleanup probe — the delete also exercises the delete permission. It still
-        // runs after the time budget is spent (a leftover probe is the worse outcome)
-        // but not once the endpoint is known to be unreachable.
+        // Cleanup probe — the delete also exercises the delete permission. Once the
+        // write succeeded it is ALWAYS attempted, even after a connection error or an
+        // exhausted budget (a leftover probe is the worse outcome); it uses its own
+        // short fixed bounds so the run stays within the budget plus one short call.
         if ($wrote) {
-            if ($this->connFailed) {
-                $checks[] = $this->skip('delete');
-            } else {
-                try {
-                    $s3->deleteObject(['Bucket' => $bucket, 'Key' => $probeKey] + $bounds);
-                    $checks[] = $this->ok('delete', 'Deleted the probe object (cleanup).');
-                } catch (\Throwable $e) {
-                    $checks[] = $this->fail('delete', $this->awsMsg($e, 'Cannot delete from the bucket.'),
+            try {
+                $s3->deleteObject(['Bucket' => $bucket, 'Key' => $probeKey] + $this->deleteBounds());
+                $checks[] = $this->ok('delete', 'Deleted the probe object (cleanup).');
+            } catch (\Throwable $e) {
+                $this->noteConnectionError($e);
+                $checks[] = $this->connFailed && $e instanceof \Aws\Exception\AwsException && $e->isConnectionError()
+                    ? $this->warn('delete', 'Could not delete the probe object: the storage endpoint did not answer.',
+                        'Remove any leftover object under _fluxfiles/.doctor/ in the bucket.')
+                    : $this->fail('delete', $this->awsMsg($e, 'Cannot delete from the bucket.'),
                         'Grant s3:DeleteObject — FluxFiles needs it for delete and move.');
-                }
             }
+        }
+
+        $summary = $this->summarize($checks);
+        if ($this->connFailed && $summary === 'ok') {
+            $summary = 'warn';   // part of the diagnosis could not run: never report a clean bill of health
         }
 
         return [
             'disk'        => $disk,
             'driver'      => $driver,
-            'summary'     => $this->summarize($checks),
+            'summary'     => $summary,
             'checks'      => $checks,
             'remediation' => $this->remediation($bucket, $origin),
         ];
@@ -219,13 +235,25 @@ class BucketDoctor
      * Per-command bounds for every S3 call the doctor makes. All doctor payloads
      * are tiny (a ~25-byte probe, metadata reads, multipart create/abort), so one
      * budget fits: 5 s to connect, 15 s total, and no SDK retry (a retry would
-     * just multiply the wait on an endpoint that is already unreachable).
+     * just multiply the wait on an endpoint that is already unreachable). Both are
+     * clamped to what is left of the overall budget, so one run cannot outlive it
+     * by a whole call.
      *
      * @return array{'@http':array{connect_timeout:int,timeout:int},'@retries':int}
      */
     private function bounds(): array
     {
-        return ['@http' => ['connect_timeout' => self::CONNECT_TIMEOUT, 'timeout' => self::TIMEOUT], '@retries' => 0];
+        $left = max(1, (int) ceil($this->deadline - microtime(true)));
+        return ['@http' => [
+            'connect_timeout' => min(self::CONNECT_TIMEOUT, $left),
+            'timeout'         => min(self::TIMEOUT, $left),
+        ], '@retries' => 0];
+    }
+
+    /** Fixed short bounds for the cleanup delete, which must run even when the budget is gone. */
+    private function deleteBounds(): array
+    {
+        return ['@http' => ['connect_timeout' => 3, 'timeout' => self::DELETE_TIMEOUT], '@retries' => 0];
     }
 
     /** Remember a transport-level failure (timeout, DNS, refused, TLS) so the remaining checks are skipped. */
@@ -240,6 +268,11 @@ class BucketDoctor
     private function shouldSkip(): bool
     {
         return $this->connFailed || $this->overBudget();
+    }
+
+    private function fetchTimeout(): int
+    {
+        return min(self::PROBE_FETCH_TIMEOUT, max(1, (int) ceil($this->deadline - microtime(true))));
     }
 
     protected function overBudget(): bool
@@ -429,7 +462,7 @@ class BucketDoctor
         // BYOB fetch needs the DNS pin plus the post-connect IP check, which only a
         // UrlFetcherInterface can express.
         if ($pinnedIp === null || $pinnedIp === '') {
-            $res = ($this->transport ?? HttpTransports::curlOrFail())->request('GET', $url, [], null, self::PROBE_FETCH_TIMEOUT);
+            $res = ($this->transport ?? HttpTransports::curlOrFail())->request('GET', $url, [], null, $this->fetchTimeout());
             return [$res['status'], $res['body']];
         }
 
@@ -447,7 +480,7 @@ class BucketDoctor
         try {
             // The endpoint is tenant-supplied (BYOB): cap what it can make us buffer.
             $res = ($this->fetcher ??= HttpTransports::urlFetcher())
-                ->fetch($url, [$pinnedIp], $allowance, $tmp, self::PROBE_MAX_BYTES, self::PROBE_FETCH_TIMEOUT);
+                ->fetch($url, [$pinnedIp], $allowance, $tmp, self::PROBE_MAX_BYTES, $this->fetchTimeout());
             $body = file_get_contents($tmp, false, null, 0, self::PROBE_MAX_BYTES);
             return [$res['status'], $body === false ? '' : $body];
         } catch (ApiException $e) {
