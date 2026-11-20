@@ -163,6 +163,20 @@ An unknown `role` override (e.g. a typo like `'veiwer'`) throws
 An unknown `edition` is ignored (the token mints without the extra claims) and raises
 `_doing_it_wrong()` under `WP_DEBUG`; editions come from an add-on.
 
+## Testing your connections
+
+* **Settings > FluxFiles > AI > Test connection** makes one tiny real vision call with the
+  saved provider and shows the provider, model and latency, or a classified error with a
+  fix hint. Administrators only, limited to 2 per minute.
+* **Settings > FluxFiles > Cloud > Test connection** runs core's Bucket Doctor on the saved
+  disk and lists each check (connection, write, read, presigned link, large uploads, CORS,
+  failed-upload clean-up, delete). It writes and deletes one object under
+  `_fluxfiles/.doctor/` and works before the disk is enabled. Limited to 5 per minute.
+* **Tools > Site Health** gets two asynchronous tests: "FluxFiles storage" (a read-only list
+  of one item per enabled cloud disk) and "FluxFiles AI" (a free model lookup that never
+  sends an image). Results are cached (1 hour for storage, 12 hours for AI) and cleared when
+  you save the settings.
+
 ## Storage protection (Apache / nginx)
 
 Files live in `<uploads>/fluxfiles/uploads/` (usually `wp-content/uploads/fluxfiles/uploads/`)
