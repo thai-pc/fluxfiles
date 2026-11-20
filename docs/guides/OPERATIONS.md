@@ -319,6 +319,11 @@ token or path. The same report appears in WordPress under Tools > Site Health > 
 clipboard") and in `php artisan about` on Laravel versions that have it. Ask a customer
 for this output first when debugging a module that "does nothing".
 
+To check the connections themselves, `fluxfiles doctor [disk]` runs the Bucket Doctor and
+`fluxfiles ai:test [--cheap]` checks the AI provider (see
+[DEPLOYMENT.md](DEPLOYMENT.md)). WordPress also runs both as asynchronous tests under
+Tools > Site Health ("FluxFiles storage" and "FluxFiles AI").
+
 ## Before announcing
 
 Buy something. Not a smoke test — a real purchase on the real store, refunded
