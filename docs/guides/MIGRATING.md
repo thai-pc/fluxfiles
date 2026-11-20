@@ -7,7 +7,7 @@ integration, explains how to bring existing files across, and lists what you gai
 what changes, including what FluxFiles does not do.
 
 Status facts about other products were checked on **2026-11-06**. Each one links its
-source. Check those sources for anything newer. FluxFiles facts refer to `core-v1.0.2`.
+source. Check those sources for anything newer. FluxFiles facts refer to `core-v1.6.3`.
 
 ## Quick pick
 
@@ -175,9 +175,10 @@ and [README](https://github.com/trippo/ResponsiveFilemanager/blob/master/README.
 
 | RFM | FluxFiles |
 |---|---|
-| External plugin for TinyMCE 4.x and CKEditor | [`@fluxfiles/tinymce`](../../packages/tinymce/README.md) (TinyMCE 4.x/5.x) or [`@fluxfiles/ckeditor4`](../../packages/ckeditor4/README.md) |
+| External plugin for TinyMCE 4.x and CKEditor | [`@fluxfiles/tinymce`](../../packages/tinymce/README.md) (TinyMCE 4–8), [`@fluxfiles/ckeditor4`](../../packages/ckeditor4/README.md) or [`@fluxfiles/ckeditor5`](../../packages/ckeditor5/README.md) (CKEditor 5 v42+) |
 | Standalone file manager (`dialog.php` in a popup or iframe) | JS SDK `FluxFiles.open({ mode: 'picker' })`, or `fluxfiles_embed()` for a server-rendered iframe ([PHP Embed Helper](../../README.md#php-embed-helper)) |
-| `session_start()` in `config.php`; optional `USE_ACCESS_KEYS` | A JWT minted by `fluxfiles_token()` on your server |
+| TinyMCE options `external_filemanager_path`, `filemanager_title`, `filemanager_access_key` | `fluxfiles_endpoint`, `fluxfiles_token`, `fluxfiles_disk` ([TinyMCE plugin options](../../packages/tinymce/README.md#configuration)). The access key has no equivalent: the signed token replaces it. |
+| `session_start()` in `config.php`; optional `USE_ACCESS_KEYS` (off by default) | A JWT minted by `fluxfiles_token()` on your server. FluxFiles answers `401` to any API call without a valid token, so there is no unprotected default to forget. |
 | "A subfolder as the root … for each user, page or FileManager call" | The `prefix` claim. Mint a different token per user or page. |
 | Local upload folder | The `local` disk, with its root set through `FLUXFILES_DISKS_CONFIG` |
 | FTP storage (`ftp_host`, `ftp_folder`) | **No equivalent.** FluxFiles has no FTP driver. If the server also accepts SSH, use the [SFTP disk](../../README.md#sftp-disk-vps--shared-hosting). Otherwise copy the files to local or S3 storage. |
@@ -221,6 +222,7 @@ After. Mint the token as in [step 4](#steps-common-to-every-migration), then:
 <script>
 tinymce.init({
     selector: '#editor',
+    license_key: 'gpl',   // self-hosted TinyMCE 7+ only
     external_plugins: { fluxfiles: '/node_modules/@fluxfiles/tinymce/plugin.min.js' },
     toolbar: 'undo redo | bold italic | fluxfiles | link image',
     fluxfiles_endpoint: 'https://fm.example.com',
@@ -234,6 +236,57 @@ The token's claims take over from the `config.php` switches: `perms` from
 `delete_files`/`rename_files`, and `allow_extract`/`allow_url_import` in the `claims` map.
 Remove RFM's TinyMCE plugin and its `file_picker_callback`. The FluxFiles plugin wires
 the native image dialog only when no other callback is set.
+
+**CKEditor 4.** Before, CKEditor's "Browse Server" buttons pointed at RFM's
+`dialog.php` (the `type`, `editor` and `fldr` parameters are RFM's own):
+
+```js
+CKEDITOR.replace('editor', {
+    filebrowserBrowseUrl:      '/filemanager/dialog.php?type=2&editor=ckeditor&fldr=',
+    filebrowserImageBrowseUrl: '/filemanager/dialog.php?type=1&editor=ckeditor&fldr='
+});
+```
+
+After: drop both `filebrowser*Url` settings, load `https://fm.example.com/fluxfiles.js`
+and then the FluxFiles plugin. It adds a
+toolbar button and a **Browse FluxFiles** button inside CKEditor's own Image dialog:
+
+```js
+CKEDITOR.plugins.addExternal('fluxfiles', '/node_modules/@fluxfiles/ckeditor4/', 'plugin.min.js');
+CKEDITOR.replace('editor', {
+    extraPlugins: 'fluxfiles',
+    fluxfiles: {
+        endpoint: 'https://fm.example.com',
+        token: <?= json_encode($token) ?>,
+        disk: 'local'
+    }
+});
+```
+
+**Moving to CKEditor 5 at the same time.** RFM never had a CKEditor 5 integration.
+[`@fluxfiles/ckeditor5`](../../packages/ckeditor5/README.md) (CKEditor 5 v42 or newer)
+adds a toolbar button and an entry in the image insert dropdown:
+
+```js
+import { ClassicEditor, Essentials, Paragraph, Image, ImageInsert, Link } from 'ckeditor5';
+import { FluxFiles } from '@fluxfiles/ckeditor5';
+
+ClassicEditor.create(document.querySelector('#editor'), {
+    licenseKey: 'GPL',
+    plugins: [Essentials, Paragraph, Image, ImageInsert, Link, FluxFiles],
+    toolbar: ['undo', 'redo', '|', 'insertImage', 'link', 'fluxfiles'],
+    fluxfiles: {
+        endpoint: 'https://fm.example.com',
+        token: () => fetch('/fluxfiles-token').then(r => r.text()),
+        disk: 'local'
+    }
+});
+```
+
+**Keeping your existing image URLs.** Content saved through RFM points at
+`upload_dir` (default `/source/`). If you point the `local` disk's `root` at that folder
+and set its `url` to the same path (step 3), URLs in old posts keep working and new
+uploads land next to them.
 
 ### Moving existing files
 
@@ -250,7 +303,7 @@ on an FTP server have to be copied to local, SFTP or S3 storage first.
   and S3/R2/SFTP storage.
 - **Changes:** PHP 8.1 or newer; no FTP storage; extract and download handle zip only;
   no general image editor; no switch to allow renaming without allowing other writes.
-- The TinyMCE plugin supports TinyMCE 4.x and 5.x.
+- The TinyMCE plugin supports TinyMCE 4–8.
 
 ---
 
@@ -487,7 +540,43 @@ function pickCover() {
 </script>
 ```
 
-For CKEditor, use the CKEditor 4 snippet in the [KCFinder](#kcfinder) section.
+**TinyMCE.** Before, a `file_browser_callback` (TinyMCE 3/4) or `file_picker_callback`
+(TinyMCE 5+) opened RichFilemanager's `index.html` in a window. After, remove that
+callback and load the FluxFiles plugin, which registers its own `file_picker_callback`
+for the image, link and media dialogs (supported: TinyMCE 4–8). Load
+`https://fm.example.com/fluxfiles.js` on the page before TinyMCE starts, and on
+self-hosted TinyMCE 7 or newer also set `license_key` (a TinyMCE requirement):
+
+```js
+tinymce.init({
+    selector: '#editor',
+    external_plugins: { fluxfiles: '/node_modules/@fluxfiles/tinymce/plugin.min.js' },
+    toolbar: 'undo redo | bold italic | fluxfiles | link image',
+    fluxfiles_endpoint: 'https://fm.example.com',
+    fluxfiles_token: <?= json_encode($token) ?>,
+    fluxfiles_disk: 'local'
+});
+```
+
+**CKEditor 4.** Remove `filebrowserBrowseUrl`, load `https://fm.example.com/fluxfiles.js`
+and then the plugin:
+
+```js
+CKEDITOR.plugins.addExternal('fluxfiles', '/node_modules/@fluxfiles/ckeditor4/', 'plugin.min.js');
+CKEDITOR.replace('editor', {
+    extraPlugins: 'fluxfiles',
+    fluxfiles: { endpoint: 'https://fm.example.com', token: <?= json_encode($token) ?>, disk: 'local' }
+});
+```
+
+For CKEditor 5, use the snippet in the [Responsive FileManager](#before-and-after) section.
+
+**Replacing `fm_authenticate()` and the permission hooks.** RichFilemanager's PHP
+connector calls `fm_authenticate()` once per request and `fm_has_read_permission()` /
+`fm_has_write_permission()` per path. In FluxFiles the same decisions are made once,
+when you mint the token: the user's folder goes in `prefix`, read/write/delete in
+`perms`, and per-file ownership in `owner_only`. Nothing is evaluated from a session
+on the file server.
 
 ### Moving existing files
 
@@ -691,3 +780,33 @@ claims, and shares need the Share module.
   site. It has no login screen or user management (except through the paid SSO
   module), no share links in the free core, no tar, no command runner, and fewer UI
   languages.
+
+---
+
+## FAQ: Responsive FileManager and RichFilemanager
+
+**Can I keep my upload folder and the URLs already saved in posts?** Yes. Point the
+`local` disk's `root` at the existing folder and its `url` at the path the web server
+already serves it from ([step 3](#steps-common-to-every-migration)). Files stay where
+they are; run the indexer once for search.
+
+**Do my users need accounts in FluxFiles?** No. Your app keeps its users. For each
+editor page it mints a short-lived token that says which folder and actions that
+user gets.
+
+**Is the token visible in the page?** The editor plugins and the SDK hand it to the
+FluxFiles iframe with `postMessage`; it is never put in a URL. Keep the `ttl` short
+and renew it with `onTokenRefresh`.
+
+**What about the old `filemanager/` or `richfilemanager/` folder?** Delete it from the
+web root once the editors use FluxFiles. Both products have unpatched upload
+vulnerabilities (see their Status paragraphs), which stay reachable as long as their
+scripts are served.
+
+**Can I move to S3 or Cloudflare R2 while migrating?** Yes: copy the folder to the
+bucket, configure the `s3` or `r2` disk, index it with `--disk=s3` (or `r2`), and give
+the bucket a `public_url` so editor embeds get permanent URLs.
+
+**Which TinyMCE versions work?** The FluxFiles plugin supports TinyMCE 4–8. CKEditor 4
+and CKEditor 5 (v42+) have their own plugins.
+

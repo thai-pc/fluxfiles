@@ -357,6 +357,11 @@ post_max_size       = 110M     ; a little above upload_max_filesize
 
 ## Embedding in Your App
 
+> Moving off **Responsive FileManager** or **RichFilemanager** (TinyMCE / CKEditor)? The
+> [migration guide](docs/guides/MIGRATING.md#responsive-filemanager) maps their config to
+> FluxFiles token claims, keeps your existing upload folder and URLs, and has
+> before/after snippets for TinyMCE, CKEditor 4 and CKEditor 5.
+
 ### JavaScript SDK (Vanilla)
 
 Include `fluxfiles.js` on your page — zero dependencies, works with any framework

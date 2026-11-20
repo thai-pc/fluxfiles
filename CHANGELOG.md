@@ -10,6 +10,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Docs
 - `@fluxfiles/tinymce`: README says TinyMCE 4 to 8 (it said 4.x/5.x), notes that self-hosted TinyMCE 7+ needs `license_key`, and corrects the claim that the plugin loads the SDK itself (the page must load `fluxfiles.js`). Checked in a browser against core 1.6.3 with TinyMCE 6.8.6, 7.9.3 and 8.10.2 (toolbar button and the native image dialog's browse icon). Unit tests cover the `ui.registry` path on majors 7 and 8.
+- `docs/guides/MIGRATING.md`: Responsive FileManager and RichFilemanager sections gain CKEditor 4 and CKEditor 5 before/after snippets, a TinyMCE snippet for RichFilemanager, the RFM TinyMCE option mapping (`external_filemanager_path`, `filemanager_access_key`), a note on keeping existing upload URLs, how `fm_authenticate()`/permission hooks become token claims, and an FAQ; FluxFiles facts now refer to `core-v1.6.3`. README's Embedding section links it.
 
 ## [1.0.47] — 2026-11-20
 
