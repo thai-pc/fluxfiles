@@ -5,11 +5,16 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.47] — 2026-11-20
+
+> Released: `core-v1.6.3`: the Docker image ships the UI's bundled scripts again (the page was blank) and is smoke-tested before every push; README demo GIF and a 30-second try.
+
 ### Fixed
 - Docker: the published image (`ghcr.io/thai-pc/fluxfiles`) shipped without `packages/core/assets/vendor` (bundled Alpine.js and CodeMirror), because `.dockerignore`'s `**/vendor` also matched it, so `/public/index.html` loaded a blank page (404 on `alpine.min.js`). `.dockerignore` re-includes that directory, and `docker-publish.yml` now builds an amd64 image and smoke-tests it (UI page, `fm.js`, `alpine.min.js`, an authenticated `/api/fm/list`) before anything is pushed.
 
 ### Docs
 - README: a demo GIF of the standalone UI, 4 badges instead of 15 (the rest under "All packages"), a three-bullet summary, and a "Try it in 30 seconds" block that also mints a token inside the container (the Docker quick start used to stop at a page that needs one).
+- `packages/core/api/MediaEndpoint.php`: the class comment no longer says the Laravel/WordPress proxies fail to forward `watermark_enabled`; they forward it and route `/img` through this class (comment only, no behaviour change).
 
 ## [1.0.46] — 2026-11-20
 

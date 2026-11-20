@@ -33,12 +33,10 @@ namespace FluxFiles;
  * clean original" rules for watermarked / no-download tokens, and per-segment
  * X-Accel percent-encoding.
  *
- * Watermark overlay in the proxies: nothing here is core-specific, so once an
- * adapter routes through this class the overlay works there too. What blocks it
- * today is not this code but that the proxies' token minters do not forward the
- * `watermark_enabled` claim (the `wm` scope only exists when it is forwarded) and
- * that they 415 a watermarked token. Forward the claim in step 2 and delete the
- * 415 branch.
+ * Watermark overlay in the proxies: nothing here is core-specific. The Laravel
+ * and WordPress proxies route `/img` through this class and their token minters
+ * forward the `watermark_enabled` claim, so the overlay works there exactly as in
+ * core.
  */
 class MediaEndpoint
 {
