@@ -511,7 +511,9 @@ CKEditor / Summernote. **Non-destructive** — the true original is snapshotted 
 Only if you're building a **stock-photo / photographer store** (Shutterstock,
 Getty, Pixieset…): show watermarked **previews** but never hand out the clean file
 until purchase — applied on the fly when serving (`/api/fm/img`), source never
-modified. Enable with token claims (off by default; forces the token preview-only):
+modified. Enable with token claims (off by default; forces the token preview-only).
+Preview-only is only as private as the storage: keep originals on a **private** bucket or a
+local root that is not web-served, or the clean file stays reachable at its public URL:
 
 ```php
 $token = fluxfiles_token([
