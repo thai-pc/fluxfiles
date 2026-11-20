@@ -574,9 +574,33 @@ test('BYOB SFTP: valid config (public host) passes validation', function () {
 
 test('BYOB SFTP: private-key auth (no password) passes', function () {
     FluxFiles\CredentialEncryptor::validate('vps', [
-        'driver' => 'sftp', 'host' => 'github.com', 'username' => 'deploy', 'private_key' => '-----KEY-----',
+        'driver' => 'sftp', 'host' => 'github.com', 'username' => 'deploy',
+        'private_key' => "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk=\n-----END OPENSSH PRIVATE KEY-----",
     ]);
     assertEqual(true, true, 'key auth ok');
+});
+
+test('BYOB SFTP: PuTTY and RFC 4716 key text is accepted', function () {
+    foreach (["PuTTY-User-Key-File-3: ssh-ed25519\nEncryption: none\n", "---- BEGIN SSH2 PRIVATE KEY ----\nAAAA\n---- END SSH2 PRIVATE KEY ----"] as $k) {
+        FluxFiles\CredentialEncryptor::validate('vps', ['driver' => 'sftp', 'host' => 'github.com', 'username' => 'deploy', 'private_key' => $k]);
+    }
+    assertEqual(true, true, 'accepted');
+});
+
+// Audit 2026-11-20 R1-1: Flysystem loads a private_key that names a readable
+// file, so a BYOB user could make the server log in with the server's own key.
+test('BYOB SFTP: a private_key that is a file path (or not key text) → 400', function () {
+    $keyFile = tempnam(sys_get_temp_dir(), 'fxkey');
+    file_put_contents($keyFile, "-----BEGIN OPENSSH PRIVATE KEY-----\nx\n-----END OPENSSH PRIVATE KEY-----\n");
+    foreach ([$keyFile, '/etc/hosts', '~/.ssh/id_ed25519', 'KEYPEM', '-----BEGIN one line no newline-----'] as $bad) {
+        try {
+            FluxFiles\CredentialEncryptor::validate('vps', ['driver' => 'sftp', 'host' => 'github.com', 'username' => 'deploy', 'private_key' => $bad]);
+            throw new \RuntimeException('accepted ' . $bad);
+        } catch (FluxFiles\ApiException $e) {
+            assertEqual(400, $e->getCode(), 'expected 400 for ' . $bad);
+        }
+    }
+    @unlink($keyFile);
 });
 
 test('BYOB SFTP: missing host / username / auth → 400', function () {

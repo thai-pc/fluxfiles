@@ -782,7 +782,8 @@ How it differs from S3 (by design):
 - **Per-tenant (BYOB)**: mint a token with the user's own SFTP credentials —
   `fluxfiles_byob_token($u, ['my-vps' => ['driver' => 'sftp', 'host' => …,
   'username' => …, 'password' => …]])`, or use `'private_key' => …` (RSA/ED25519)
-  with an optional `'private_key_passphrase' => …`. See [BYOB](#byob-bring-your-own-bucket).
+  with an optional `'private_key_passphrase' => …`. A BYOB `private_key` must be the key text
+  itself (PEM, OpenSSH or PuTTY); a file path is refused. See [BYOB](#byob-bring-your-own-bucket).
 
 ### Adding a Custom Disk
 
