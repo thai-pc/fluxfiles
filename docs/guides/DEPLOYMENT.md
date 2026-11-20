@@ -46,8 +46,8 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # SDK file
-    location = /fluxfiles.js {
+    # SDK file (core ships fluxfiles.js and fluxfiles.min.js in its root)
+    location ~ ^/fluxfiles(\.min)?\.js$ {
         expires 7d;
         add_header Cache-Control "public";
     }
