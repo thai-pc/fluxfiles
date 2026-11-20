@@ -1,5 +1,8 @@
 **/node_modules
 **/vendor
+# ...but the UI's bundled third-party JS/CSS (Alpine, CodeMirror) is source, not
+# Composer output: without it /public/index.html loads blank (404 on alpine.min.js).
+!packages/core/assets/vendor
 .git
 **/dist
 storage/uploads

@@ -1,6 +1,33 @@
 # FluxFiles
 
+<p align="center">
+  <img src="docs/assets/fluxfiles-demo.gif" alt="FluxFiles: browsing folders, uploading a photo and opening its details" width="900">
+</p>
+
 [![Packagist Version](https://img.shields.io/packagist/v/fluxfiles/fluxfiles?label=packagist&color=f28d1a)](https://packagist.org/packages/fluxfiles/fluxfiles)
+[![Docker image](https://img.shields.io/badge/ghcr.io-fluxfiles-2496ed?logo=docker&logoColor=white)](https://github.com/thai-pc/fluxfiles/pkgs/container/fluxfiles)
+[![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
+[![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
+
+**An embeddable file manager for PHP 8.1+.** Files stay on your own storage: local disk, AWS S3, Cloudflare R2 or SFTP. Your backend signs a short-lived JWT that decides what each user can see and do, so FluxFiles keeps no user database of its own.
+
+- **Drop it into any app** with an iframe and a small JS SDK, or use the adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4**, **CKEditor 5**, **TinyMCE** and **Summernote**.
+- **Scoped per token:** disks, folder prefix, permissions, upload size, file types and quota are claims in the token, enforced on every request.
+- **MIT core:** folders, trash, search, WebP/AVIF images, crop, zip, cross-disk copy and more. Paid add-ons are optional and separate.
+
+### Try it in 30 seconds
+
+```bash
+docker run -d --name fluxfiles -p 8080:80 -e FLUXFILES_SECRET="$(openssl rand -hex 32)" ghcr.io/thai-pc/fluxfiles:latest
+TOKEN=$(docker exec fluxfiles php -r 'require "/app/packages/core/embed.php"; echo fluxfiles_token(userId: "demo", perms: ["read","write","delete"], disks: ["local"]);')
+echo "http://localhost:8080/public/index.html?token=$TOKEN"
+```
+
+Open the printed URL. The `?token=` URL is only for trying it locally; in a real app the token is handed to the iframe by the SDK, never put in a URL (see [Embedding in Your App](#embedding-in-your-app)).
+
+<details>
+<summary>All packages</summary>
+
 [![Laravel](https://img.shields.io/packagist/v/fluxfiles/laravel?label=laravel&color=ff2d20)](https://packagist.org/packages/fluxfiles/laravel)
 [![npm](https://img.shields.io/npm/v/fluxfiles?label=sdk&color=cb3837)](https://www.npmjs.com/package/fluxfiles)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/react?label=react&color=61dafb)](https://www.npmjs.com/package/@fluxfiles/react)
@@ -12,13 +39,8 @@
 [![npm](https://img.shields.io/npm/v/@fluxfiles/node?label=node&color=339933)](https://www.npmjs.com/package/@fluxfiles/node)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/mcp?label=mcp&color=6b4fbb)](https://www.npmjs.com/package/@fluxfiles/mcp)
 [![PyPI](https://img.shields.io/pypi/v/fluxfiles-token?label=python&color=3776ab)](https://pypi.org/project/fluxfiles-token/)
-[![Docker image](https://img.shields.io/badge/ghcr.io-fluxfiles-2496ed?logo=docker&logoColor=white)](https://github.com/thai-pc/fluxfiles/pkgs/container/fluxfiles)
-[![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
-[![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
 
-Standalone, embeddable PHP 8.1+ file manager. Files stay on your own storage: Local, AWS S3, Cloudflare R2 or SFTP. JWT-scoped access, with adapters for Laravel, WordPress, React and Vue.
-
-Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4**, **CKEditor 5**, **TinyMCE**, and **Summernote**.
+</details>
 
 ---
 
@@ -120,13 +142,19 @@ The standalone app (nginx + php-fpm) is published to GHCR — no PHP/Composer on
 your host. Pull and run:
 
 ```bash
-docker run -p 8080:80 \
+docker run -d --name fluxfiles -p 8080:80 \
   -e FLUXFILES_SECRET="$(openssl rand -hex 32)" \
   ghcr.io/thai-pc/fluxfiles:latest
 ```
 
-Open **http://localhost:8080/public/index.html**. Persist uploads + runtime state
-with a volume, and add cloud creds as needed:
+Open **http://localhost:8080/public/index.html** with a token: the page needs one
+to load files (`?token=` is for local testing only). Mint one inside the container:
+
+```bash
+docker exec fluxfiles php -r 'require "/app/packages/core/embed.php"; echo fluxfiles_token(userId: "demo", perms: ["read","write","delete"], disks: ["local"]);'
+```
+
+Persist uploads + runtime state with a volume, and add cloud creds as needed:
 
 ```bash
 docker run -p 8080:80 \

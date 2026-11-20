@@ -38,6 +38,31 @@ jobs:
             type=match,pattern=core-v(\d+\.\d+),group=1
             type=raw,value=latest
 
+      # Smoke test before anything is pushed: an image whose UI can't load its
+      # bundled JS (e.g. .dockerignore dropping assets/vendor) renders a blank page.
+      - name: Build for smoke test (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.prod
+          platforms: linux/amd64
+          load: true
+          tags: fluxfiles:smoke
+          cache-from: type=gha
+
+      - name: Smoke test
+        run: |
+          docker run -d --name ff-smoke -p 8080:80 -e FLUXFILES_SECRET="$(openssl rand -hex 32)" fluxfiles:smoke
+          for _ in $(seq 1 30); do curl -fs -o /dev/null http://localhost:8080/public/index.html && break; sleep 1; done
+          for u in /public/index.html /assets/fm.js /assets/vendor/alpine/alpine.min.js; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8080$u")
+            echo "$u -> $code"; [ "$code" = 200 ] || { docker logs ff-smoke; exit 1; }
+          done
+          TOKEN=$(docker exec ff-smoke php -r 'require "/app/packages/core/embed.php"; echo fluxfiles_token(userId: "smoke", perms: ["read"], disks: ["local"]);')
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "http://localhost:8080/api/fm/list?disk=local&path=")
+          echo "api list -> $code"; [ "$code" = 200 ]
+          docker rm -f ff-smoke
+
       - name: Build & push
         uses: docker/build-push-action@v6
         with:
