@@ -723,7 +723,7 @@ locally resolvable Playwright or the monorepo browser installation. Install an
 isolated test dependency when neither exists:
 
 ```sh
-npm install --prefix /tmp/fluxfiles-admin-browser --no-audit --no-fund playwright@1.60.0
+npm install --prefix /tmp/fluxfiles-admin-browser --no-audit --no-fund playwright@1.65.1
 /tmp/fluxfiles-admin-browser/node_modules/.bin/playwright install chromium
 FLUXFILES_TEST_PLAYWRIGHT_MODULE=/tmp/fluxfiles-admin-browser/node_modules/playwright \
   node services/license-server/tests/browser-admin.cjs
