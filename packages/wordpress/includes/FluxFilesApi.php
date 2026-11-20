@@ -3656,9 +3656,9 @@ class FluxFilesApi
      * the handles registerUiAssets() registered. A source tree falls back to core's
      * public/index.html with the same tags converted here.
      */
-    private static function uiPageHtml(): ?string
+    private static function uiPageHtml(?string $tplPath = null): ?string
     {
-        $tpl = FLUXFILES_PLUGIN_DIR . 'templates/ui-index.php';
+        $tpl = $tplPath ?? FLUXFILES_PLUGIN_DIR . 'templates/ui-index.php';
         if (is_file($tpl)) {
             $raw = @file_get_contents($tpl);
             if ($raw === false || strncmp($raw, self::UI_TEMPLATE_GUARD, strlen(self::UI_TEMPLATE_GUARD)) !== 0) {
@@ -3696,6 +3696,20 @@ class FluxFilesApi
         return (string) preg_replace_callback('#[ \t]*<' . $s . ' defer src="\.\./assets/fm\.js"></' . $s . '>\n?#', static function () use ($capture): string {
             return $capture(static fn() => wp_print_scripts(['fluxfiles-ui-fm', 'fluxfiles-ui-alpine']));
         }, $html);
+    }
+
+    /**
+     * Put the negotiated language and direction on the page's <html> tag (core's page
+     * carries more attributes after lang, e.g. translate="no"), so RTL locales flip.
+     */
+    public static function applyUiLocale(string $html, string $locale, string $dir): string
+    {
+        return (string) preg_replace(
+            '/<html\s+lang="[^"]*"/',
+            '<html lang="' . esc_attr($locale) . '" dir="' . esc_attr($dir) . '"',
+            $html,
+            1
+        );
     }
 
     /**
@@ -3752,11 +3766,7 @@ class FluxFilesApi
         if ($html === null) {
             return $this->error('UI page not found', 500);
         }
-        $html = str_replace(
-            '<html lang="en">',
-            '<html lang="' . esc_attr($locale) . '" dir="' . esc_attr($dir) . '">',
-            $html
-        );
+        $html = self::applyUiLocale($html, $locale, $dir);
 
         $html = str_replace('</head>', self::codeMirrorMeta($assetsBase, $jsSep, $hash) . "\n</head>", $html);
 

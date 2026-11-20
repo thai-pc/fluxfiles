@@ -283,12 +283,17 @@ rm -f  "$PLUGIN_DIR/vendor/paragonie/random_compat/psalm-autoload.php"
 # Keep only what a PHP library legitimately ships and the plugin may run or must carry
 # (code, data, images/fonts, licence/notice files); scripts/check-wp-dist.php enforces the
 # same allow-list over the whole zip, so keep the two lists in step.
+# Licence-style names: exactly NAME, NAME.*, NAME-*, NAME_* (check-wp-dist.php's rule).
+NAME_ARGS=()
+for n in LICENSE LICENCE COPYING NOTICE AUTHORS VERSION THIRD-PARTY-LICENSES; do
+    NAME_ARGS+=( -o -name "$n" -o -name "$n.*" -o -name "$n-*" -o -name "${n}_*" )
+done
 find "$PLUGIN_DIR/vendor" -type f \
     ! \( -iname "*.php" -o -iname "*.js" -o -iname "*.css" -o -iname "*.json" -o -iname "*.xml" -o -iname "*.txt" \
        -o -iname "*.md" -o -iname "*.png" -o -iname "*.svg" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.gif" \
        -o -iname "*.webp" -o -iname "*.ttf" -o -iname "*.woff" -o -iname "*.woff2" -o -iname "*.cnf" -o -iname "*.lock" \
-       -o -name "LICENSE*" -o -name "COPYING*" -o -name "NOTICE*" -o -name "AUTHORS*" -o -name "VERSION" \
-       -o -name "THIRD-PARTY-LICENSES*" \) -delete
+       -o \( -path "*/languages/*" \( -iname "*.pot" -o -iname "*.po" -o -iname "*.mo" \) \) \
+       "${NAME_ARGS[@]}" \) -delete
 # Any leftover dot-file or dot-directory (.travis.yml, .gitkeep, .github, ...).
 find "$PLUGIN_DIR" -mindepth 1 -name ".*" -prune -exec rm -rf {} + 2>/dev/null || true
 

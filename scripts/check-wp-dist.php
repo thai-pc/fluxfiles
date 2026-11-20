@@ -141,7 +141,7 @@ foreach ($files as $rel => $_) {
 // with the `find ... -delete` allow-list in scripts/build-wordpress.sh.
 $allowedExt = ['php', 'js', 'css', 'json', 'xml', 'txt', 'md', 'png', 'svg', 'jpg', 'jpeg', 'gif', 'webp',
     'ttf', 'woff', 'woff2', 'cnf', 'lock'];
-$allowedNames = '#^(LICENSE|COPYING|NOTICE|AUTHORS|VERSION|THIRD-PARTY-LICENSES)([-_.][A-Za-z0-9._-]*)?$#';
+$allowedNames = '#^(LICENSE|LICENCE|COPYING|NOTICE|AUTHORS|VERSION|THIRD-PARTY-LICENSES)([-_.].*)?$#';
 foreach ($files as $rel => $_) {
     $name = basename($rel);
     $ext = strtolower((string) pathinfo($name, PATHINFO_EXTENSION));
@@ -149,6 +149,9 @@ foreach ($files as $rel => $_) {
         continue;
     }
     if (preg_match($allowedNames, $name) === 1) {
+        continue;
+    }
+    if (in_array($ext, ['pot', 'po', 'mo'], true) && preg_match('#(^|/)languages/#', $rel) === 1) {
         continue;
     }
     $fail("file type not permitted by WordPress.org: $rel");
@@ -162,6 +165,25 @@ if (isset($files['templates/ui-index.php'])) {
     $tpl = (string) preg_replace("#<<<'FLUXFILES_JS'.*?\nFLUXFILES_JS#s", '', $tpl);
     if (preg_match('#<script|<style|<link[^>]*rel\s*=\s*["\']?stylesheet#i', $tpl) === 1) {
         $fail('templates/ui-index.php contains a literal <script>/<style>/<link rel="stylesheet"> (use wp_print_scripts/wp_print_styles)');
+    }
+}
+
+// ---- no literal script/stylesheet tags in shipped PHP -------------------------
+// Plugin Check's EnqueuedResources sniff reads every string token, so a regex or a
+// sample containing one is reported even when it is not output. Same patterns as above.
+foreach ($files as $rel => $abs) {
+    if (str_starts_with($rel, 'vendor/') || !str_ends_with($rel, '.php')) {
+        continue;
+    }
+    // Comments are fine (the sniff reads strings and inline HTML, not comments).
+    $text = '';
+    foreach (token_get_all((string) file_get_contents($abs)) as $tok) {
+        if (is_array($tok) && in_array($tok[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE, T_INLINE_HTML], true)) {
+            $text .= $tok[1] . "\n";
+        }
+    }
+    if (preg_match('#<script\b|<link[^>]*rel\s*=\s*\\\\?["\']?stylesheet#i', $text) === 1) {
+        $fail("$rel: literal <script>/<link rel=stylesheet> text in a string (use wp_register_* / wp_print_*; build a pattern from pieces)");
     }
 }
 

@@ -4403,7 +4403,7 @@ test('the plugin build denies direct web access to the bundled public/ pages', f
     assertTrue(strpos($build, 'templates/ui-index.php') !== false && strpos($build, 'rm -f "$PLUGIN_DIR"/public/*.html') !== false,
         'the build turns the UI page into a guarded PHP template and removes public/*.html');
     // A direct HTTP hit on the template (ABSPATH undefined) must print nothing; the guard line
-    // is exactly what serveUiHtml() strips before serving the page.
+    // is the first line uiPageHtml() checks before it includes the template.
     $guard = (new ReflectionClassConstant(FluxFilesApi::class, 'UI_TEMPLATE_GUARD'))->getValue();
     $tpl = tempnam(sys_get_temp_dir(), 'ffui') . '.php';
     file_put_contents($tpl, $guard . "<html><body>SECRET-PAGE</body></html>");
@@ -4423,6 +4423,32 @@ test('the plugin build denies direct web access to the bundled public/ pages', f
     // serveUiHtml() still reads the page from disk.
     $api = file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     assertTrue(strpos($api, "corePath('public')") !== false, 'serveUiHtml() still reads public/ from disk');
+});
+
+test('the build\'s template transform produces a page uiPageHtml() can include; RTL locales get dir on <html>', function () {
+    $build = (string) file_get_contents(__DIR__ . '/../../../scripts/build-wordpress.sh');
+    assertTrue(preg_match("/python3 - \"\\\$PLUGIN_DIR\\/public\\/index.html\".*?<<'PY'\n(.*?)\nPY\n/s", $build, $m) === 1, 'transform found in build-wordpress.sh');
+    $core = __DIR__ . '/../../core/public/index.html';
+    $tmp = sys_get_temp_dir() . '/ffui-' . bin2hex(random_bytes(4));
+    mkdir($tmp);
+    file_put_contents("$tmp/t.py", $m[1]);
+    $out = shell_exec('python3 ' . escapeshellarg("$tmp/t.py") . ' ' . escapeshellarg($core) . ' ' . escapeshellarg("$tmp/ui-index.php") . ' 2>&1');
+    assertTrue(is_file("$tmp/ui-index.php"), 'transform ran: ' . $out);
+    if (!defined('FLUXFILES_PLUGIN_DIR')) { define('FLUXFILES_PLUGIN_DIR', realpath(__DIR__ . '/..') . '/'); }
+    if (!function_exists('wp_print_inline_script_tag')) { function wp_print_inline_script_tag($js) { echo "<!--inline-script-->\n"; } }
+    if (!function_exists('wp_print_styles')) { function wp_print_styles($h = false) { echo "<!--styles-->\n"; } }
+    if (!function_exists('wp_print_scripts')) { function wp_print_scripts($h = false) { echo "<!--scripts-->\n"; } }
+    $html = (new ReflectionMethod(FluxFilesApi::class, 'uiPageHtml'))->invoke(null, "$tmp/ui-index.php");
+    assertTrue(is_string($html) && strpos($html, '<!--scripts-->') !== false && strpos($html, '<!--styles-->') !== false && strpos($html, '<!--inline-script-->') !== false && strpos($html, 'ABSPATH') === false, 'the built template includes and prints the handles');
+    assertTrue(stripos($html, '<script') === false, 'no literal script tag in the included page');
+    @unlink("$tmp/t.py"); @unlink("$tmp/ui-index.php"); @rmdir($tmp);
+    // N6: core's tag is <html lang="en" translate="no">; the locale must land on it.
+    $i18n = new \FluxFiles\I18n(FluxFilesPlugin::corePath('lang'), 'ar');
+    assertEqual('rtl', $i18n->direction(), 'ar is RTL');
+    $page = FluxFilesApi::applyUiLocale('<html lang="en" translate="no"><head>', $i18n->locale(), $i18n->direction());
+    assertEqual('<html lang="ar" dir="rtl" translate="no"><head>', $page, 'lang + dir land on core\'s real <html> tag');
+    $core = (string) file_get_contents($core);
+    assertTrue(strpos(FluxFilesApi::applyUiLocale($core, 'ar', 'rtl'), 'dir="rtl"') !== false, 'dir applied to core\'s actual page');
 });
 
 test('Site Health adds a FluxFiles section, escaped, with sensitive rows private and no secrets', function () use ($secret) {

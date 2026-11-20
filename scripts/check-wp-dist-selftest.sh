@@ -68,6 +68,9 @@ plant public-link      public-link.php '<?php'
 plant vendor-py        vendor/aws/aws-crt-php/format-check.py 'x'
 plant vendor-sarif     vendor/maennchen/zipstream-php/results.sarif '{}'
 plant vendor-rst       vendor/foo/guides/Index.rst 'x'
+plant php-literal-script includes/FluxFilesPlugin.php '$x = "<script>";'
+plant php-literal-link   includes/FluxFilesPlugin.php "\$x = '<link rel=\"stylesheet\" href=\"a\">';"
+plant lang-ext-bad      lang/x.pot 'x'
 plant ui-literal-script templates/ui-index.php '<script>alert(1)</script>'
 plant ui-literal-style  templates/ui-index.php '<link rel="stylesheet" href="x.css">'
 
