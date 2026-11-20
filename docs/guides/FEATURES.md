@@ -116,6 +116,13 @@ $token = fluxfiles_token([
   is disabled, and the UI marks such images with a **"Preview"** badge. The clean
   original is never served. To grant it later (after purchase), issue a **separate
   token without the watermark**.
+- **Preview-only needs private storage.** FluxFiles stops handing out the clean
+  file, but it cannot hide bytes the storage itself serves: on a local disk whose
+  root is under the web root (a disk with a `url`, e.g. `/storage/...`) or on a
+  bucket/objects with public-read access, anyone who knows or guesses the key can
+  still fetch the original directly. For selling originals, keep the local root
+  outside the web root (or `deny all` it in nginx/Apache) and use a private bucket
+  (`visibility => private`, no public bucket policy).
 - **Logo watermark:** upload a transparent PNG as a normal file and set
   `watermark_type => 'logo'` + `watermark_logo_path`. A missing/unsafe path falls
   back to text (never a clean image). Watermarked WebPs are cached in `_variants/`.

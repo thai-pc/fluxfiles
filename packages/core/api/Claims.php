@@ -435,6 +435,7 @@ class Claims
         $this->userId = $userId;
         $this->permissions = $permissions;
         $this->allowedDisks = $allowedDisks;
+        self::assertSafePrefix($pathPrefix);
         $this->pathPrefix = $pathPrefix;
         $this->maxUploadMb = $maxUploadMb;
         $this->allowedExt = $allowedExt;
@@ -1082,6 +1083,30 @@ class Claims
      * component (e.g. "report.v2.pdf") is untouched; only whole "." / ".."
      * path segments are dropped.
      */
+    /**
+     * The `prefix` claim is the tenant's sandbox, so it must name a real folder.
+     * A `.`/`..` segment, a backslash or a NUL is resolved by Flysystem when it
+     * builds a key ("users/.." is the disk root), so a host that builds the prefix
+     * from user text ("users/{$name}" with a name of "..") would hand that user
+     * another tenant's tree, or the whole disk. Refuse such a token outright.
+     * Empty segments (a leading/trailing or doubled "/") stay allowed: they are
+     * dropped when the prefix is trimmed and cannot climb out.
+     */
+    private static function assertSafePrefix(string $prefix): void
+    {
+        if ($prefix === '') {
+            return;
+        }
+        if (strpbrk($prefix, "\\\0") !== false) {
+            throw new ApiException('Invalid or expired token', 401, 'token_invalid');
+        }
+        foreach (explode('/', $prefix) as $segment) {
+            if ($segment === '.' || $segment === '..') {
+                throw new ApiException('Invalid or expired token', 401, 'token_invalid');
+            }
+        }
+    }
+
     private static function stripDotSegments(string $path): string
     {
         $path = str_replace(["\0", "\x00"], '', $path);

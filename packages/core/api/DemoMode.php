@@ -374,18 +374,37 @@ final class DemoMode
      * Purge demo sandboxes older than the TTL, then enforce the global size budget by
      * deleting the OLDEST sandboxes until total demo bytes are under the cap. Best-effort,
      * cheap; call opportunistically or from cron. $localRoot is the local disk root.
+     *
+     * A visitor's deleted files are not under `demo/<id>/`: the UI soft-deletes them
+     * into the disk-wide `_fluxfiles/trash/<tid>/` with a `trash.json` entry whose
+     * `original_key` names the sandbox. They count toward that sandbox's size and go
+     * with it, and trash left behind by a sandbox that no longer exists is swept too
+     * (audit 2026-11-20 R1-2: upload → trash → repeat filled the disk unbounded).
+     * $meta defaults to the operator's configured backend (JSON or DB).
      */
-    public static function purge(string $localRoot): void
+    public static function purge(string $localRoot, ?MetadataRepositoryInterface $meta = null): void
     {
-        $base = rtrim($localRoot, '/') . '/demo';
+        $root = rtrim($localRoot, '/');
+        $base = $root . '/demo';
         if (!is_dir($base)) {
             return;
+        }
+        $trash = self::demoTrash($root, $meta);   // sandbox id => [trash id => bytes]
+
+        // 0. Trash whose sandbox is already gone.
+        foreach ($trash as $sandbox => $items) {
+            if (!is_dir($base . '/' . $sandbox)) {
+                self::dropTrash($root, $meta, $items);
+                unset($trash[$sandbox]);
+            }
         }
         // 1. TTL purge.
         $cutoff = time() - self::ttlHours() * 3600;
         foreach (glob($base . '/*', GLOB_ONLYDIR) ?: [] as $dir) {
             if (@filemtime($dir) < $cutoff) {
                 self::rrmdir($dir);
+                self::dropTrash($root, $meta, $trash[basename($dir)] ?? []);
+                unset($trash[basename($dir)]);
             }
         }
         // 2. Global budget: if still over cap, delete oldest sandboxes first.
@@ -394,7 +413,7 @@ final class DemoMode
         $sizes = [];
         $total = 0;
         foreach ($dirs as $dir) {
-            $s = self::dirSize($dir);
+            $s = self::dirSize($dir) + array_sum($trash[basename($dir)] ?? []);
             $sizes[$dir] = ['size' => $s, 'mtime' => @filemtime($dir) ?: 0];
             $total += $s;
         }
@@ -402,12 +421,59 @@ final class DemoMode
             return;
         }
         uasort($sizes, static fn ($a, $b) => $a['mtime'] <=> $b['mtime']); // oldest first
-        foreach ($sizes as $dir => $meta) {
+        foreach ($sizes as $dir => $info) {
             if ($total <= $budget) {
                 break;
             }
             self::rrmdir($dir);
-            $total -= $meta['size'];
+            self::dropTrash($root, $meta, $trash[basename($dir)] ?? []);
+            $total -= $info['size'];
+        }
+    }
+
+    /**
+     * Trash entries that came from a demo sandbox, with the bytes they hold on disk.
+     *
+     * @return array<string,array<string,int>> sandbox id => [trash id => bytes]
+     */
+    private static function demoTrash(string $root, ?MetadataRepositoryInterface &$meta): array
+    {
+        try {
+            if ($meta === null) {
+                $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root]]);
+                $meta = PublicContext::resolveMeta($dm);
+            }
+            $all = $meta->allTrash('local');
+        } catch (\Throwable $e) {
+            Log::warn('FluxFiles demo purge: cannot read the trash index — ' . $e->getMessage());
+            return [];
+        }
+        $out = [];
+        foreach ($all as $id => $e) {
+            $id = (string) $id;
+            $origin = is_array($e) ? (string) ($e['original_key'] ?? '') : '';
+            if (preg_match('#^demo/([A-Za-z0-9_-]+)/#', $origin, $m) !== 1 || preg_match('/^[A-Za-z0-9_-]+$/', $id) !== 1) {
+                continue;
+            }
+            $dir = $root . '/_fluxfiles/trash/' . $id;
+            $out[$m[1]][$id] = is_dir($dir) ? self::dirSize($dir) : 0;
+        }
+        return $out;
+    }
+
+    /** @param array<string,int> $items trash id => bytes */
+    private static function dropTrash(string $root, ?MetadataRepositoryInterface $meta, array $items): void
+    {
+        foreach (array_keys($items) as $id) {
+            $dir = $root . '/_fluxfiles/trash/' . $id;
+            if (is_dir($dir)) {
+                self::rrmdir($dir);
+            }
+            try {
+                $meta?->removeTrash('local', (string) $id);
+            } catch (\Throwable $e) {
+                Log::warn('FluxFiles demo purge: cannot drop trash entry — ' . $e->getMessage());
+            }
         }
     }
 

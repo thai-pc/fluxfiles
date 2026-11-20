@@ -85,7 +85,7 @@ and [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/AP
 | Claim | Type | Default | Notes |
 |---|---|---|---|
 | `owner_only` | bool | `false` | Restrict delete/rename/move to the uploader. |
-| `allow_download` | bool | `true` | `false` = preview-only (withholds `url`/`variants`; original presign, ZIP download and `GET /content` → 403). `/img` also refuses to fall through to the untransformed source: a client accepting neither AVIF nor WebP gets WebP anyway, and an untransformable image (SVG, animated GIF) → 415 instead of the original bytes. |
+| `allow_download` | bool | `true` | `false` = preview-only (withholds `url`/`variants`; original presign, ZIP download and `GET /content` → 403). `/img` also refuses to fall through to the untransformed source: a client accepting neither AVIF nor WebP gets WebP anyway, and an untransformable image (SVG, animated GIF) → 415 instead of the original bytes. Only as private as the disk: on a web-served local root or a public bucket the original stays fetchable at its public URL. |
 | `allow_chmod` | bool | `true`; `false` when `owner_only` is set and `allow_chmod` is absent | Allow `POST /api/fm/chmod` on SFTP disks. The WordPress plugin forces it `false` (see `allow_code_edit`) and answers the route with 403. An `owner_only` token gets it only by setting `allow_chmod: true` explicitly (the role presets already set it either way). A folder target also needs the caller to own everything inside it, and the tenant root itself is never a target (`403 chmod_root_forbidden`). |
 | `allow_code_edit` | bool | `false` | Allow editing file text via `PUT /api/fm/content` (config/code editor). Unlike an upload, this skips the dangerous-extension block (editing an existing `.php` is the point on a server you manage). **The WordPress plugin forces `allow_code_edit`, `allow_chmod` and `terminal_pty_url` off on every token and answers `PUT /content` with 403**; read-only preview (`GET /content`) stays. |
 | `allow_zip` | bool | `true` | Allow `POST /api/fm/zip`; also needs `allow_download`. |
@@ -138,7 +138,7 @@ and [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/AP
 ### 2.6 Watermark — overlay (serve-time; free)
 | Claim | Type | Default | Notes |
 |---|---|---|---|
-| `watermark_enabled` | bool | `false` | Overlay on `/api/fm/img`; forces preview-only. Source never modified. |
+| `watermark_enabled` | bool | `false` | Overlay on `/api/fm/img`; forces preview-only. Source never modified. Only as private as the disk: on a web-served local root or a public bucket the original stays fetchable at its public URL. |
 | `watermark_type` | enum | `text` | `text` or `logo`. |
 | `watermark_text` | string | — | Text for `type=text`. |
 | `watermark_logo_path` | string | — | Storage path to logo PNG for `type=logo` (missing → text fallback). |

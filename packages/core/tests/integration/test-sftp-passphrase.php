@@ -80,7 +80,7 @@ test('BYOB: validate accepts a passphrase config + encrypt/decrypt round-trips i
     $secret = str_repeat('s', 40);
     $cfg = [
         'driver' => 'sftp', 'host' => '93.184.216.34', 'username' => 'deploy',
-        'private_key' => 'KEYPEM', 'private_key_passphrase' => $PASS, 'root' => '/srv',
+        'private_key' => "-----BEGIN OPENSSH PRIVATE KEY-----\nKEYPEM\n-----END OPENSSH PRIVATE KEY-----", 'private_key_passphrase' => $PASS, 'root' => '/srv',
     ];
     CredentialEncryptor::validate('my-vps', $cfg);            // must not throw
     $enc = CredentialEncryptor::encrypt($cfg, $secret);

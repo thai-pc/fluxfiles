@@ -131,6 +131,27 @@ class CredentialEncryptor
      *         (see Claims::fromJwtPayload / DiskManager::build). Null otherwise
      *         (no endpoint, or a non-s3 driver).
      */
+    /**
+     * True for pasted key material (OpenSSH/PEM "-----BEGIN …", RFC 4716
+     * "---- BEGIN SSH2 …", PuTTY "PuTTY-User-Key-File-N:"), false for anything
+     * else, including any value that names an existing file.
+     */
+    private static function isInlineKeyMaterial(#[\SensitiveParameter] string $key): bool
+    {
+        $key = trim($key);
+        if ($key === '' || strpos($key, "\n") === false) {
+            return false;
+        }
+        $looksLikeKey = strpos($key, '-----BEGIN ') !== false
+            || strpos($key, '---- BEGIN SSH2') !== false
+            || preg_match('/^PuTTY-User-Key-File-\d+:/', $key) === 1;
+        if (!$looksLikeKey) {
+            return false;
+        }
+        // Never a path, whatever it looks like (a filename can contain anything).
+        return strpos($key, "\0") === false && !@is_file($key);
+    }
+
     public static function validate(string $diskName, array $config): ?string
     {
         $driver = $config['driver'] ?? '';
@@ -154,6 +175,17 @@ class CredentialEncryptor
             }
             if (empty($config['password']) && empty($config['private_key'])) {
                 throw new ApiException("BYOB disk '{$diskName}' needs a 'password' or 'private_key'", 400);
+            }
+            // The key must be the key itself. Flysystem treats a private_key that
+            // names a readable file as a path and loads it, so a user-supplied
+            // "/var/www/.ssh/id_ed25519" would make the server log in to a host the
+            // user picked with the server's own key. (Operator disks may still
+            // use a key file path; this check is BYOB-only.)
+            if (!empty($config['private_key']) && !self::isInlineKeyMaterial((string) $config['private_key'])) {
+                throw new ApiException(
+                    "BYOB disk '{$diskName}': 'private_key' must contain the key itself (PEM, OpenSSH or PuTTY format), not a file path",
+                    400
+                );
             }
             if (\class_exists('\\FluxFiles\\SsrfGuard')) {
                 SsrfGuard::assertHostSafe((string) $config['host'], (int) ($config['port'] ?? 22));
