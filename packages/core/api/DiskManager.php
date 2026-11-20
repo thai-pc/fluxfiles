@@ -60,6 +60,23 @@ class DiskManager
     }
 
     /**
+     * A throwaway SFTP filesystem for the Bucket Doctor: same disk config but a short
+     * connect timeout and a single attempt, so an unreachable host fails the check in
+     * seconds instead of holding the run for timeout x maxTries. Not cached, and the
+     * disk's normal adapter (used for file operations) is left untouched.
+     */
+    public function sftpDoctorDisk(string $name, int $timeout = 8): Filesystem
+    {
+        $cfg = $this->config($name);
+        if (($cfg['driver'] ?? '') !== 'sftp') {
+            throw new ApiException("Disk '{$name}' is not an SFTP disk", 400);
+        }
+        $cfg['timeout']   = min($timeout, (int) ($cfg['timeout'] ?? $timeout));
+        $cfg['max_tries'] = 1;
+        return new Filesystem(self::buildSftpAdapter($cfg));
+    }
+
+    /**
      * Presigned GET URL for an object on an S3-compatible disk, or null when the
      * disk isn't S3 or presigning fails. Lets a caller redirect (302) to the
      * bucket instead of proxying the bytes through the app server.
@@ -279,7 +296,7 @@ class DiskManager
             'useAgent'            => false, // never reach for a local ssh-agent on the server
             'hostFingerprint'     => $hostFingerprint,
             'timeout'             => (int) ($cfg['timeout'] ?? 20),
-            'maxTries'            => 2,
+            'maxTries'            => max(1, (int) ($cfg['max_tries'] ?? 2)),
             'preferredAlgorithms' => !empty($cfg['strict_algorithms']) ? self::modernSshAlgorithms() : [],
         ]);
     }

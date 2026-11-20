@@ -31,6 +31,15 @@ class BucketDoctor
     private ?HttpTransportInterface $transport;
     private ?UrlFetcherInterface $fetcher;
 
+    /** S3 per-command bounds (see bounds()), the whole-run budget, and the presign probe's fetch timeout. */
+    private const CONNECT_TIMEOUT = 5;
+    private const TIMEOUT = 15;
+    private const BUDGET_SECONDS = 45;
+    private const PROBE_FETCH_TIMEOUT = 8;
+
+    private bool $connFailed = false;
+    private float $deadline = 0.0;
+
     /**
      * @param ?HttpTransportInterface $transport unpinned (operator-configured disk) probes
      * @param ?UrlFetcherInterface    $fetcher   pinned (BYOB) probes; defaults to cURL
@@ -59,104 +68,141 @@ class BucketDoctor
 
         $bucket   = (string) ($config['bucket'] ?? '');
         $s3       = $this->disks->s3Client($disk);
-        $fs       = $this->disks->disk($disk);
         $probeKey = self::PROBE_DIR . '/' . bin2hex(random_bytes(8)) . '.txt';
         $probeMp  = $probeKey . '.mp';
         $body     = 'fluxfiles-doctor-' . time();
         $checks   = [];
         $wrote    = false;
 
+        // Every S3 call below goes straight through the client with per-command
+        // http bounds (see bounds()) instead of Flysystem, so the disk's shared
+        // client config — used for normal file operations — stays untouched.
+        $this->connFailed = false;
+        $this->deadline   = microtime(true) + self::BUDGET_SECONDS;
+        $bounds = $this->bounds();
+
         // 1. Reachability + list.
         try {
-            $s3->listObjectsV2(['Bucket' => $bucket, 'MaxKeys' => 1]);
+            $s3->listObjectsV2(['Bucket' => $bucket, 'MaxKeys' => 1] + $bounds);
             $checks[] = $this->ok('reachability', 'Bucket is reachable and listable.');
         } catch (\Throwable $e) {
+            $this->noteConnectionError($e);
             $checks[] = $this->fail('reachability', $this->awsMsg($e, 'Cannot reach or list the bucket.'),
                 'Verify credentials, bucket name, region/endpoint, and the s3:ListBucket permission.');
         }
 
         // 2. Write a probe object.
-        try {
-            $fs->write($probeKey, $body);
-            $wrote = true;
-            $checks[] = $this->ok('write', 'Wrote a probe object.');
-        } catch (\Throwable $e) {
-            $checks[] = $this->fail('write', $this->awsMsg($e, 'Cannot write to the bucket.'),
-                'Grant s3:PutObject on the bucket.');
+        if ($this->shouldSkip()) {
+            $checks[] = $this->skip('write');
+        } else {
+            try {
+                $s3->putObject(['Bucket' => $bucket, 'Key' => $probeKey, 'Body' => $body] + $bounds);
+                $wrote = true;
+                $checks[] = $this->ok('write', 'Wrote a probe object.');
+            } catch (\Throwable $e) {
+                $this->noteConnectionError($e);
+                $checks[] = $this->fail('write', $this->awsMsg($e, 'Cannot write to the bucket.'),
+                    'Grant s3:PutObject on the bucket.');
+            }
         }
 
         // 3. Read it back, and 4. presign a GET for it.
         if ($wrote) {
-            try {
-                $got = $fs->read($probeKey);
-                $checks[] = $got === $body
-                    ? $this->ok('read', 'Read the probe object back.')
-                    : $this->warn('read', 'Read the probe back but the content differed.', null);
-            } catch (\Throwable $e) {
-                $checks[] = $this->fail('read', $this->awsMsg($e, 'Cannot read from the bucket.'),
-                    'Grant s3:GetObject on the bucket.');
+            if ($this->shouldSkip()) {
+                $checks[] = $this->skip('read');
+            } else {
+                try {
+                    $got = (string) $s3->getObject(['Bucket' => $bucket, 'Key' => $probeKey] + $bounds)['Body'];
+                    $checks[] = $got === $body
+                        ? $this->ok('read', 'Read the probe object back.')
+                        : $this->warn('read', 'Read the probe back but the content differed.', null);
+                } catch (\Throwable $e) {
+                    $this->noteConnectionError($e);
+                    $checks[] = $this->fail('read', $this->awsMsg($e, 'Cannot read from the bucket.'),
+                        'Grant s3:GetObject on the bucket.');
+                }
             }
 
-            try {
-                $cmd = $s3->getCommand('GetObject', ['Bucket' => $bucket, 'Key' => $probeKey]);
-                $url = (string) $s3->createPresignedRequest($cmd, '+5 minutes')->getUri();
-                // Reuse the same SSRF-validated IP the S3Client above is pinned to for
-                // this disk (see DiskManager::build()'s CURLOPT_RESOLVE) instead of
-                // letting curl re-resolve the endpoint host fresh — otherwise a BYOB
-                // tenant who re-points their endpoint's DNS at an internal address
-                // between disk registration and this call could turn this presign
-                // fetch into a blind SSRF probe.
-                [$code, $resp] = $this->httpGet($url, $config['_pinned_ip'] ?? null);
-                $checks[] = ($code === 200 && $resp === $body)
-                    ? $this->ok('presign', 'Presigned GET URL serves the object.')
-                    : $this->warn('presign', "Presigned GET returned HTTP {$code}.",
-                        'Private disks serve files via presigned URLs — make sure the endpoint/region is reachable from clients.');
-            } catch (ApiException $e) {
-                // SsrfGuard blocked the fetch (e.g. the endpoint's DNS changed to a
-                // private/internal address between disk registration and this call).
-                // Report it as a normal failed check — never let it bubble into a 500.
-                $checks[] = $this->fail('presign', 'Presign check blocked: ' . $e->getMessage(),
-                    'The bucket endpoint resolved to a private/internal address — verify its DNS is not pointing at an internal host.');
-            } catch (\Throwable $e) {
-                $checks[] = $this->warn('presign', $this->awsMsg($e, 'Could not presign a GET URL.'), null);
+            if ($this->shouldSkip()) {
+                $checks[] = $this->skip('presign');
+            } else {
+                try {
+                    $cmd = $s3->getCommand('GetObject', ['Bucket' => $bucket, 'Key' => $probeKey]);
+                    $url = (string) $s3->createPresignedRequest($cmd, '+5 minutes')->getUri();
+                    // Reuse the same SSRF-validated IP the S3Client above is pinned to for
+                    // this disk (see DiskManager::build()'s CURLOPT_RESOLVE) instead of
+                    // letting curl re-resolve the endpoint host fresh — otherwise a BYOB
+                    // tenant who re-points their endpoint's DNS at an internal address
+                    // between disk registration and this call could turn this presign
+                    // fetch into a blind SSRF probe.
+                    [$code, $resp] = $this->httpGet($url, $config['_pinned_ip'] ?? null);
+                    $checks[] = ($code === 200 && $resp === $body)
+                        ? $this->ok('presign', 'Presigned GET URL serves the object.')
+                        : $this->warn('presign', "Presigned GET returned HTTP {$code}.",
+                            'Private disks serve files via presigned URLs — make sure the endpoint/region is reachable from clients.');
+                } catch (ApiException $e) {
+                    // SsrfGuard blocked the fetch (e.g. the endpoint's DNS changed to a
+                    // private/internal address between disk registration and this call).
+                    // Report it as a normal failed check — never let it bubble into a 500.
+                    $checks[] = $this->fail('presign', 'Presign check blocked: ' . $e->getMessage(),
+                        'The bucket endpoint resolved to a private/internal address — verify its DNS is not pointing at an internal host.');
+                } catch (\Throwable $e) {
+                    $checks[] = $this->warn('presign', $this->awsMsg($e, 'Could not presign a GET URL.'), null);
+                }
             }
         }
 
         // 5. Multipart (large-file uploads).
-        try {
-            $mp = $s3->createMultipartUpload(['Bucket' => $bucket, 'Key' => $probeMp]);
-            $s3->abortMultipartUpload(['Bucket' => $bucket, 'Key' => $probeMp, 'UploadId' => $mp['UploadId']]);
-            $checks[] = $this->ok('multipart', 'Multipart upload works (files larger than 10 MB).');
-        } catch (\Throwable $e) {
-            $checks[] = $this->warn('multipart', $this->awsMsg($e, 'Multipart upload is not available.'),
-                'Grant multipart upload permissions (s3:PutObject + s3:AbortMultipartUpload) for large files.');
+        if ($this->shouldSkip()) {
+            $checks[] = $this->skip('multipart');
+        } else {
+            try {
+                $mp = $s3->createMultipartUpload(['Bucket' => $bucket, 'Key' => $probeMp] + $bounds);
+                $s3->abortMultipartUpload(['Bucket' => $bucket, 'Key' => $probeMp, 'UploadId' => $mp['UploadId']] + $bounds);
+                $checks[] = $this->ok('multipart', 'Multipart upload works (files larger than 10 MB).');
+            } catch (\Throwable $e) {
+                $this->noteConnectionError($e);
+                $checks[] = $this->warn('multipart', $this->awsMsg($e, 'Multipart upload is not available.'),
+                    'Grant multipart upload permissions (s3:PutObject + s3:AbortMultipartUpload) for large files.');
+            }
         }
 
         // 6. CORS (warn-only — the #1 cause of broken browser uploads).
-        $checks[] = $this->corsCheck($s3, $bucket, $origin);
+        $checks[] = $this->shouldSkip() ? $this->skip('cors') : $this->corsCheck($s3, $bucket, $origin);
 
         // 6b. Lifecycle rule for incomplete multipart uploads (warn-only). A chunked
         // upload that never completes leaves its parts billed and invisible to a
         // normal object listing until this rule (or a manual ListMultipartUploads
         // sweep) cleans them up.
-        $checks[] = $this->lifecycleCheck($s3, $bucket);
+        $checks[] = $this->shouldSkip() ? $this->skip('lifecycle') : $this->lifecycleCheck($s3, $bucket);
 
         // 7. Versioning (informational).
-        try {
-            $v = $s3->getBucketVersioning(['Bucket' => $bucket]);
-            $checks[] = $this->info('versioning', 'Versioning: ' . ($v['Status'] ?? 'Disabled') . '.');
-        } catch (\Throwable $e) {
-            $checks[] = $this->info('versioning', 'Could not read versioning (s3:GetBucketVersioning not granted).');
+        if ($this->shouldSkip()) {
+            $checks[] = $this->skip('versioning');
+        } else {
+            try {
+                $v = $s3->getBucketVersioning(['Bucket' => $bucket] + $bounds);
+                $checks[] = $this->info('versioning', 'Versioning: ' . ($v['Status'] ?? 'Disabled') . '.');
+            } catch (\Throwable $e) {
+                $this->noteConnectionError($e);
+                $checks[] = $this->info('versioning', 'Could not read versioning (s3:GetBucketVersioning not granted).');
+            }
         }
 
-        // Cleanup probe — the delete also exercises the delete permission.
+        // Cleanup probe — the delete also exercises the delete permission. It still
+        // runs after the time budget is spent (a leftover probe is the worse outcome)
+        // but not once the endpoint is known to be unreachable.
         if ($wrote) {
-            try {
-                $fs->delete($probeKey);
-                $checks[] = $this->ok('delete', 'Deleted the probe object (cleanup).');
-            } catch (\Throwable $e) {
-                $checks[] = $this->fail('delete', $this->awsMsg($e, 'Cannot delete from the bucket.'),
-                    'Grant s3:DeleteObject — FluxFiles needs it for delete and move.');
+            if ($this->connFailed) {
+                $checks[] = $this->skip('delete');
+            } else {
+                try {
+                    $s3->deleteObject(['Bucket' => $bucket, 'Key' => $probeKey] + $bounds);
+                    $checks[] = $this->ok('delete', 'Deleted the probe object (cleanup).');
+                } catch (\Throwable $e) {
+                    $checks[] = $this->fail('delete', $this->awsMsg($e, 'Cannot delete from the bucket.'),
+                        'Grant s3:DeleteObject — FluxFiles needs it for delete and move.');
+                }
             }
         }
 
@@ -169,10 +215,55 @@ class BucketDoctor
         ];
     }
 
+    /**
+     * Per-command bounds for every S3 call the doctor makes. All doctor payloads
+     * are tiny (a ~25-byte probe, metadata reads, multipart create/abort), so one
+     * budget fits: 5 s to connect, 15 s total, and no SDK retry (a retry would
+     * just multiply the wait on an endpoint that is already unreachable).
+     *
+     * @return array{'@http':array{connect_timeout:int,timeout:int},'@retries':int}
+     */
+    private function bounds(): array
+    {
+        return ['@http' => ['connect_timeout' => self::CONNECT_TIMEOUT, 'timeout' => self::TIMEOUT], '@retries' => 0];
+    }
+
+    /** Remember a transport-level failure (timeout, DNS, refused, TLS) so the remaining checks are skipped. */
+    private function noteConnectionError(\Throwable $e): void
+    {
+        if ($e instanceof \Aws\Exception\AwsException && $e->isConnectionError()) {
+            $this->connFailed = true;
+        }
+    }
+
+    /** True once the endpoint is known unreachable or the overall time budget is spent. */
+    private function shouldSkip(): bool
+    {
+        return $this->connFailed || $this->overBudget();
+    }
+
+    protected function overBudget(): bool
+    {
+        return microtime(true) > $this->deadline;
+    }
+
+    /**
+     * A check that was not run. Reuses the existing `info` status (every renderer
+     * already labels it, and it never worsens the summary); `skipped:true` is the
+     * additive marker for consumers that want to tell it apart.
+     */
+    private function skip(string $id): array
+    {
+        $why = $this->connFailed
+            ? 'Skipped: the storage endpoint did not answer (connection error).'
+            : 'Skipped: the diagnosis time budget (' . self::BUDGET_SECONDS . ' s) ran out.';
+        return ['id' => $id, 'status' => 'info', 'message' => $why, 'fix' => null, 'skipped' => true];
+    }
+
     private function corsCheck($s3, string $bucket, ?string $origin): array
     {
         try {
-            $res   = $s3->getBucketCors(['Bucket' => $bucket]);
+            $res   = $s3->getBucketCors(['Bucket' => $bucket] + $this->bounds());
             $rules = $res['CORSRules'] ?? [];
             foreach ($rules as $r) {
                 $methods  = $r['AllowedMethods'] ?? [];
@@ -186,6 +277,7 @@ class BucketDoctor
             return $this->warn('cors', 'CORS is configured but does not allow PUT' . ($origin ? " from {$origin}" : '') . '.',
                 'Add a CORS rule allowing GET/PUT from your app origin.');
         } catch (\Throwable $e) {
+            $this->noteConnectionError($e);
             $code = $e instanceof \Aws\Exception\AwsException ? (string) $e->getAwsErrorCode() : '';
             if ($code === 'NoSuchCORSConfiguration') {
                 return $this->warn('cors', 'No CORS configuration — browser presigned PUT uploads will fail.',
@@ -198,7 +290,7 @@ class BucketDoctor
     private function lifecycleCheck($s3, string $bucket): array
     {
         try {
-            $res   = $s3->getBucketLifecycleConfiguration(['Bucket' => $bucket]);
+            $res   = $s3->getBucketLifecycleConfiguration(['Bucket' => $bucket] + $this->bounds());
             $rules = $res['Rules'] ?? [];
             foreach ($rules as $r) {
                 if (($r['Status'] ?? '') === 'Enabled' && isset($r['AbortIncompleteMultipartUpload']['DaysAfterInitiation'])) {
@@ -209,6 +301,7 @@ class BucketDoctor
             return $this->warn('lifecycle', 'No lifecycle rule aborts incomplete multipart uploads — a failed chunked upload leaves billed, invisible parts in the bucket forever.',
                 'Add an AbortIncompleteMultipartUpload lifecycle rule (see snippet below).');
         } catch (\Throwable $e) {
+            $this->noteConnectionError($e);
             $code = $e instanceof \Aws\Exception\AwsException ? (string) $e->getAwsErrorCode() : '';
             if ($code === 'NoSuchLifecycleConfiguration') {
                 return $this->warn('lifecycle', 'No lifecycle configuration — a failed chunked upload leaves billed, invisible parts in the bucket forever.',
@@ -233,7 +326,7 @@ class BucketDoctor
         // 1. Connect + authenticate. Listing the root forces the connection, so a
         //    wrong password/key, unreachable host, or host-key mismatch lands here.
         try {
-            $fs = $this->disks->disk($disk);
+            $fs = $this->disks->sftpDoctorDisk($disk);
             iterator_to_array($fs->listContents('', false));
             $checks[] = $this->ok('reachability', 'Connected and authenticated to the SFTP host.');
         } catch (\Throwable $e) {
@@ -336,7 +429,7 @@ class BucketDoctor
         // BYOB fetch needs the DNS pin plus the post-connect IP check, which only a
         // UrlFetcherInterface can express.
         if ($pinnedIp === null || $pinnedIp === '') {
-            $res = ($this->transport ?? HttpTransports::curlOrFail())->request('GET', $url, [], null, 15);
+            $res = ($this->transport ?? HttpTransports::curlOrFail())->request('GET', $url, [], null, self::PROBE_FETCH_TIMEOUT);
             return [$res['status'], $res['body']];
         }
 
@@ -354,7 +447,7 @@ class BucketDoctor
         try {
             // The endpoint is tenant-supplied (BYOB): cap what it can make us buffer.
             $res = ($this->fetcher ??= HttpTransports::urlFetcher())
-                ->fetch($url, [$pinnedIp], $allowance, $tmp, self::PROBE_MAX_BYTES, 15);
+                ->fetch($url, [$pinnedIp], $allowance, $tmp, self::PROBE_MAX_BYTES, self::PROBE_FETCH_TIMEOUT);
             $body = file_get_contents($tmp, false, null, 0, self::PROBE_MAX_BYTES);
             return [$res['status'], $body === false ? '' : $body];
         } catch (ApiException $e) {

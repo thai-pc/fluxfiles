@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- Bucket Doctor (`GET /api/fm/disk/doctor`, WP Cloud test, Laravel `disk/doctor`, `fluxfiles doctor`) is now time-bounded. Every S3 call carries per-command `@http` (5 s connect, 15 s total) and `@retries` 0 (the disk's shared client used for file operations is unchanged), the presign probe fetch is capped at 8 s, and the SFTP check uses a doctor-only connection (8 s timeout, one attempt instead of two). After a connection-level failure (timeout, DNS, refused, TLS) the remaining checks are reported as skipped (`status: info` plus an additive `skipped: true`), and one run has a 45 s overall budget. Previously a silent endpoint could hold one run for many minutes.
+- WordPress.org review: a phpcs ignore note on the rate limiter's local lock-file `fopen()` (comment only, no behaviour change).
+
 ## [1.0.43] — 2026-11-15
 
 > Released: `laravel-v1.1.0` (core floor `^1.6.1`): AI connection test route, Doctor `ai` block, `fluxfiles:doctor --ai`.
