@@ -5,6 +5,23 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.49] — 2026-11-20
+
+> Released: `core-v1.6.5`. Security fixes from the pre-launch audit: tenant root rename, `prefix` dot segments, BYOB SFTP key paths, watermark logo size, demo trash purge, plus preview-only docs.
+
+### Security
+- A token scoped to a `prefix` could rename its own root. Renaming path `""` built the new key from the prefix's parent, so `users/42` renamed to `99` moved the whole tree into `users/99`, and a flat prefix `tenant1` → `tenant2` returned 200. Such a rename now returns `403 root_forbidden`, and every rename target must stay inside the token's scope.
+- A `prefix` claim with a `.`/`..` segment, a backslash or a NUL is refused (`401 token_invalid`). `users/..` used to resolve to the disk root, so a host that builds the prefix from user text could expose every tenant. `fluxfiles_token()`, `fluxfiles_byob_token()` and `fluxfiles_mixed_token()` throw `InvalidArgumentException` instead of minting such a token. Empty segments (a leading, trailing or doubled `/`) are still allowed.
+- BYOB SFTP: `private_key` must contain the key itself (PEM/OpenSSH, RFC 4716 or PuTTY), not a file path. Flysystem loads a `private_key` that names a readable file, so a BYOB user could make the server log in to a host of their choice with the server's own key. Operator-configured disks are unchanged.
+- Watermark logo: the logo now goes through the same 30-megapixel decode check as the base image (413/415), and is scaled down until its height fits the base. Before, a tiny 1×N PNG scaled to the base width made GD allocate gigabytes of native memory, outside `memory_limit`.
+- Demo mode: `DemoMode::purge()` now removes a sandbox's trashed files (`_fluxfiles/trash/<id>/` and their `trash.json` entries) along with the sandbox, counts them toward `FLUXFILES_DEMO_TOTAL_MB`, and sweeps trash whose sandbox is already gone. Before, repeating upload → trash grew the disk without limit. Trash that does not come from a demo sandbox is not touched.
+
+### Docs
+- Preview-only (`watermark_enabled`, `allow_download: false`) only protects originals on private storage. On a web-served local root or a public bucket, anyone who knows the key can still fetch the original from its public URL. FEATURES.md, README and the CONFIG.md rows now say so.
+
+### Changed
+- `@fluxfiles/react` and `@fluxfiles/vue`: `package-lock.json` regenerated (it had drifted from `package.json`, so `npm ci` failed). No published code changed.
+
 ## [1.0.48] — 2026-11-20
 
 > Released: `core-v1.6.4` (the browser SDK `/fluxfiles.js` is served by the Docker image and by Composer installs) and `tinymce-v1.0.3` (README: TinyMCE 4 to 8, browser-tested on 6, 7 and 8). Migration guide for Responsive FileManager and RichFilemanager.
