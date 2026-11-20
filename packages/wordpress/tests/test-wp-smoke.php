@@ -1332,7 +1332,7 @@ test('audit: a typed token refused at auth is never logged under a previous call
 test('audit: presign/zip/share/c2pa/webhook/stream/content are covered in the proxy', function () {
     $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     foreach (["'POST' => 'presign_post'", "'zip_download'", "\$module . '_create'", "\$module . '_revoke'",
-              "'c2pa_verify'", "'webhook_test'", "'content_read'", "'notify/' . $op"] as $needle) {
+              "'c2pa_verify'", "'webhook_test'", "'content_read'", "'notify/' . \$op"] as $needle) {
         assertTrue(strpos($src, $needle) !== false, "proxy logs {$needle}");
     }
     // stream_read (audit_reads) is MediaEndpoint's job now; the proxy must hand it the metadata repo.
@@ -1355,6 +1355,8 @@ require_once __DIR__ . '/../includes/FluxFilesDbMetadataHandler.php';
 class WpdbSpy
 {
     public string $prefix = 'wp_';
+    /** like wpdb::$last_error (read by FluxFilesRateLimiterStorage's fallback log line) */
+    public string $last_error = '';
     public array $queries = [];
     /** @var array<int, array|null> queue of canned get_row() results, consumed in order */
     public array $rowQueue = [];
