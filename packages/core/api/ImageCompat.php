@@ -21,6 +21,9 @@ namespace FluxFiles;
  */
 final class ImageCompat
 {
+    /** Same bound as ImageOptimizer::MAX_SOURCE_PIXELS, for the watermark logo. */
+    private const MAX_LOGO_SOURCE_PIXELS = 30000000;
+
     /** @var object Intervention\Image\ImageManager instance (v2 or v3). */
     private $manager;
 
@@ -189,8 +192,22 @@ final class ImageCompat
         }
         $bw = $base->width();
         $bh = $base->height();
+        // The logo is untrusted input like the base image: refuse a decompression
+        // bomb before GD allocates it (native memory, outside memory_limit).
+        $info = @getimagesizefromstring($logoData);
+        if ($info === false || $info[0] <= 0 || $info[1] <= 0) {
+            throw new ApiException('Watermark logo is not a decodable image', 415, 'image_undecodable');
+        }
+        if ($info[0] * $info[1] > self::MAX_LOGO_SOURCE_PIXELS) {
+            throw new ApiException('Watermark logo exceeds maximum decodable size', 413, 'image_too_large');
+        }
         $logo = $this->manager->read($logoData);
         $targetW = (int) round(max(0.01, min(1.0, $widthPct)) * $bw);
+        // scale() keeps the aspect ratio, so a tall 1xN logo scaled to the base's
+        // width would become (bw x bw*N) pixels. Fit the logo inside the canvas.
+        if ($targetW > 0 && $info[1] * $targetW > $bh * $info[0]) {
+            $targetW = max(1, (int) floor($bh * $info[0] / $info[1]));
+        }
         if ($targetW > 0 && $logo->width() !== $targetW) {
             // scale() (not scaleDown) so a small logo can be enlarged on request.
             $logo = $logo->scale($targetW);
