@@ -65,11 +65,16 @@ if (!function_exists('_doing_it_wrong')) {
 // Minimal filter registry so we can exercise the fluxfiles_token_overrides hook.
 $GLOBALS['WP_FILTERS'] = [];
 if (!function_exists('add_filter')) {
-    function add_filter($tag, $cb, $priority = 10, $args = 1) { $GLOBALS['WP_FILTERS'][$tag][] = $cb; return true; }
+    function add_filter($tag, $cb, $priority = 10, $args = 1) { $GLOBALS['WP_FILTERS'][$tag][] = $cb; if (is_object($cb)) { $GLOBALS['WP_FILTER_PRIO'][spl_object_id($cb)] = $priority; } return true; }
 }
+if (!function_exists('remove_filter')) { function remove_filter($tag, $cb, $prio = 10) { foreach ($GLOBALS['WP_FILTERS'][$tag] ?? [] as $i => $f) { if ($f === $cb) { unset($GLOBALS['WP_FILTERS'][$tag][$i]); } } return true; } }
 if (!function_exists('apply_filters')) {
     function apply_filters($tag, $value, ...$args) {
-        foreach ($GLOBALS['WP_FILTERS'][$tag] ?? [] as $cb) { $value = $cb($value, ...$args); }
+        $list = array_values($GLOBALS['WP_FILTERS'][$tag] ?? []);
+        $prio = static fn($cb) => is_object($cb) ? ($GLOBALS['WP_FILTER_PRIO'][spl_object_id($cb)] ?? 10) : 10;
+        $order = array_keys($list);
+        usort($order, static fn($a, $b) => [$prio($list[$a]), $a] <=> [$prio($list[$b]), $b]); // like WP: by priority, then insertion
+        foreach ($order as $i) { $value = $list[$i]($value, ...$args); }
         return $value;
     }
 }
@@ -4451,6 +4456,42 @@ test('the build\'s template transform produces a page uiPageHtml() can include; 
     assertEqual('<html lang="ar" dir="rtl" translate="no"><head>', $page, 'lang + dir land on core\'s real <html> tag');
     $core = (string) file_get_contents($core);
     assertTrue(strpos(FluxFilesApi::applyUiLocale($core, 'ar', 'rtl'), 'dir="rtl"') !== false, 'dir applied to core\'s actual page');
+});
+
+test('UI page: our loader handles survive other plugins\' src/tag filters, other handles and other pages do not', function () {
+    $saved = $GLOBALS['WP_FILTERS'];
+    $base = [];
+    foreach (['script_loader_src', 'style_loader_src', 'script_loader_tag', 'style_loader_tag'] as $h) { $base[$h] = count($saved[$h] ?? []) + 1; }
+    // A hostile optimiser: strips the query string, forces async, rewrites the tag.
+    $strip = static fn($src, $handle = '') => explode('?', (string) $src)[0];
+    $mangle = static fn($tag, $handle = '') => str_replace(' defer', ' async', '[opt]' . $tag);
+    foreach (['script_loader_src', 'style_loader_src'] as $h) { add_filter($h, $strip, PHP_INT_MAX, 2); }
+    foreach (['script_loader_tag', 'style_loader_tag'] as $h) { add_filter($h, $mangle, PHP_INT_MAX, 2); }
+    // Stand-in for WP's printer: filter src, build a tag from it, filter the tag.
+    $print = static function (string $handle, string $kind): string {
+        $src = apply_filters($kind . '_loader_src', 'http://wp.test/assets/fm.js?ver=abc123', $handle);
+        return apply_filters($kind . '_loader_tag', '<x defer src="' . $src . '">', $handle, $src);
+    };
+    $guard = new ReflectionMethod(FluxFilesApi::class, 'withUiLoaderGuards');
+    $inside = $guard->invoke(null, static fn() => [
+        $print('fluxfiles-ui-fm', 'script'), $print('fluxfiles-ui-alpine', 'script'), $print('fluxfiles-ui', 'style'),
+        $print('other-plugin', 'script'),
+    ]);
+    foreach ([0, 1, 2] as $i) {
+        assertTrue(strpos($inside[$i], '?ver=abc123') !== false && strpos($inside[$i], ' defer') !== false && strpos($inside[$i], 'async') === false && strpos($inside[$i], '[opt]') === false,
+            'our handle keeps src ?ver= and defer: ' . $inside[$i]);
+    }
+    assertTrue(strpos($inside[3], '?ver') === false && strpos($inside[3], 'async') !== false, 'another plugin\'s handle is still optimised: ' . $inside[3]);
+    // After the page is printed, nothing of ours is left registered and the hostile filter still applies to everything.
+    $after = $print('fluxfiles-ui-fm', 'script');
+    assertTrue(strpos($after, '?ver') === false && strpos($after, 'async') !== false, 'outside the UI page the filters are not touched: ' . $after);
+    foreach (['script_loader_src', 'style_loader_src', 'script_loader_tag', 'style_loader_tag'] as $h) {
+        assertEqual($base[$h], count($GLOBALS['WP_FILTERS'][$h]), "$h back to just the hostile filter");
+    }
+    // Filters are removed even when printing throws.
+    try { $guard->invoke(null, static function () { throw new RuntimeException('boom'); }); } catch (RuntimeException $e) {}
+    assertEqual($base['script_loader_tag'], count($GLOBALS['WP_FILTERS']['script_loader_tag']), 'filters removed after an exception');
+    $GLOBALS['WP_FILTERS'] = $saved;
 });
 
 test('Site Health adds a FluxFiles section, escaped, with sensitive rows private and no secrets', function () use ($secret) {

@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- WordPress: the UI iframe page is hardened against other plugins' script/style loader filters. While the page prints its own handles (`fluxfiles-ui`, `fluxfiles-ui-fm`, `fluxfiles-ui-alpine`), `script_loader_src`/`style_loader_src`/`script_loader_tag`/`style_loader_tag` get a snapshot-at-first-priority / restore-at-last-priority pair for those handles only, removed right after printing (also on error). An optimiser that strips `?ver=`, forces `async` or rewrites the tag can no longer break the iframe's immutable caching or `defer` order; other handles, other pages and other plugins' filters are untouched. It cannot protect against optimisers that rewrite the finished HTML (output buffering, CDN/edge). Covered by a smoke test.
+
 ## [1.0.45] — 2026-11-20
 
 > Released: `wordpress-v1.3.1` (bundles core 1.6.2): WordPress.org review round 2 (UI assets through the script loader, vendor allow-list, literal `permission_callback` on every route), RTL `lang`/`dir` fix for the file manager page.

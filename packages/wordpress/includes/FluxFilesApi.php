@@ -3658,6 +3658,58 @@ class FluxFilesApi
      */
     private static function uiPageHtml(?string $tplPath = null): ?string
     {
+        return self::withUiLoaderGuards(fn() => self::renderUiPage($tplPath));
+    }
+
+    /** Handles printed on the UI page; the loader filters below touch only these. */
+    private const UI_HANDLES = ['fluxfiles-ui', 'fluxfiles-ui-fm', 'fluxfiles-ui-alpine'];
+
+    /**
+     * Run $print (which prints the UI handles) with our own handles shielded from other
+     * plugins' loader filters: an optimiser that strips `?ver=` (the UI's immutable
+     * caching keys on it), forces `async` or rewrites the tag. The filters exist only for
+     * the duration of the call and act on our handles only, so the rest of the site and
+     * every other plugin's filters are untouched. A snapshot of the src/tag as WordPress
+     * built it is taken at the earliest priority and put back at the latest.
+     *
+     * Limit: this cannot see optimisers that work on the finished document (output
+     * buffering, a `template_redirect` ob_start, a CDN/edge rewriting the HTML) or that
+     * replace wp_print_scripts() output outside these filters.
+     *
+     * @template T
+     * @param callable():T $print
+     * @return T
+     */
+    private static function withUiLoaderGuards(callable $print)
+    {
+        $snap = [];
+        $filters = [];
+        foreach (['script_loader_src' => 'src', 'style_loader_src' => 'src', 'script_loader_tag' => 'tag', 'style_loader_tag' => 'tag'] as $hook => $kind) {
+            $save = static function ($value, $handle = '') use ($hook, &$snap) {
+                if (in_array($handle, self::UI_HANDLES, true)) {
+                    $snap[$hook][$handle] = $value;
+                }
+                return $value;
+            };
+            $restore = static function ($value, $handle = '') use ($hook, &$snap) {
+                return in_array($handle, self::UI_HANDLES, true) && isset($snap[$hook][$handle]) ? $snap[$hook][$handle] : $value;
+            };
+            add_filter($hook, $save, PHP_INT_MIN, 2);
+            add_filter($hook, $restore, PHP_INT_MAX, 2);
+            $filters[] = [$hook, $save, PHP_INT_MIN];
+            $filters[] = [$hook, $restore, PHP_INT_MAX];
+        }
+        try {
+            return $print();
+        } finally {
+            foreach ($filters as [$hook, $cb, $prio]) {
+                remove_filter($hook, $cb, $prio);
+            }
+        }
+    }
+
+    private static function renderUiPage(?string $tplPath = null): ?string
+    {
         $tpl = $tplPath ?? FLUXFILES_PLUGIN_DIR . 'templates/ui-index.php';
         if (is_file($tpl)) {
             $raw = @file_get_contents($tpl);
