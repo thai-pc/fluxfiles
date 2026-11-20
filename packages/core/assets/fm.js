@@ -4266,7 +4266,7 @@ function fluxFilesApp() {
         // that is on purpose: those are capability toggles whose absence is meant to be
         // invisible; Share/Intake IS the SKU, and an unlicensed server has no paying
         // operator to embarrass. The departure is bounded to the unlicensed, unframed case.
-        // Do not "simplify" this to tokenAllows() alone. See docs/guides/OPERATOR-SHARE-INTAKE-UI.md §5.1.
+        // Do not "simplify" this to tokenAllows() alone. See fluxfiles-private-docs: design/OPERATOR-SHARE-INTAKE-UI.md §5.1.
         proGate(claim, moduleId) {
             // Order matters: it short-circuits so the common paths cost ZERO extra requests.
             if (this.tokenAllows(claim, false)) return 'on';        // licensed tenants never fetch the license
@@ -4302,7 +4302,7 @@ function fluxFilesApp() {
         // this gate; this only guards the PLACE/RELEASE UI. Visibility of the
         // affordance itself is further limited to the `audit` perm below
         // (canLegalHoldFile), same posture as Audit Export. See
-        // docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §8.
+        // fluxfiles-private-docs: design/RETENTION-LEGAL-HOLD-DESIGN.md §8.
         get legalHoldGate() { return this.proGate('allow_legal_hold', 'legal-hold'); },
         // GET /api/fm/audit/export streams a raw NDJSON/CSV file, not the JSON
         // envelope — fetch + blob + a synthetic <a download>, same pattern as
@@ -4345,7 +4345,7 @@ function fluxFilesApp() {
         // The toolbar entry point exists if EITHER feature is usable or advertisable.
         // Versioning has no toolbar 'on' behavior of its own (it's opened per-file from
         // the detail panel / context menu), but its 'locked' teaser rides the same pill
-        // rather than adding a second affordance — see docs/guides/OPERATOR-SHARE-INTAKE-UI.md
+        // rather than adding a second affordance — see fluxfiles-private-docs: design/OPERATOR-SHARE-INTAKE-UI.md
         // "one affordance per app, not one per file".
         get linksToolbarState() {
             if (this.shareGate === 'on' || this.intakeGate === 'on') return 'on';
@@ -4381,7 +4381,7 @@ function fluxFilesApp() {
         // Non-sensitive tooltip for everyone; admins (audit perm) get the full
         // reason/placed-by/placed-at detail already present on the item from
         // the free/unconditional /list enrichment (on_hold/hold_id/hold_reason/
-        // hold_placed_by/hold_placed_at — docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §4.2).
+        // hold_placed_by/hold_placed_at — fluxfiles-private-docs: design/RETENTION-LEGAL-HOLD-DESIGN.md §4.2).
         holdTooltip(file) {
             if (!file || !file.on_hold) return '';
             if (this._hasPerm('audit') && file.hold_placed_at) {

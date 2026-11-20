@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Core side of e-mail notices (docs/design/INTAKE-SHARE-NOTIFICATIONS-DESIGN.md §4–§5):
+ * Core side of e-mail notices (fluxfiles-private-docs: design/INTAKE-SHARE-NOTIFICATIONS-DESIGN.md §4–§5):
  * the 10 `notify_*` claims, NotifyEndpoint's test/run/mute gates against fake modules,
  * PublicContext::mailer() precedence, I18n::forLocale(), and the audit route→action map.
  *

@@ -198,7 +198,7 @@ class JsonToDbMigrator
     }
 
     // -------------------------------------------------------------------
-    // 3b. Legal holds (_fluxfiles/holds.json) — docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §5
+    // 3b. Legal holds (_fluxfiles/holds.json) — fluxfiles-private-docs: design/RETENTION-LEGAL-HOLD-DESIGN.md §5
     // -------------------------------------------------------------------
 
     private function migrateHolds(string $disk, string $prefix, bool $dryRun, ?callable $onItem): array

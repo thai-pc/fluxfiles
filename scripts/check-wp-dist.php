@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Guard for the free WordPress.org plugin zip (docs/design/WPORG-SPLIT-DESIGN.md §8.2).
+ * Guard for the free WordPress.org plugin zip (fluxfiles-private-docs: design/WPORG-SPLIT-DESIGN.md §8.2).
  *
  *   bash scripts/build-wordpress.sh [X.Y.Z]
  *   php  scripts/check-wp-dist.php [path/to/fluxfiles.zip]

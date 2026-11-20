@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Core mail layer for e-mail notices (docs/design/INTAKE-SHARE-NOTIFICATIONS-DESIGN.md §6, §8):
+ * Core mail layer for e-mail notices (fluxfiles-private-docs: design/INTAKE-SHARE-NOTIFICATIONS-DESIGN.md §6, §8):
  * MailMessage validation + MIME, every provider transport against a fake HTTP layer (endpoint,
  * auth header, payload shape, no credential in an error), SMTP against a scripted socket, and
  * the env factory matrix.

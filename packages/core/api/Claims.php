@@ -188,7 +188,7 @@ class Claims
     public bool $allowLegalHold = false;   // Legal hold / retention — place/release only (fluxfiles/legal-hold)
 
     // ── DLP / PII detection-on-write (Enterprise bundle) ──────────────────
-    // See docs/design/DLP-PII-REDACTION-DESIGN.md. Mirrors allow_virus_scan's shape: a
+    // See fluxfiles-private-docs: design/DLP-PII-REDACTION-DESIGN.md. Mirrors allow_virus_scan's shape: a
     // 3-layer-gated module + a fail-closed FileManager hook. The eligibility
     // pre-filter (extension + size cap) below is checked in CORE, before the
     // module is ever invoked, so an engine outage never blocks a non-text upload.
@@ -294,7 +294,7 @@ class Claims
     public const NOTIFY_EVENTS = [
         'intake_received', 'intake_full', 'intake_expiring', 'intake_receipt',
         'share_first_download', 'share_exhausted', 'share_expiring', 'share_expired',
-        // Intake document requests (docs/design/INTAKE-DOCUMENT-REQUESTS-DESIGN.md).
+        // Intake document requests (fluxfiles-private-docs: design/INTAKE-DOCUMENT-REQUESTS-DESIGN.md).
         'intake_request', 'intake_reminder', 'intake_overdue', 'intake_complete',
     ];
 
@@ -603,7 +603,7 @@ class Claims
      * Presidio's entity-type naming convention (`^[A-Z_]+$`), drop the rest. Returns
      * null when nothing usable remains — null means the DLP module's curated PII default set
      * (DlpModule::DEFAULT_ENTITIES, language-narrowed; not Presidio's full set; reversed in
-     * dlp 1.1.0 — see docs/design/DLP-PII-REDACTION-DESIGN.md), so an all-garbage input is NOT the same
+     * dlp 1.1.0 — see fluxfiles-private-docs: design/DLP-PII-REDACTION-DESIGN.md), so an all-garbage input is NOT the same
      * as an empty allowlist (which would block nothing).
      *
      * @return string[]|null
@@ -939,7 +939,7 @@ class Claims
         $c->dlpMinScore = $dlpMinScore > 0 ? max(0.0, min(1.0, $dlpMinScore)) : 0.6;
         // Legal hold: gates PLACING/RELEASING a hold only (module management routes).
         // Enforcement of an already-placed hold (blocking delete/trash/rename/move/
-        // purge) is free/core and NEVER checks this claim — see docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §2.
+        // purge) is free/core and NEVER checks this claim — see fluxfiles-private-docs: design/RETENTION-LEGAL-HOLD-DESIGN.md §2.
         $c->allowLegalHold = (bool) ($payload->allow_legal_hold ?? false);
         $c->autoOptimize = (bool) ($payload->auto_optimize ?? false);
         $c->optimizeQuality = max(0, min(95, (int) ($payload->optimize_quality ?? 0)));

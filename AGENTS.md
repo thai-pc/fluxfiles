@@ -86,6 +86,9 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
   `AiTagger`; "share" = a narrow short-TTL token, not a stateful public endpoint.
 - Don't edit `dist/` or `vendor/` (build artifacts); edit source and rebuild.
   Don't read/print secrets from `.env`.
+- This repo is public: specs for paid modules and the Pro add-on live in the private
+  repo `fluxfiles-private-docs` (cited as `fluxfiles-private-docs: design/<FILE>.md`);
+  `docs/design/` is free/core only, guarded by `tests/unit/test-no-paid-specs-public.php`.
 - **`docs/reference/CONFIG.md` is the single source of truth for every JWT claim + env var.**
   Document any new claim there (the `test-config-doc.php` guard enforces it). Mint
   tokens with the one-options-array API — `fluxfiles_token(['user'=>…, 'claims'=>[…]])`

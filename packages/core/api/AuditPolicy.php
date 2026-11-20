@@ -266,7 +266,7 @@ final class AuditPolicy
      * hold exist to produce would be the one thing never recorded.
      *
      * `pii_detected` detail carries ONLY the matched entity-TYPE names (never
-     * matched text/offsets/counts — see §6.2 of docs/design/DLP-PII-REDACTION-DESIGN.md).
+     * matched text/offsets/counts — see §6.2 of fluxfiles-private-docs: design/DLP-PII-REDACTION-DESIGN.md).
      *
      * @param array<string,mixed> $body
      * @param array<string,mixed> $post

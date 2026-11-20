@@ -1848,7 +1848,7 @@ class FluxFilesController
 
     /**
      * Legal hold — PLACE/RELEASE/LIST are the paid-gated management half (see
-     * docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself is free/core
+     * fluxfiles-private-docs: design/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself is free/core
      * and license-independent, wired unconditionally into
      * FileManager::assertNoActiveHold() (inherited from core, no proxy change needed).
      */

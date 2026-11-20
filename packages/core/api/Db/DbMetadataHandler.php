@@ -794,7 +794,7 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
     }
 
     // ---------------------------------------------------------------------
-    // Legal hold (retention) — docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §5/§7. Same
+    // Legal hold (retention) — fluxfiles-private-docs: design/RETENTION-LEGAL-HOLD-DESIGN.md §5/§7. Same
     // "one row per disk+id" shape as trash above; StorageMetadataHandler's
     // _fluxfiles/holds.json is the reference implementation for field names.
     // ---------------------------------------------------------------------

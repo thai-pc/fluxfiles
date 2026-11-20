@@ -119,7 +119,7 @@ final class FileManagerFactory
         // contract as virus scanning above: wired only when the token asks for it
         // (`allow_dlp_scan`), and ModuleRegistry::require() resolves install/license/claim
         // on the first eligible write rather than here, so a plain read never pays the
-        // gate cost. See docs/design/DLP-PII-REDACTION-DESIGN.md.
+        // gate cost. See fluxfiles-private-docs: design/DLP-PII-REDACTION-DESIGN.md.
         if ($claims->allowDlpScan) {
             $fm->setDlpScanner(static function (string $localPath, string $name) use ($claims): array {
                 /** @var \FluxFiles\Dlp\DlpModule $dlp */

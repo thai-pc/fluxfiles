@@ -11,7 +11,7 @@ use FluxFiles\Mail\MailMessage;
 /**
  * The pieces of e-mail notices that the Intake and Share modules share, so both seal,
  * validate, cap and format notices the same way (design:
- * docs/design/INTAKE-SHARE-NOTIFICATIONS-DESIGN.md §2, §4, §6).
+ * fluxfiles-private-docs: design/INTAKE-SHARE-NOTIFICATIONS-DESIGN.md §2, §4, §6).
  *
  * - {@see recipients()} / {@see sealedConfig()}: what a portal/share create bakes into its
  *   record from the operator token + the create body.

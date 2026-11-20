@@ -1316,7 +1316,7 @@ function routeRequest(
     }
 
     // Legal hold — PLACE/RELEASE/LIST are the paid-gated management half (see
-    // docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself — actually
+    // fluxfiles-private-docs: design/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself — actually
     // blocking delete/trash/rename/move on a held path — is free/core and
     // license-independent, wired unconditionally into FileManager::assertNoActiveHold();
     // it keeps working even if this module is uninstalled or the license lapses.
