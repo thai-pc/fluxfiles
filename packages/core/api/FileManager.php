@@ -1883,6 +1883,10 @@ class FileManager
         // match (§6 of the design doc) — blocked as a security requirement, not
         // just a nicety.
         $this->assertNotDiskRoot($scoped);
+        // A tenant's own root has no name it may change: renaming it rebuilds the
+        // key from dirname(prefix), i.e. OUTSIDE the prefix, which would move the
+        // whole tree into a sibling (another tenant's) folder.
+        $this->assertNotTenantRoot($scoped);
         $this->assertNoActiveHold($disk, $scoped);
 
         $newName = trim($newName);
@@ -1901,6 +1905,8 @@ class FileManager
 
         $dir = dirname($scoped);
         $newPath = ($dir !== '.' && $dir !== '') ? $dir . '/' . $newName : $newName;
+        // Belt and braces: the target must stay inside the token's scope.
+        $this->assertScopedKeyInScope($newPath);
         $this->assertNotSystem($newPath, $disk);
         // show_hidden=false: renaming `.env` → `env.txt` would expose it, and the
         // reverse would hide a file from the token that owns it.
@@ -4909,6 +4915,18 @@ class FileManager
      * legal hold with it. A prefix-scoped token's own tenant root is a different
      * (non-empty) key and stays a legitimate target; holds still apply to it.
      */
+    /**
+     * Refuses an operation on the token's own prefix root (`path` "" or ".").
+     * No-op for an unscoped token (that is the disk root, see assertNotDiskRoot()).
+     */
+    private function assertNotTenantRoot(string $scopedKey): void
+    {
+        $prefix = trim($this->claims->pathPrefix, '/');
+        if ($prefix !== '' && trim($scopedKey, '/') === $prefix) {
+            throw new ApiException('The root of your file space cannot be renamed', 403, 'root_forbidden');
+        }
+    }
+
     private function assertNotDiskRoot(string $scopedKey): void
     {
         if (trim($scopedKey, '/') === '') {
