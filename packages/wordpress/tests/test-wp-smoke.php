@@ -1145,7 +1145,7 @@ test('REST share/page + intake/page are registered as public routes', function (
     foreach (['/share/page', '/intake/page'] as $r) {
         $pos = strpos($api, "\$p . '{$r}'");
         assertTrue($pos !== false, "route registered: {$r}");
-        assertTrue(strpos(substr($api, $pos, 200), '$public') !== false, "{$r} uses the public args");
+        assertTrue(strpos(substr($api, $pos, 300), "'permission_callback' => '__return_true'") !== false, "{$r} is public (literal __return_true)");
     }
 });
 
@@ -3102,6 +3102,38 @@ test('Plugin Check: the settings template enqueues, never prints a <script> tag 
     assertTrue(strpos($tpl, 'wp_add_inline_script') !== false, 'the theme sample shows the enqueue way');
 });
 
+test('Plugin Check: every register_rest_route call carries a literal permission_callback in its own args', function () {
+    // The scanner reads each call's own argument list, so a callback hidden in a shared
+    // array (array_merge($readArgs, ...)) is flagged as missing.
+    $files = array_merge(glob(__DIR__ . '/../includes/*.php') ?: [], [__DIR__ . '/../fluxfiles.php']);
+    $calls = 0;
+    foreach ($files as $file) {
+        $src = (string) file_get_contents($file);
+        $off = 0;
+        while (($at = strpos($src, 'register_rest_route(', $off)) !== false) {
+            $off = $at + 20;
+            // The preceding text decides whether this is a call (not a comment/definition).
+            if (preg_match('/(function\s+|\*\s*|\/\/\s*)$/', substr($src, max(0, $at - 12), 12)) === 1) {
+                continue;
+            }
+            $depth = 1; $i = $off; $len = strlen($src); $q = '';
+            for (; $i < $len && $depth > 0; $i++) {
+                $c = $src[$i];
+                if ($q !== '') { if ($c === '\\') { $i++; } elseif ($c === $q) { $q = ''; } continue; }
+                if ($c === "'" || $c === '"') { $q = $c; } elseif ($c === '(') { $depth++; } elseif ($c === ')') { $depth--; }
+            }
+            $call = substr($src, $at, $i - $at);
+            $calls++;
+            $where = basename($file) . ':' . (substr_count(substr($src, 0, $at), "\n") + 1);
+            assertTrue(strpos($call, 'array_merge') === false, "$where: route args are a literal array, not array_merge()");
+            $handlers = preg_match_all("/'callback'\\s*=>/", $call);
+            $perms = preg_match_all("/'permission_callback'\\s*=>/", $call);
+            assertTrue($handlers > 0 && $perms === $handlers, "$where: each handler has its own literal 'permission_callback' ($perms/$handlers)");
+        }
+    }
+    assertTrue($calls >= 85, "scanned the route registrations ($calls)");
+});
+
 test('Plugin Check: FluxFilesAdmin enqueues its scripts and names every sanitize_callback', function () {
     $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesAdmin.php');
     assertTrue(stripos($src, '<script') === false && stripos($src, '<style') === false, 'no inline <script>/<style> in FluxFilesAdmin.php');
@@ -4380,8 +4412,14 @@ test('the plugin build denies direct web access to the bundled public/ pages', f
     assertEqual('', $out, 'the template exits without output when hit directly');
     // The REST page still renders (source tree: falls back to core/public/index.html).
     if (!defined('FLUXFILES_PLUGIN_DIR')) { define('FLUXFILES_PLUGIN_DIR', realpath(__DIR__ . '/..') . '/'); }
+    // The printed handles: stand-ins that echo what WordPress would print.
+    if (!function_exists('wp_print_inline_script_tag')) { function wp_print_inline_script_tag($js) { echo "<!--inline-script-->\n"; } }
+    if (!function_exists('wp_print_styles')) { function wp_print_styles($h = false) { echo "<!--styles-->\n"; } }
+    if (!function_exists('wp_print_scripts')) { function wp_print_scripts($h = false) { echo "<!--scripts-->\n"; } }
     $html = (new ReflectionMethod(FluxFilesApi::class, 'uiPageHtml'))->invoke(null);
     assertTrue(is_string($html) && stripos($html, '<html') !== false && strpos($html, 'ABSPATH') === false, 'uiPageHtml() returns the page without the guard');
+    assertTrue(stripos($html, '<script') === false && stripos($html, 'rel="stylesheet"') === false && strpos($html, '<!--scripts-->') !== false && strpos($html, '<!--styles-->') !== false,
+        'the page prints registered handles instead of literal script/stylesheet tags');
     // serveUiHtml() still reads the page from disk.
     $api = file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     assertTrue(strpos($api, "corePath('public')") !== false, 'serveUiHtml() still reads public/ from disk');

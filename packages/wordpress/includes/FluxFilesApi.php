@@ -163,13 +163,13 @@ class FluxFilesApi
         // prefix here so the same fm.js works against either the standalone PHP
         // server or this WP REST proxy without conditionals.
         $p = '/api/fm';
-        $readArgs  = ['methods' => 'GET', 'permission_callback' => [self::class, 'checkAuth']];
-        $writeArgs = ['methods' => 'POST', 'permission_callback' => [self::class, 'checkAuth']];
 
         // Core file operations
-        register_rest_route($ns, $p . '/list', array_merge($readArgs, [
-            'callback' => [$api, 'handleList'],
-        ]));
+        register_rest_route($ns, $p . '/list', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleList'],
+        ]);
         register_rest_route($ns, $p . '/upload', [
             'methods'             => 'POST',
             'permission_callback' => [self::class, 'checkAuth'],
@@ -185,48 +185,74 @@ class FluxFilesApi
             'permission_callback' => [self::class, 'checkAuth'],
             'callback'            => [$api, 'handleDelete'],
         ]);
-        register_rest_route($ns, $p . '/rename', array_merge($writeArgs, [
-            'callback' => [$api, 'handleRename'],
-        ]));
-        register_rest_route($ns, $p . '/move', array_merge($writeArgs, [
-            'callback' => [$api, 'handleMove'],
-        ]));
-        register_rest_route($ns, $p . '/copy', array_merge($writeArgs, [
-            'callback' => [$api, 'handleCopy'],
-        ]));
-        register_rest_route($ns, $p . '/mkdir', array_merge($writeArgs, [
-            'callback' => [$api, 'handleMkdir'],
-        ]));
-        register_rest_route($ns, $p . '/cross-copy', array_merge($writeArgs, [
-            'callback' => [$api, 'handleCrossCopy'],
-        ]));
-        register_rest_route($ns, $p . '/cross-move', array_merge($writeArgs, [
-            'callback' => [$api, 'handleCrossMove'],
-        ]));
-        register_rest_route($ns, $p . '/crop', array_merge($writeArgs, [
-            'callback' => [$api, 'handleCrop'],
-        ]));
-        register_rest_route($ns, $p . '/watermark', array_merge($writeArgs, [
-            'callback' => [$api, 'handleWatermark'],
-        ]));
-        register_rest_route($ns, $p . '/watermark/remove', array_merge($writeArgs, [
-            'callback' => [$api, 'handleWatermarkRemove'],
-        ]));
-        register_rest_route($ns, $p . '/ai-tag', array_merge($writeArgs, [
-            'callback' => [$api, 'handleAiTag'],
-        ]));
+        register_rest_route($ns, $p . '/rename', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleRename'],
+        ]);
+        register_rest_route($ns, $p . '/move', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleMove'],
+        ]);
+        register_rest_route($ns, $p . '/copy', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleCopy'],
+        ]);
+        register_rest_route($ns, $p . '/mkdir', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleMkdir'],
+        ]);
+        register_rest_route($ns, $p . '/cross-copy', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleCrossCopy'],
+        ]);
+        register_rest_route($ns, $p . '/cross-move', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleCrossMove'],
+        ]);
+        register_rest_route($ns, $p . '/crop', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleCrop'],
+        ]);
+        register_rest_route($ns, $p . '/watermark', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleWatermark'],
+        ]);
+        register_rest_route($ns, $p . '/watermark/remove', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleWatermarkRemove'],
+        ]);
+        register_rest_route($ns, $p . '/ai-tag', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleAiTag'],
+        ]);
         // AI connection test: same gate as /ai-tag, but "Tag on upload" plays no part.
-        register_rest_route($ns, $p . '/ai/test', array_merge($writeArgs, [
-            'callback' => [$api, 'handleAiTest'],
-        ]));
-        register_rest_route($ns, $p . '/presign', array_merge($writeArgs, [
-            'callback' => [$api, 'handlePresign'],
-        ]));
+        register_rest_route($ns, $p . '/ai/test', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleAiTest'],
+        ]);
+        register_rest_route($ns, $p . '/presign', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handlePresign'],
+        ]);
 
         // File meta
-        register_rest_route($ns, $p . '/meta', array_merge($readArgs, [
-            'callback' => [$api, 'handleMeta'],
-        ]));
+        register_rest_route($ns, $p . '/meta', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleMeta'],
+        ]);
 
         // Metadata CRUD
         register_rest_route($ns, $p . '/metadata', [
@@ -262,18 +288,22 @@ class FluxFilesApi
         ]);
 
         // Extract a zip in place (works on any disk; returns JSON)
-        register_rest_route($ns, $p . '/extract', array_merge($writeArgs, [
-            'callback' => [$api, 'handleExtract'],
-        ]));
+        register_rest_route($ns, $p . '/extract', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleExtract'],
+        ]);
 
         // Download a selection as a streamed zip. The UI's `canZip` gate defaults to
         // ON (allow_zip defaults true in Claims), so the toolbar's "Download ZIP"
         // button renders in proxy mode too — it 404'd here until this route existed.
         // Streams bytes straight to the client like handleStream()/handleImg(), so
         // it never returns a WP_REST_Response.
-        register_rest_route($ns, $p . '/zip', array_merge($writeArgs, [
-            'callback' => [$api, 'handleZip'],
-        ]));
+        register_rest_route($ns, $p . '/zip', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleZip'],
+        ]);
 
         // SFTP file permissions. WordPress has no operator-configured SFTP disk, so
         // this is reached through a BYOB sftp disk in the token (registered in claims()).
@@ -291,164 +321,252 @@ class FluxFilesApi
         ]);
 
         // Trash (soft-delete) — gated by the 'delete' permission inside FileManager
-        register_rest_route($ns, $p . '/trash', array_merge($writeArgs, [
-            'callback' => [$api, 'handleTrash'],
-        ]));
-        register_rest_route($ns, $p . '/trash/restore', array_merge($writeArgs, [
-            'callback' => [$api, 'handleTrashRestore'],
-        ]));
-        register_rest_route($ns, $p . '/trash/list', array_merge($readArgs, [
-            'callback' => [$api, 'handleTrashList'],
-        ]));
-        register_rest_route($ns, $p . '/trash/purge', array_merge($writeArgs, [
-            'callback' => [$api, 'handleTrashPurge'],
-        ]));
-        register_rest_route($ns, $p . '/trash/empty', array_merge($writeArgs, [
-            'callback' => [$api, 'handleTrashEmpty'],
-        ]));
+        register_rest_route($ns, $p . '/trash', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleTrash'],
+        ]);
+        register_rest_route($ns, $p . '/trash/restore', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleTrashRestore'],
+        ]);
+        register_rest_route($ns, $p . '/trash/list', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleTrashList'],
+        ]);
+        register_rest_route($ns, $p . '/trash/purge', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleTrashPurge'],
+        ]);
+        register_rest_route($ns, $p . '/trash/empty', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleTrashEmpty'],
+        ]);
 
         // Bucket Doctor — diagnose a disk backend (writes/deletes a probe object,
         // so it requires the 'write' permission on a disk the token may access).
-        register_rest_route($ns, $p . '/disk/doctor', array_merge($readArgs, [
-            'callback' => [$api, 'handleDiskDoctor'],
-        ]));
+        register_rest_route($ns, $p . '/disk/doctor', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleDiskDoctor'],
+        ]);
 
         // Search, quota, audit
-        register_rest_route($ns, $p . '/search', array_merge($readArgs, [
-            'callback' => [$api, 'handleSearch'],
-        ]));
-        register_rest_route($ns, $p . '/search-folders', array_merge($readArgs, [
-            'callback' => [$api, 'handleSearchFolders'],
-        ]));
-        register_rest_route($ns, $p . '/quota', array_merge($readArgs, [
-            'callback' => [$api, 'handleQuota'],
-        ]));
-        register_rest_route($ns, $p . '/duplicates', array_merge($readArgs, [
-            'callback' => [$api, 'handleDuplicates'],
-        ]));
-        register_rest_route($ns, $p . '/usage', array_merge($readArgs, [
-            'callback' => [$api, 'handleUsage'],
-        ]));
-        register_rest_route($ns, $p . '/license', array_merge($readArgs, [
-            'callback' => [$api, 'handleLicense'],
-        ]));
-        register_rest_route($ns, $p . '/optimize', array_merge($writeArgs, [
-            'callback' => [$api, 'handleOptimize'],
-        ]));
-        register_rest_route($ns, $p . '/audit', array_merge($readArgs, [
-            'callback' => [$api, 'handleAudit'],
-        ]));
+        register_rest_route($ns, $p . '/search', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleSearch'],
+        ]);
+        register_rest_route($ns, $p . '/search-folders', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleSearchFolders'],
+        ]);
+        register_rest_route($ns, $p . '/quota', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleQuota'],
+        ]);
+        register_rest_route($ns, $p . '/duplicates', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleDuplicates'],
+        ]);
+        register_rest_route($ns, $p . '/usage', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleUsage'],
+        ]);
+        register_rest_route($ns, $p . '/license', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleLicense'],
+        ]);
+        register_rest_route($ns, $p . '/optimize', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleOptimize'],
+        ]);
+        register_rest_route($ns, $p . '/audit', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleAudit'],
+        ]);
 
         // Compliance Readiness Scorecard (free/core) — read-only capability
         // checklist, gated by the 'audit' perm, not a module/license check.
-        register_rest_route($ns, $p . '/compliance/scorecard', array_merge($readArgs, [
-            'callback' => [$api, 'handleComplianceScorecard'],
-        ]));
+        register_rest_route($ns, $p . '/compliance/scorecard', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleComplianceScorecard'],
+        ]);
 
         // Audit export/purge (paid module)
-        register_rest_route($ns, $p . '/audit/export', array_merge($readArgs, [
-            'callback' => [$api, 'handleAuditExport'],
-        ]));
-        register_rest_route($ns, $p . '/retention/run', array_merge($writeArgs, [
-            'callback' => [$api, 'handleRetentionRun'],
-        ]));
-        register_rest_route($ns, $p . '/fixity/check', array_merge($writeArgs, [
-            'callback' => [$api, 'handleFixityCheck'],
-        ]));
-        register_rest_route($ns, $p . '/audit/verify', array_merge($readArgs, [
-            'callback' => [$api, 'handleAuditVerify'],
-        ]));
-        register_rest_route($ns, $p . '/audit/purge', array_merge($writeArgs, [
-            'callback' => [$api, 'handleAuditPurge'],
-        ]));
+        register_rest_route($ns, $p . '/audit/export', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleAuditExport'],
+        ]);
+        register_rest_route($ns, $p . '/retention/run', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleRetentionRun'],
+        ]);
+        register_rest_route($ns, $p . '/fixity/check', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleFixityCheck'],
+        ]);
+        register_rest_route($ns, $p . '/audit/verify', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleAuditVerify'],
+        ]);
+        register_rest_route($ns, $p . '/audit/purge', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleAuditPurge'],
+        ]);
 
         // Legal hold (paid module) — place/release/list are gated; status is
         // free/core visibility. Enforcement lives inside FileManager (core).
-        register_rest_route($ns, $p . '/hold/status', array_merge($readArgs, [
-            'callback' => [$api, 'handleHoldStatus'],
-        ]));
-        register_rest_route($ns, $p . '/hold', array_merge($writeArgs, [
-            'callback' => [$api, 'handleHold'],
-        ]));
-        register_rest_route($ns, $p . '/hold/release', array_merge($writeArgs, [
-            'callback' => [$api, 'handleHoldRelease'],
-        ]));
-        register_rest_route($ns, $p . '/hold/list', array_merge($readArgs, [
-            'callback' => [$api, 'handleHoldList'],
-        ]));
+        register_rest_route($ns, $p . '/hold/status', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleHoldStatus'],
+        ]);
+        register_rest_route($ns, $p . '/hold', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleHold'],
+        ]);
+        register_rest_route($ns, $p . '/hold/release', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleHoldRelease'],
+        ]);
+        register_rest_route($ns, $p . '/hold/list', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleHoldList'],
+        ]);
 
         // Webhooks (paid module) — send a test ping to the configured endpoint
-        register_rest_route($ns, $p . '/webhooks/test', array_merge($writeArgs, [
-            'callback' => [$api, 'handleWebhooksTest'],
-        ]));
+        register_rest_route($ns, $p . '/webhooks/test', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleWebhooksTest'],
+        ]);
 
         // E-mail notices (Intake/Share modules) — test the transport, run the sweep, mute one record
-        register_rest_route($ns, $p . '/notify/test', array_merge($writeArgs, [
-            'callback' => [$api, 'handleNotifyTest'],
-        ]));
-        register_rest_route($ns, $p . '/notify/run', array_merge($writeArgs, [
-            'callback' => [$api, 'handleNotifyRun'],
-        ]));
-        register_rest_route($ns, $p . '/notify/mute', array_merge($writeArgs, [
-            'callback' => [$api, 'handleNotifyMute'],
-        ]));
+        register_rest_route($ns, $p . '/notify/test', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleNotifyTest'],
+        ]);
+        register_rest_route($ns, $p . '/notify/run', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleNotifyRun'],
+        ]);
+        register_rest_route($ns, $p . '/notify/mute', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleNotifyMute'],
+        ]);
 
         // File versioning (paid module) — list prior versions of a file / restore one
-        register_rest_route($ns, $p . '/versions', array_merge($readArgs, [
-            'callback' => [$api, 'handleVersions'],
-        ]));
-        register_rest_route($ns, $p . '/versions/restore', array_merge($writeArgs, [
-            'callback' => [$api, 'handleVersionsRestore'],
-        ]));
+        register_rest_route($ns, $p . '/versions', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleVersions'],
+        ]);
+        register_rest_route($ns, $p . '/versions/restore', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleVersionsRestore'],
+        ]);
 
         // AI Vision / OCR / Backup Bridge / C2PA (paid modules)
-        register_rest_route($ns, $p . '/ai-vision', array_merge($writeArgs, [
-            'callback' => [$api, 'handleAiVision'],
-        ]));
-        register_rest_route($ns, $p . '/virus/scan', array_merge($writeArgs, [
-            'callback' => [$api, 'handleVirusScan'],
-        ]));
-        register_rest_route($ns, $p . '/ocr', array_merge($writeArgs, [
-            'callback' => [$api, 'handleOcr'],
-        ]));
-        register_rest_route($ns, $p . '/backup', array_merge($writeArgs, [
-            'callback' => [$api, 'handleBackup'],
-        ]));
-        register_rest_route($ns, $p . '/c2pa', array_merge($writeArgs, [
-            'callback' => [$api, 'handleC2pa'],
-        ]));
-        register_rest_route($ns, $p . '/c2pa/sign', array_merge($writeArgs, [
-            'callback' => [$api, 'handleC2paSign'],
-        ]));
+        register_rest_route($ns, $p . '/ai-vision', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleAiVision'],
+        ]);
+        register_rest_route($ns, $p . '/virus/scan', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleVirusScan'],
+        ]);
+        register_rest_route($ns, $p . '/ocr', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleOcr'],
+        ]);
+        register_rest_route($ns, $p . '/backup', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleBackup'],
+        ]);
+        register_rest_route($ns, $p . '/c2pa', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleC2pa'],
+        ]);
+        register_rest_route($ns, $p . '/c2pa/sign', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleC2paSign'],
+        ]);
 
         // ── Share + Intake ──────────────────────────────────────────────────
         // Operator side: create/list/revoke, behind the normal JWT + the paid-module
         // gate. The public recipient routes are registered separately below and are
         // deliberately NOT behind checkAuth.
-        register_rest_route($ns, $p . '/share', array_merge($writeArgs, [
-            'callback' => [$api, 'handleShareCreate'],
-        ]));
-        register_rest_route($ns, $p . '/share/list', array_merge($readArgs, [
-            'callback' => [$api, 'handleShareList'],
-        ]));
-        register_rest_route($ns, $p . '/share/revoke', array_merge($writeArgs, [
-            'callback' => [$api, 'handleShareRevoke'],
-        ]));
-        register_rest_route($ns, $p . '/share/analytics', array_merge($readArgs, [
-            'callback' => [$api, 'handleShareAnalytics'],
-        ]));
-        register_rest_route($ns, $p . '/intake', array_merge($writeArgs, [
-            'callback' => [$api, 'handleIntakeCreate'],
-        ]));
-        register_rest_route($ns, $p . '/intake/list', array_merge($readArgs, [
-            'callback' => [$api, 'handleIntakeList'],
-        ]));
-        register_rest_route($ns, $p . '/intake/revoke', array_merge($writeArgs, [
-            'callback' => [$api, 'handleIntakeRevoke'],
-        ]));
-        register_rest_route($ns, $p . '/intake/analytics', array_merge($readArgs, [
-            'callback' => [$api, 'handleIntakeAnalytics'],
-        ]));
+        register_rest_route($ns, $p . '/share', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleShareCreate'],
+        ]);
+        register_rest_route($ns, $p . '/share/list', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleShareList'],
+        ]);
+        register_rest_route($ns, $p . '/share/revoke', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleShareRevoke'],
+        ]);
+        register_rest_route($ns, $p . '/share/analytics', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleShareAnalytics'],
+        ]);
+        register_rest_route($ns, $p . '/intake', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleIntakeCreate'],
+        ]);
+        register_rest_route($ns, $p . '/intake/list', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleIntakeList'],
+        ]);
+        register_rest_route($ns, $p . '/intake/revoke', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleIntakeRevoke'],
+        ]);
+        register_rest_route($ns, $p . '/intake/analytics', [
+            'methods'             => 'GET',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleIntakeAnalytics'],
+        ]);
 
         // ── PUBLIC recipient routes ─────────────────────────────────────────
         //
@@ -462,39 +580,65 @@ class FluxFilesApi
         // What that means in practice: an unauthenticated caller reaches core code, so
         // the gate is the token, not this callback. Do not "tighten" this to checkAuth
         // — that would make every share link 401 for the people it is for.
-        $public = ['permission_callback' => '__return_true'];
-        register_rest_route($ns, $p . '/share/info', array_merge($public, [
-            'methods' => 'GET', 'callback' => [$api, 'handleSharePublicRoute'],
-        ]));
-        register_rest_route($ns, $p . '/share/unlock', array_merge($public, [
-            'methods' => 'POST', 'callback' => [$api, 'handleSharePublicRoute'],
-        ]));
-        register_rest_route($ns, $p . '/share/file', array_merge($public, [
-            'methods' => 'GET', 'callback' => [$api, 'handleSharePublicRoute'],
-        ]));
-        register_rest_route($ns, $p . '/share/page', array_merge($public, [
-            'methods' => 'GET', 'callback' => [$api, 'handleSharePublicRoute'],
-        ]));
-        register_rest_route($ns, $p . '/intake/info', array_merge($public, [
-            'methods' => 'GET', 'callback' => [$api, 'handleIntakePublicRoute'],
-        ]));
-        register_rest_route($ns, $p . '/intake/upload', array_merge($public, [
-            'methods' => 'POST', 'callback' => [$api, 'handleIntakePublicRoute'],
-        ]));
-        register_rest_route($ns, $p . '/intake/page', array_merge($public, [
-            'methods' => 'GET', 'callback' => [$api, 'handleIntakePublicRoute'],
-        ]));
+        register_rest_route($ns, $p . '/share/info', [
+            'methods'             => 'GET',
+            // public: a share recipient has no WordPress account; authenticated by the share token inside the shared core handler
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'handleSharePublicRoute'],
+        ]);
+        register_rest_route($ns, $p . '/share/unlock', [
+            'methods'             => 'POST',
+            // public: a share recipient has no WordPress account; authenticated by the share token inside the shared core handler
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'handleSharePublicRoute'],
+        ]);
+        register_rest_route($ns, $p . '/share/file', [
+            'methods'             => 'GET',
+            // public: a share recipient has no WordPress account; authenticated by the share token inside the shared core handler
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'handleSharePublicRoute'],
+        ]);
+        register_rest_route($ns, $p . '/share/page', [
+            'methods'             => 'GET',
+            // public: a share recipient has no WordPress account; authenticated by the share token inside the shared core handler
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'handleSharePublicRoute'],
+        ]);
+        register_rest_route($ns, $p . '/intake/info', [
+            'methods'             => 'GET',
+            // public: an intake uploader has no WordPress account; authenticated by the intake token inside the shared core handler
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'handleIntakePublicRoute'],
+        ]);
+        register_rest_route($ns, $p . '/intake/upload', [
+            'methods'             => 'POST',
+            // public: an intake uploader has no WordPress account; authenticated by the intake token inside the shared core handler
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'handleIntakePublicRoute'],
+        ]);
+        register_rest_route($ns, $p . '/intake/page', [
+            'methods'             => 'GET',
+            // public: an intake uploader has no WordPress account; authenticated by the intake token inside the shared core handler
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'handleIntakePublicRoute'],
+        ]);
 
         // Gated media stream/img — reached with a per-file signed token in the
         // query string (an <img>/<video> element can't send an Authorization
         // header), same public posture as the share/intake routes above. See
         // FluxFilesApi::handleStream()/handleImg() (core's shared MediaEndpoint).
-        register_rest_route($ns, $p . '/stream', array_merge($public, [
-            'methods' => 'GET', 'callback' => [$api, 'handleStream'],
-        ]));
-        register_rest_route($ns, $p . '/img', array_merge($public, [
-            'methods' => 'GET', 'callback' => [$api, 'handleImg'],
-        ]));
+        register_rest_route($ns, $p . '/stream', [
+            'methods'             => 'GET',
+            // public: an <img>/<video> element cannot send Authorization; gated by a per-file signed token (short TTL)
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'handleStream'],
+        ]);
+        register_rest_route($ns, $p . '/img', [
+            'methods'             => 'GET',
+            // public: an <img>/<video> element cannot send Authorization; gated by a per-file signed token (short TTL)
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'handleImg'],
+        ]);
 
         // Token refresh — mints a fresh JWT for the logged-in WP user (cookie +
         // REST nonce auth, NOT the JWT). The embedded UI's onTokenRefresh hook
@@ -518,42 +662,60 @@ class FluxFilesApi
         ]);
 
         // Chunk upload
-        register_rest_route($ns, $p . '/chunk/init', array_merge($writeArgs, [
-            'callback' => [$api, 'handleChunkInit'],
-        ]));
-        register_rest_route($ns, $p . '/chunk/presign', array_merge($writeArgs, [
-            'callback' => [$api, 'handleChunkPresign'],
-        ]));
-        register_rest_route($ns, $p . '/chunk/complete', array_merge($writeArgs, [
-            'callback' => [$api, 'handleChunkComplete'],
-        ]));
-        register_rest_route($ns, $p . '/chunk/abort', array_merge($writeArgs, [
-            'callback' => [$api, 'handleChunkAbort'],
-        ]));
+        register_rest_route($ns, $p . '/chunk/init', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleChunkInit'],
+        ]);
+        register_rest_route($ns, $p . '/chunk/presign', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleChunkPresign'],
+        ]);
+        register_rest_route($ns, $p . '/chunk/complete', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleChunkComplete'],
+        ]);
+        register_rest_route($ns, $p . '/chunk/abort', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleChunkAbort'],
+        ]);
 
         // ---------------------------------------------------------------------
         // UI / asset / locale proxy — public routes so the iframe can load HTML
         // and assets without going through the WP login flow. Auth still applies
         // to every /api/fm/ data route above.
         // ---------------------------------------------------------------------
-        $publicArgs = ['methods' => 'GET', 'permission_callback' => '__return_true'];
-
-        register_rest_route($ns, '/public/index.html', array_merge($publicArgs, [
-            'callback' => [$api, 'serveUiHtml'],
-        ]));
+        register_rest_route($ns, '/public/index.html', [
+            'methods'             => 'GET',
+            // public: the iframe document is fetched without a WP login; it carries no data, every /api/fm data route is authenticated
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'serveUiHtml'],
+        ]);
         // fm.js/fm.css plus the vendored lazy-loaded libraries under
         // assets/vendor/ (Alpine) — fm.js derives its base from its
         // own <script src>, which is this route. No '..' can match, and
         // serveUiAsset() re-checks containment with realpath().
-        register_rest_route($ns, '/assets/(?P<file>fm\.(?:min\.)?(?:js|css)|codemirror-theme-material-darker\.css|THIRD-PARTY-NOTICES\.txt|vendor/[A-Za-z0-9._/-]+\.(?:js|css))', array_merge($publicArgs, [
-            'callback' => [$api, 'serveUiAsset'],
-        ]));
-        register_rest_route($ns, $p . '/lang', array_merge($publicArgs, [
-            'callback' => [$api, 'serveLangList'],
-        ]));
-        register_rest_route($ns, $p . '/lang/(?P<locale>[a-z]{2,5})', array_merge($publicArgs, [
-            'callback' => [$api, 'serveLangMessages'],
-        ]));
+        register_rest_route($ns, '/assets/(?P<file>fm\.(?:min\.)?(?:js|css)|codemirror-theme-material-darker\.css|THIRD-PARTY-NOTICES\.txt|vendor/[A-Za-z0-9._/-]+\.(?:js|css))', [
+            'methods'             => 'GET',
+            // public: static UI assets (fixed allow-listed filenames), no data
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'serveUiAsset'],
+        ]);
+        register_rest_route($ns, $p . '/lang', [
+            'methods'             => 'GET',
+            // public: UI translation list, no data
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'serveLangList'],
+        ]);
+        register_rest_route($ns, $p . '/lang/(?P<locale>[a-z]{2,5})', [
+            'methods'             => 'GET',
+            // public: UI translation messages, no data
+            'permission_callback' => '__return_true',
+            'callback'            => [$api, 'serveLangMessages'],
+        ]);
 
         // Extension point: add routes under the same namespace (e.g. the FluxFiles Pro plugin).
         do_action('fluxfiles_rest_routes', $ns, $api);
@@ -3485,11 +3647,14 @@ class FluxFilesApi
     // -------------------------------------------------------------------------
 
     /** First line of the built UI template (build-wordpress.sh): exits when hit directly over HTTP. */
-    private const UI_TEMPLATE_GUARD = "<?php defined('ABSPATH') || exit; // phpcs:disable WordPress.WP.EnqueuedResources -- standalone iframe document served by the REST route (own CSP), not a WordPress page ?>\n";
+    private const UI_TEMPLATE_GUARD = "<?php defined('ABSPATH') || exit; ?>\n";
 
     /**
-     * The bundled UI page. A release build ships it as templates/ui-index.php (guarded, so a
-     * direct request prints nothing); a source tree falls back to core's public/index.html.
+     * The bundled UI page, rendered. A release build ships it as templates/ui-index.php
+     * (guarded, so a direct request prints nothing) and it is INCLUDED: build-wordpress.sh
+     * turns its script/stylesheet tags into wp_print_styles()/wp_print_scripts() calls for
+     * the handles registerUiAssets() registered. A source tree falls back to core's
+     * public/index.html with the same tags converted here.
      */
     private static function uiPageHtml(): ?string
     {
@@ -3499,11 +3664,51 @@ class FluxFilesApi
             if ($raw === false || strncmp($raw, self::UI_TEMPLATE_GUARD, strlen(self::UI_TEMPLATE_GUARD)) !== 0) {
                 return null;
             }
-            return substr($raw, strlen(self::UI_TEMPLATE_GUARD));
+            ob_start();
+            include $tpl;
+            return (string) ob_get_clean();
         }
         $publicDir = FluxFilesPlugin::corePath('public');
         $html = $publicDir === null ? false : @file_get_contents($publicDir . '/index.html');
-        return $html === false ? null : $html;
+        if ($html === false) {
+            return null;
+        }
+        $capture = static function (callable $print): string {
+            ob_start();
+            $print();
+            return (string) ob_get_clean();
+        };
+        // Same conversion as scripts/build-wordpress.sh applies to the template.
+        $html = (string) preg_replace_callback('#[ \t]*<script>(.*?)</script>\n?#s', static function (array $m) use ($capture): string {
+            // The default locale line: the real one is the `before` data of the fm.js handle.
+            return strpos($m[1], 'window.__FM_LOCALE__ = window.__FM_LOCALE__') !== false
+                ? ''
+                : $capture(static fn() => wp_print_inline_script_tag($m[1]));
+        }, $html);
+        $html = (string) preg_replace_callback('#[ \t]*<link rel="stylesheet" href="\.\./assets/fm\.css">\n?#', static function () use ($capture): string {
+            return $capture(static fn() => wp_print_styles('fluxfiles-ui'));
+        }, $html);
+        $html = (string) preg_replace('#[ \t]*<script defer src="\.\./assets/vendor/alpine/alpine\.min\.js"></script>\n?#', '', $html);
+        return (string) preg_replace_callback('#[ \t]*<script defer src="\.\./assets/fm\.js"></script>\n?#', static function () use ($capture): string {
+            return $capture(static fn() => wp_print_scripts(['fluxfiles-ui-fm', 'fluxfiles-ui-alpine']));
+        }, $html);
+    }
+
+    /**
+     * Register the UI's own styles/scripts (printed by the page, never enqueued on a WP
+     * screen: the page is a standalone iframe document). fm.js defines fluxFilesApp()
+     * before Alpine starts, so Alpine depends on it and both are `defer`, which keeps
+     * document order. The locale payload is the `before` data of fm.js.
+     */
+    private static function registerUiAssets(string $assetsBase, string $sep, callable $hash, string $jsFile, string $cssFile, string $localeJs): void
+    {
+        $alpine = 'vendor/alpine/alpine.min.js';
+        // `?v=<content hash>` is read back by serveUiAsset() (immutable caching), so the
+        // handles carry it in the src and no WordPress `ver` is appended (null).
+        wp_register_style('fluxfiles-ui', $assetsBase . '/' . $cssFile . $sep . 'v=' . $hash($cssFile), [], null);
+        wp_register_script('fluxfiles-ui-fm', $assetsBase . '/' . $jsFile . $sep . 'v=' . $hash($jsFile), [], null, ['strategy' => 'defer']);
+        wp_add_inline_script('fluxfiles-ui-fm', $localeJs, 'before');
+        wp_register_script('fluxfiles-ui-alpine', $assetsBase . '/' . $alpine . $sep . 'v=' . $hash($alpine), ['fluxfiles-ui-fm'], null, ['strategy' => 'defer']);
     }
 
     public function serveUiHtml(\WP_REST_Request $request)
@@ -3512,33 +3717,16 @@ class FluxFilesApi
         if ($langDir === null) {
             return $this->error('UI assets not bundled with this plugin install', 500);
         }
-        $html = self::uiPageHtml();
-        if ($html === null) {
-            return $this->error('UI page not found', 500);
-        }
-
         $i18n = new \FluxFiles\I18n($langDir, $request->get_param('lang') ?: null);
         $locale = $i18n->locale();
         $dir = $i18n->direction();
-        $injection = 'window.__FM_LOCALE__ = { locale: ' . json_encode($locale)
+        $localeJs = 'window.__FM_LOCALE__ = { locale: ' . json_encode($locale)
             . ', dir: ' . json_encode($dir)
             . ', messages: ' . $i18n->toJson() . ' };';
-        $html = str_replace(
-            "window.__FM_LOCALE__ = window.__FM_LOCALE__ || { locale: 'en', dir: 'ltr', messages: {} };",
-            $injection,
-            $html
-        );
-        $html = str_replace(
-            '<html lang="en">',
-            '<html lang="' . esc_attr($locale) . '" dir="' . esc_attr($dir) . '">',
-            $html
-        );
 
-        // The HTML uses `../assets/fm.css` and `../assets/fm.js`, which work when
-        // served from /public/index.html on a real path but break under WP's
-        // ?rest_route=… query form (browser strips the query, ../ goes to /assets/
-        // at site root). Rewrite to absolute URLs against our /assets/ route and
-        // append a content-hash version so browsers pick up new builds.
+        // The page's own asset URLs are absolute against our /assets/ route (a relative
+        // `../assets/` breaks under WP's ?rest_route=… query form), each with a
+        // content-hash version so browsers pick up new builds.
         $assetsBase = rest_url('fluxfiles/v1/assets');
         $assetsDir  = FluxFilesPlugin::corePath('assets') ?: '';
         $dbg = getenv('FLUXFILES_DEBUG');
@@ -3553,14 +3741,18 @@ class FluxFilesApi
         $hash = static function (string $file) use ($assetsDir): string {
             return $assetsDir && is_file("$assetsDir/$file") ? substr(md5_file("$assetsDir/$file"), 0, 8) : 'x';
         };
-        $jsFile  = $pick('fm.js');
-        $cssFile = $pick('fm.css');
-        $jsSep  = strpos($assetsBase, '?') !== false ? '&' : '?';
-        $html = str_replace('"../assets/fm.css"', '"' . esc_url($assetsBase . '/' . $cssFile) . $jsSep . 'v=' . $hash($cssFile) . '"', $html);
-        $html = str_replace('"../assets/fm.js"',  '"' . esc_url($assetsBase . '/' . $jsFile)  . $jsSep . 'v=' . $hash($jsFile)  . '"', $html);
-        // Vendored Alpine (the page must not load it from a CDN: it runs in the JWT's origin).
-        $alpine = 'vendor/alpine/alpine.min.js';
-        $html = str_replace('"../assets/' . $alpine . '"', '"' . esc_url($assetsBase . '/' . $alpine) . $jsSep . 'v=' . $hash($alpine) . '"', $html);
+        $jsSep = strpos($assetsBase, '?') !== false ? '&' : '?';
+        self::registerUiAssets($assetsBase, $jsSep, $hash, $pick('fm.js'), $pick('fm.css'), $localeJs);
+
+        $html = self::uiPageHtml();
+        if ($html === null) {
+            return $this->error('UI page not found', 500);
+        }
+        $html = str_replace(
+            '<html lang="en">',
+            '<html lang="' . esc_attr($locale) . '" dir="' . esc_attr($dir) . '">',
+            $html
+        );
 
         $html = str_replace('</head>', self::codeMirrorMeta($assetsBase, $jsSep, $hash) . "\n</head>", $html);
 

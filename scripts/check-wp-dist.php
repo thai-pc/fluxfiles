@@ -134,6 +134,37 @@ foreach ($files as $rel => $_) {
     }
 }
 
+// ---- permitted file types --------------------------------------------------
+// WordPress.org's "Not permitted files" check (aws-crt-php/format-check.py,
+// zipstream-php/results.sarif in 1.3.0). An allow-list over the WHOLE zip, so a vendor bump
+// that ships a new helper/CI/report file fails here instead of in review. Keep it in step
+// with the `find ... -delete` allow-list in scripts/build-wordpress.sh.
+$allowedExt = ['php', 'js', 'css', 'json', 'xml', 'txt', 'md', 'png', 'svg', 'jpg', 'jpeg', 'gif', 'webp',
+    'ttf', 'woff', 'woff2', 'cnf', 'lock'];
+$allowedNames = '#^(LICENSE|COPYING|NOTICE|AUTHORS|VERSION|THIRD-PARTY-LICENSES)([-_.][A-Za-z0-9._-]*)?$#';
+foreach ($files as $rel => $_) {
+    $name = basename($rel);
+    $ext = strtolower((string) pathinfo($name, PATHINFO_EXTENSION));
+    if ($ext !== '' && in_array($ext, $allowedExt, true)) {
+        continue;
+    }
+    if (preg_match($allowedNames, $name) === 1) {
+        continue;
+    }
+    $fail("file type not permitted by WordPress.org: $rel");
+}
+
+// ---- UI template: no literal script/stylesheet tags ---------------------------
+// Plugin Check ("Use wp_enqueue commands"): templates/ui-index.php prints registered
+// handles; a literal tag outside the inline heredoc would be flagged again.
+if (isset($files['templates/ui-index.php'])) {
+    $tpl = (string) file_get_contents($files['templates/ui-index.php']);
+    $tpl = (string) preg_replace("#<<<'FLUXFILES_JS'.*?\nFLUXFILES_JS#s", '', $tpl);
+    if (preg_match('#<script|<style|<link[^>]*rel\s*=\s*["\']?stylesheet#i', $tpl) === 1) {
+        $fail('templates/ui-index.php contains a literal <script>/<style>/<link rel="stylesheet"> (use wp_print_scripts/wp_print_styles)');
+    }
+}
+
 // ---- content scans (outside vendor/) ---------------------------------------
 $binary = '#\.(ttf|otf|woff2?|png|jpe?g|gif|webp|ico|mo|zip|gz)$#i';
 $strings = [

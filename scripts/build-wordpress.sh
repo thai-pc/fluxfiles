@@ -103,13 +103,36 @@ rm -f "$PLUGIN_DIR/api/CurlTransport.php" "$PLUGIN_DIR/api/CurlUrlFetcher.php"
 # frame protection; it must never be openable directly under wp-content/plugins/. No
 # .htaccess can ship (WordPress.org rejects hidden files) and nginx ignores it anyway,
 # so the page is converted into a PHP template that exits unless WordPress loaded it
-# (FluxFilesApi::serveUiHtml strips the guard line and serves the rest), and no
+# (FluxFilesApi::uiPageHtml includes it), and no
 # .html file stays under public/. index.php answers a request for the directory itself.
+# WordPress.org's scanner wants enqueue calls, not literal <script>/<link rel=stylesheet>
+# tags, so the template prints the UI's handles instead (registered by
+# FluxFilesApi::registerUiAssets(); uiPageHtml() INCLUDES the template). The inline
+# theme snippet becomes wp_print_inline_script_tag(); the default-locale line is
+# dropped (the real one is the `before` data of the fm.js handle). The build fails
+# when a literal tag survives, so a new tag in core's page cannot slip through.
 python3 - "$PLUGIN_DIR/public/index.html" "$PLUGIN_DIR/templates/ui-index.php" <<'PY'
-import sys
-# Binary in and out: no newline translation or re-encoding, the page stays byte-identical.
-html = open(sys.argv[1], 'rb').read()
-open(sys.argv[2], 'wb').write(b"<?php defined('ABSPATH') || exit; // phpcs:disable WordPress.WP.EnqueuedResources -- standalone iframe document served by the REST route (own CSP), not a WordPress page ?>\n" + html)
+import re, sys
+html = open(sys.argv[1], 'rb').read().decode('utf-8')
+if '<?' in html:
+    sys.exit('core public/index.html contains "<?": it cannot become a PHP template')
+
+def inline(m):
+    body = m.group(1)
+    if 'window.__FM_LOCALE__ = window.__FM_LOCALE__' in body:
+        return ''
+    if 'FLUXFILES_JS' in body:
+        sys.exit('inline script contains the heredoc marker')
+    return "<?php wp_print_inline_script_tag( <<<'FLUXFILES_JS'\n" + body.strip() + "\nFLUXFILES_JS\n); ?>\n"
+
+html = re.sub(r'[ \t]*<script>(.*?)</script>\n?', inline, html, flags=re.S)
+html, n_css = re.subn(r'[ \t]*<link rel="stylesheet" href="\.\./assets/fm\.css">\n?', "<?php wp_print_styles( 'fluxfiles-ui' ); ?>\n", html)
+html, n_alp = re.subn(r'[ \t]*<script defer src="\.\./assets/vendor/alpine/alpine\.min\.js"></script>\n?', '', html)
+html, n_js = re.subn(r'[ \t]*<script defer src="\.\./assets/fm\.js"></script>\n?', "<?php wp_print_scripts( array( 'fluxfiles-ui-fm', 'fluxfiles-ui-alpine' ) ); ?>\n", html)
+rest = re.sub(r"<<<'FLUXFILES_JS'.*?\nFLUXFILES_JS", '', html, flags=re.S)
+if (n_css, n_alp, n_js) != (1, 1, 1) or re.search(r'<script|<link[^>]*stylesheet', rest):
+    sys.exit('core public/index.html changed shape: update the UI template conversion in build-wordpress.sh')
+open(sys.argv[2], 'wb').write(b"<?php defined('ABSPATH') || exit; ?>\n" + html.encode('utf-8'))
 PY
 rm -f "$PLUGIN_DIR"/public/*.html
 cat > "$PLUGIN_DIR/public/index.php" <<'PHP'
@@ -255,6 +278,17 @@ find "$PLUGIN_DIR/vendor" -type d -name bin -prune -exec rm -rf {} + 2>/dev/null
 find "$PLUGIN_DIR/vendor" -type f \( -name "*.sh" -o -name "*.phar" -o -name "*.exe" -o -name "*.bat" \) -delete 2>/dev/null || true
 rm -rf "$PLUGIN_DIR/vendor/paragonie/random_compat/other"
 rm -f  "$PLUGIN_DIR/vendor/paragonie/random_compat/psalm-autoload.php"
+# WordPress.org also rejects "not permitted files" by extension (aws-crt-php's
+# format-check.py, zipstream-php's results.sarif, paragonie's .pubkey/.asc, doc .rst ...).
+# Keep only what a PHP library legitimately ships and the plugin may run or must carry
+# (code, data, images/fonts, licence/notice files); scripts/check-wp-dist.php enforces the
+# same allow-list over the whole zip, so keep the two lists in step.
+find "$PLUGIN_DIR/vendor" -type f \
+    ! \( -iname "*.php" -o -iname "*.js" -o -iname "*.css" -o -iname "*.json" -o -iname "*.xml" -o -iname "*.txt" \
+       -o -iname "*.md" -o -iname "*.png" -o -iname "*.svg" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.gif" \
+       -o -iname "*.webp" -o -iname "*.ttf" -o -iname "*.woff" -o -iname "*.woff2" -o -iname "*.cnf" -o -iname "*.lock" \
+       -o -name "LICENSE*" -o -name "COPYING*" -o -name "NOTICE*" -o -name "AUTHORS*" -o -name "VERSION" \
+       -o -name "THIRD-PARTY-LICENSES*" \) -delete
 # Any leftover dot-file or dot-directory (.travis.yml, .gitkeep, .github, ...).
 find "$PLUGIN_DIR" -mindepth 1 -name ".*" -prune -exec rm -rf {} + 2>/dev/null || true
 

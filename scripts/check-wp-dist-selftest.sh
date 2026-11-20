@@ -65,6 +65,11 @@ plant vendor-bin       vendor/foo/bin/tool 'x'
 plant vendor-phar      vendor/foo/tool.phar 'x'
 plant root-markdown    CHANGES.md '# x'
 plant public-link      public-link.php '<?php'
+plant vendor-py        vendor/aws/aws-crt-php/format-check.py 'x'
+plant vendor-sarif     vendor/maennchen/zipstream-php/results.sarif '{}'
+plant vendor-rst       vendor/foo/guides/Index.rst 'x'
+plant ui-literal-script templates/ui-index.php '<script>alert(1)</script>'
+plant ui-literal-style  templates/ui-index.php '<link rel="stylesheet" href="x.css">'
 
 # Strip the ABSPATH guard line from the UI template: the page would become directly openable.
 dir="$WORK/strip-guard"; mkdir -p "$dir"
