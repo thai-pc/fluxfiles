@@ -288,3 +288,26 @@ describe('TinyMCE FluxFiles plugin', () => {
     expect(settings.file_picker_callback).toBe(hostCb);   // unchanged
   });
 });
+
+describe('TinyMCE 7 and 8 use the ui.registry API', () => {
+  for (const major of ['7', '8']) {
+    it(`registers the button and menu item on TinyMCE ${major}`, () => {
+      globalThis.FluxFiles = { open: vi.fn() };
+      globalThis.tinymce = { majorVersion: major, PluginManager: { add: (_n, cb) => { globalThis.__tmceCb = cb; } } };
+      (0, eval)(pluginCode);
+      const addButton = vi.fn(), addMenuItem = vi.fn(), addIcon = vi.fn(), legacy = vi.fn();
+      const editor = {
+        settings: {},
+        getParam: (k, d) => ({ fluxfiles_endpoint: 'http://localhost', fluxfiles_token: 'JWT' }[k] ?? d),
+        ui: { registry: { addIcon, addButton, addMenuItem } },
+        addButton: legacy,
+        insertContent: vi.fn(),
+      };
+      globalThis.__tmceCb(editor);
+      expect(addIcon).toHaveBeenCalledWith('fluxfiles', expect.any(String));
+      expect(addButton).toHaveBeenCalledWith('fluxfiles', expect.objectContaining({ tooltip: 'FluxFiles' }));
+      expect(addMenuItem).toHaveBeenCalledWith('fluxfiles', expect.objectContaining({ text: 'FluxFiles' }));
+      expect(legacy).not.toHaveBeenCalled();
+    });
+  }
+});

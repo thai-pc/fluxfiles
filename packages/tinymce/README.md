@@ -1,11 +1,11 @@
 # FluxFiles — TinyMCE Plugin
 
-Adds a **FluxFiles** toolbar button to TinyMCE 4.x / 5.x for browsing and inserting files.
+Adds a **FluxFiles** toolbar button to TinyMCE 4 to 8 for browsing and inserting files.
 
 ## Requirements
 
-- TinyMCE 4.x or 5.x
-- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This plugin is only the editor button — it loads the FluxFiles SDK (`fluxfiles.js`) from that server and `fluxfiles_endpoint` must point at it.
+- TinyMCE 4, 5, 6, 7 or 8. Self-hosted TinyMCE 7 and later also needs `license_key: 'gpl'` (or your commercial key) in `tinymce.init`; that is a TinyMCE requirement, not a FluxFiles one.
+- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This plugin is only the editor button: your page must load the FluxFiles SDK (`fluxfiles.js`, served by that server at `/fluxfiles.js`) before TinyMCE initialises, and `fluxfiles_endpoint` must point at that server.
 
 ## Installation
 
@@ -91,9 +91,11 @@ Only `http(s)` URLs are ever inserted.
 
 ## Compatibility
 
-- **TinyMCE 4.x** — Uses `addButton` / `addMenuItem` API
-- **TinyMCE 5.x** — Uses `ui.registry.addButton` / `ui.registry.addMenuItem` API
-- Auto-detects version at load time.
+- **TinyMCE 4** — uses the `addButton` / `addMenuItem` API.
+- **TinyMCE 5, 6, 7, 8** — use the `ui.registry.addButton` / `ui.registry.addMenuItem` API.
+- The version is detected when the plugin loads.
+
+Checked in a real browser on 2026-11-20 against FluxFiles core 1.6.3 with TinyMCE 6.8.6, 7.9.3 and 8.10.2: the toolbar button opens the picker and inserts the image with `alt`, `width` and `height`, and the browse icon in TinyMCE's own *Insert/edit image* dialog fills Source, Alt, Width and Height.
 
 ## License
 

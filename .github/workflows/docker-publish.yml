@@ -54,7 +54,7 @@ jobs:
         run: |
           docker run -d --name ff-smoke -p 8080:80 -e FLUXFILES_SECRET="$(openssl rand -hex 32)" fluxfiles:smoke
           for _ in $(seq 1 30); do curl -fs -o /dev/null http://localhost:8080/public/index.html && break; sleep 1; done
-          for u in /public/index.html /assets/fm.js /assets/vendor/alpine/alpine.min.js; do
+          for u in /public/index.html /assets/fm.js /assets/vendor/alpine/alpine.min.js /fluxfiles.js /fluxfiles.min.js; do
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8080$u")
             echo "$u -> $code"; [ "$code" = 200 ] || { docker logs ff-smoke; exit 1; }
           done

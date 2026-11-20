@@ -5,6 +5,12 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- Docker: the image did not contain the browser SDK, so `/fluxfiles.js` returned 404 and every embed that loads the SDK from the FluxFiles server (JS SDK, TinyMCE, CKEditor, Summernote) failed. `Dockerfile.prod` copies `packages/sdk/fluxfiles.js` and `fluxfiles.min.js` into the core root, nginx serves `/fluxfiles.min.js` like `/fluxfiles.js`, and the pre-push smoke test now checks both.
+
+### Docs
+- `@fluxfiles/tinymce`: README says TinyMCE 4 to 8 (it said 4.x/5.x), notes that self-hosted TinyMCE 7+ needs `license_key`, and corrects the claim that the plugin loads the SDK itself (the page must load `fluxfiles.js`). Checked in a browser against core 1.6.3 with TinyMCE 6.8.6, 7.9.3 and 8.10.2 (toolbar button and the native image dialog's browse icon). Unit tests cover the `ui.registry` path on majors 7 and 8.
+
 ## [1.0.47] — 2026-11-20
 
 > Released: `core-v1.6.3`: the Docker image ships the UI's bundled scripts again (the page was blank) and is smoke-tested before every push; README demo GIF and a 30-second try.
