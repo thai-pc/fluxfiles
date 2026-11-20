@@ -264,7 +264,7 @@ $h->test(
             Harness::ok(str_contains($browser, $name));
         }
         $workflow = file_get_contents(dirname(__DIR__, 3) . '/.github/workflows/license-admin.yml');
-        Harness::ok(str_contains($workflow, 'playwright@1.60.0'));
+        Harness::ok(str_contains($workflow, 'playwright@1.65.1'));
         Harness::ok(str_contains($workflow, 'browser-admin.cjs'));
         Harness::ok(str_contains($workflow, 'collector-root-smoke.php'));
     },
