@@ -29,6 +29,7 @@
     }
 
     function handleMessage(e) {
+        if (!iframe || !iframe.contentWindow || e.source !== iframe.contentWindow) return;
         if (iframeOrigin && e.origin !== iframeOrigin) return;
         var msg = e.data;
         if (!msg || msg.source !== SOURCE) return;
@@ -44,7 +45,12 @@
                     mode: config.mode || 'picker',
                     multiple: !!config.multiple,
                     allowedTypes: config.allowedTypes || null,
-                    maxSize: config.maxSize || null,
+                    // Canonical upload-size limit is megabytes. `maxSize` (bytes)
+                    // is the deprecated alias — used only when maxUploadMb is absent.
+                    maxUploadMb: (typeof config.maxUploadMb === 'number')
+                        ? config.maxUploadMb
+                        : (typeof config.maxSize === 'number' ? Math.round(config.maxSize / (1024 * 1024)) : null),
+                    maxFiles: (typeof config.maxFiles === 'number') ? config.maxFiles : null,
                     endpoint: config.endpoint || '',
                     locale: config.locale || null,
                     theme: config.theme || null
@@ -57,7 +63,9 @@
                     config.onSelect(msg.payload);
                 }
                 emit('FM_SELECT', msg.payload);
-                FluxFiles.close();
+                // Only the modal overlay closes on select; an embedded (container)
+                // manager stays on the page and keeps listening (issue #309).
+                if (!config.container) FluxFiles.close();
                 break;
 
             case 'FM_TOKEN_REFRESH':
@@ -95,6 +103,14 @@
                 emit('FM_EVENT', msg.payload);
                 break;
 
+            case 'FM_THEME':
+                // Runtime theme sync: the embedded UI toggled/resolved its theme.
+                // Recolor the SDK-owned modal chrome to match (it can't read the
+                // cross-origin iframe's class), then notify subscribers.
+                applyChromeTheme(!!(msg.payload && msg.payload.theme === 'dark'));
+                emit('FM_THEME', msg.payload);
+                break;
+
             case 'FM_CLOSE':
                 if (typeof config.onClose === 'function') {
                     config.onClose();
@@ -108,6 +124,22 @@
         var cbs = listeners[type] || [];
         for (var i = 0; i < cbs.length; i++) {
             try { cbs[i](data); } catch(ex) { console.error('FluxFiles listener error:', ex); }
+        }
+    }
+
+    // Recolor the SDK-owned modal chrome (window + header) at runtime to match the
+    // embedded UI's resolved theme. No-op when embedded in a host `container` (no chrome)
+    // or when closed. Colors mirror the boot values above.
+    function applyChromeTheme(dark) {
+        var modal = document.getElementById('fluxfiles-modal');
+        if (!modal) return;
+        var bg = dark ? '#2b2b2e' : '#f5f5f7';
+        var border = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+        modal.style.background = bg;
+        var header = modal.firstElementChild; // header is appended before the body
+        if (header) {
+            header.style.background = bg;
+            header.style.borderBottom = '1px solid ' + border;
         }
     }
 
@@ -135,10 +167,33 @@
             iframe.id = 'fluxfiles-iframe';
             iframe.src = endpoint + '/public/index.html';
             iframe.style.cssText = 'width:100%;height:100%;border:none;';
+            // `fullscreen` lets the embedded app's "fullscreen" button work; the
+            // legacy attribute covers older browsers.
             iframe.setAttribute('allow', IFRAME_ALLOW);
             iframe.setAttribute('allowfullscreen', 'true');
 
             if (!config.container) {
+                // Theme the modal chrome to match the embedded UI's theme, so dark
+                // mode darkens the window/header too (not just the iframe content).
+                // When the theme is auto/unset, mirror the embedded UI's anti-flash
+                // boot: prefer the last persisted theme (same localStorage key), then
+                // the OS preference — so the header doesn't flash light before a dark
+                // theme settles. Persist an explicit theme for the next open.
+                var THEME_KEY = 'fluxfiles_theme';
+                var storedTheme = null;
+                try { storedTheme = window.localStorage && localStorage.getItem(THEME_KEY); } catch (e) {}
+                try {
+                    if (config.theme === 'dark' || config.theme === 'light') localStorage.setItem(THEME_KEY, config.theme);
+                } catch (e) {}
+                var chromeDark = config.theme === 'dark' ||
+                    (config.theme !== 'light' && (
+                        storedTheme === 'dark' ||
+                        (storedTheme !== 'light' && window.matchMedia &&
+                            window.matchMedia('(prefers-color-scheme: dark)').matches)
+                    ));
+                var chromeBg = chromeDark ? '#2b2b2e' : '#f5f5f7';
+                var chromeBorder = chromeDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+
                 // Modal overlay — UI scaled down 5% (icons, text, spacing)
                 var overlay = document.createElement('div');
                 overlay.id = 'fluxfiles-overlay';
@@ -146,18 +201,23 @@
 
                 var modal = document.createElement('div');
                 modal.id = 'fluxfiles-modal';
-                modal.style.cssText = 'width:90vw;height:85vh;max-width:1200px;background:#f5f5f7;border-radius:10px;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,0.22);display:flex;flex-direction:column;';
+                modal.style.cssText = 'width:90vw;height:85vh;max-width:1200px;background:' + chromeBg + ';border-radius:10px;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,0.22);display:flex;flex-direction:column;';
 
                 // Header — macOS-style red close button (left) with × icon
                 var header = document.createElement('div');
-                header.style.cssText = 'flex-shrink:0;display:flex;align-items:center;justify-content:flex-start;padding:10px 12px;border-bottom:1px solid rgba(0,0,0,0.06);background:#f5f5f7;';
+                header.style.cssText = 'flex-shrink:0;display:flex;align-items:center;justify-content:flex-start;padding:10px 12px;border-bottom:1px solid ' + chromeBorder + ';background:' + chromeBg + ';';
                 var closeBtn = document.createElement('button');
                 closeBtn.type = 'button';
                 closeBtn.setAttribute('aria-label', 'Close');
-                closeBtn.style.cssText = 'width:28px;height:28px;border:none;border-radius:6px;background:transparent;color:#6b7280;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;font-weight:300;transition:color .15s,background .15s;flex-shrink:0;';
+                // macOS traffic-light: a red dot that reveals a faint \u00D7 on hover.
+                closeBtn.style.cssText = 'width:13px;height:13px;padding:0;border:none;border-radius:50%;background:#ff5f57;box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.14);color:rgba(0,0,0,0);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;font-weight:700;transition:filter .15s,color .15s;flex-shrink:0;';
                 closeBtn.textContent = '\u00D7';
-                closeBtn.addEventListener('mouseenter', function() { closeBtn.style.background = '#e5e7eb'; closeBtn.style.color = '#374151'; });
-                closeBtn.addEventListener('mouseleave', function() { closeBtn.style.background = 'transparent'; closeBtn.style.color = '#6b7280'; });
+                var closeReveal = function() { closeBtn.style.color = 'rgba(0,0,0,0.55)'; closeBtn.style.filter = 'brightness(0.93)'; };
+                var closeHide = function() { closeBtn.style.color = 'rgba(0,0,0,0)'; closeBtn.style.filter = 'none'; };
+                closeBtn.addEventListener('mouseenter', closeReveal);
+                closeBtn.addEventListener('mouseleave', closeHide);
+                closeBtn.addEventListener('focus', closeReveal);
+                closeBtn.addEventListener('blur', closeHide);
                 closeBtn.addEventListener('click', function() { FluxFiles.close(); });
                 header.appendChild(closeBtn);
                 modal.appendChild(header);
@@ -204,6 +264,25 @@
         crossMove: function(dstDisk, dstPath) { this.command('crossMove', { dst_disk: dstDisk, dst_path: dstPath || '' }); },
         aiTag: function() { this.command('aiTag'); },
         setLocale: function(locale) { this.command('setLocale', { locale: locale }); },
+        // Crops the currently open detail file. savePath omitted/'' = overwrite in place,
+        // otherwise saves as a new file (must keep the same extension).
+        crop: function(x, y, width, height, savePath) {
+            this.command('crop', { x: x, y: y, width: width, height: height, save_path: savePath || '' });
+        },
+
+        // Build an on-demand WebP URL for a selected image file, from its
+        // `img_base` (present on image entries when the webp feature is enabled).
+        // e.g. FluxFiles.imgUrl(file, { width: 800, quality: 80 }). Returns '' when
+        // the file has no img_base (non-image, or the feature is disabled).
+        imgUrl: function(file, opts) {
+            if (!file || !file.img_base) return '';
+            opts = opts || {};
+            var q = [];
+            if (opts.width) q.push('width=' + encodeURIComponent(opts.width));
+            if (opts.quality) q.push('quality=' + encodeURIComponent(opts.quality));
+            if (opts.format) q.push('format=' + encodeURIComponent(opts.format));
+            return file.img_base + (q.length ? '&' + q.join('&') : '');
+        },
 
         updateToken: function(newToken) {
             config.token = newToken;
