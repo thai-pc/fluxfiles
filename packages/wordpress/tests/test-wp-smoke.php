@@ -4861,6 +4861,17 @@ if (interface_exists(\FluxFiles\Mail\MailTransportInterface::class)) {
     });
 }
 
+test('assets/fluxfiles.js (enqueued by the media modals) matches packages/sdk', function () {
+    // The plugin ships its own copy of the browser SDK. It had drifted behind the SDK
+    // (no e.source check, closed embedded managers on select: issue #309).
+    $bundled = __DIR__ . '/../assets/fluxfiles.js';
+    assertTrue(is_file($bundled), 'plugin ships assets/fluxfiles.js');
+    $sdk = __DIR__ . '/../../sdk/fluxfiles.js';
+    if (is_file($sdk)) {   // monorepo only
+        assertTrue(hash_file('sha256', $sdk) === hash_file('sha256', $bundled), 'packages/wordpress/assets/fluxfiles.js is stale: cp packages/sdk/fluxfiles.js packages/wordpress/assets/');
+    }
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

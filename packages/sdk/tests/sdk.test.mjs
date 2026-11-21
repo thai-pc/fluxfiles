@@ -44,6 +44,34 @@ describe('FluxFiles SDK postMessage protocol', () => {
     expect(onSelect).toHaveBeenCalledWith({ key: 'right.txt' });
   });
 
+  it('overlay mode: FM_SELECT closes the manager', () => {
+    const onSelect = vi.fn();
+    FluxFiles.open({ endpoint: ORIGIN, token: 't', onSelect });
+    fromIframe('FM_SELECT', { key: 'a.txt' });
+    expect(onSelect).toHaveBeenCalledWith({ key: 'a.txt' });
+    expect(document.getElementById('fluxfiles-iframe')).toBeNull();
+  });
+
+  it('container mode: FM_SELECT keeps the embedded manager open and listening (#309)', () => {
+    const host = document.createElement('div');
+    host.id = 'fm';
+    document.body.appendChild(host);
+    const onSelect = vi.fn();
+    FluxFiles.open({ endpoint: ORIGIN, token: 't', multiple: true, container: '#fm', onSelect });
+    fromIframe('FM_SELECT', [{ key: 'a.txt' }]);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    const iframe = document.getElementById('fluxfiles-iframe');
+    expect(iframe).not.toBeNull();
+    expect(host.contains(iframe)).toBe(true);
+    // still listening: a second selection reaches onSelect, commands still go out
+    fromIframe('FM_SELECT', [{ key: 'b.txt' }]);
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    const sent = captureOutgoing();
+    fromIframe('FM_READY');
+    FluxFiles.navigate('docs');
+    expect(sent.some((m) => m.type === 'FM_COMMAND')).toBe(true);
+  });
+
   it('FM_READY → replies with FM_CONFIG carrying the token + disk', () => {
     FluxFiles.open({ endpoint: ORIGIN, token: 'JWT123', disk: 's3', disks: ['local', 's3'] });
     const sent = captureOutgoing();

@@ -63,7 +63,9 @@
                     config.onSelect(msg.payload);
                 }
                 emit('FM_SELECT', msg.payload);
-                FluxFiles.close();
+                // Only the modal overlay closes on select; an embedded (container)
+                // manager stays on the page and keeps listening (issue #309).
+                if (!config.container) FluxFiles.close();
                 break;
 
             case 'FM_TOKEN_REFRESH':
