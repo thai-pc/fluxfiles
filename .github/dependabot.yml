@@ -26,7 +26,7 @@ updates:
     versioning-strategy: increase-if-necessary
     ignore:
       - dependency-name: "*"
-        update-types: [version-update:semver-major]
+        update-types: ["version-update:semver-major"]
       # The editors e2e rig deliberately runs the host-editor versions the
       # plugins target (CKEditor 4.22.1 is the last OSS-licensed 4.x).
       - dependency-name: ckeditor4
@@ -42,6 +42,12 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # Same rule as npm: a major bump also touches the release workflows
+    # (npm/docker/pypi/wordpress publish), which PR CI never runs, so it
+    # gets a hand-checked PR instead.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       actions:
         patterns: ["*"]
