@@ -15,7 +15,7 @@ $repo = dirname(__DIR__, 4);
 $checks = [
     'docs/reference/CONFIG.md' => 'Only as private as the disk',
     'docs/guides/FEATURES.md'  => 'Preview-only needs private storage',
-    'README.md'                => 'Preview-only is only as private as the storage',
+    'docs/guides/GUIDE.md'     => 'Preview-only is only as private as the storage',
 ];
 $failed = 0;
 foreach ($checks as $file => $needle) {

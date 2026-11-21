@@ -421,7 +421,7 @@ list it in `define('FLUXFILES_SSRF_ALLOW_HOSTS', 'sftp.internal.example');` in
 short-lived per-file link that carries the disk config encrypted, capped at 30 minutes.
 
 For the standalone server (or the Docker image) see the
-[core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting).
+[core README → SFTP disk](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#sftp-disk-vps--shared-hosting).
 
 If you run your own [ttyd / gotty / wetty](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md),
 pass its URL as the `terminal_pty_url` token override and the UI embeds it.
