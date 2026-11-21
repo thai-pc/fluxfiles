@@ -1,0 +1,49 @@
+# Dependabot version updates: one grouped PR per ecosystem per month, so
+# dev-tool advisories (vitest, vite, esbuild, …) don't pile up again.
+# Security advisories are separate: GitHub raises those as alerts at any time.
+#
+# Majors are skipped here on purpose (a vitest 2 → 4 style bump needs a
+# hand-checked PR); minor + patch land together.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories:
+      - /packages/sdk
+      - /packages/react
+      - /packages/vue
+      - /packages/node
+      - /packages/mcp
+      - /packages/tinymce
+      - /packages/summernote
+      - /packages/ckeditor4
+      - /packages/ckeditor5
+      - /packages/core/tests/apps
+      - /packages/core/tests/editors
+      - /packages/core/tests/modules-live
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    versioning-strategy: increase-if-necessary
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+      # The editors e2e rig deliberately runs the host-editor versions the
+      # plugins target (CKEditor 4.22.1 is the last OSS-licensed 4.x).
+      - dependency-name: ckeditor4
+      - dependency-name: tinymce
+      - dependency-name: summernote
+    groups:
+      npm-dev:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore(deps)
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci(deps)

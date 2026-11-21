@@ -37,9 +37,11 @@
     "jsdom": "^25.0.1",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.12"
   },
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "author": "thai-pc",
   "homepage": "https://github.com/thai-pc/fluxfiles#framework-adapters",
   "repository": {
@@ -47,6 +49,18 @@
     "url": "git+https://github.com/thai-pc/fluxfiles.git",
     "directory": "packages/ckeditor5"
   },
-  "bugs": { "url": "https://github.com/thai-pc/fluxfiles/issues" },
-  "keywords": ["fluxfiles", "file-manager", "ckeditor", "ckeditor5", "plugin", "s3", "r2", "upload", "media"]
+  "bugs": {
+    "url": "https://github.com/thai-pc/fluxfiles/issues"
+  },
+  "keywords": [
+    "fluxfiles",
+    "file-manager",
+    "ckeditor",
+    "ckeditor5",
+    "plugin",
+    "s3",
+    "r2",
+    "upload",
+    "media"
+  ]
 }
