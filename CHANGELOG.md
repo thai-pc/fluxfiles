@@ -5,6 +5,17 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.51] — 2026-11-21
+
+> Released: `core-v1.6.7`, `node-v1.2.1` and `python-v1.2.1`: the audit's next-patch fixes (quota counts trash, rate-limit windows, an S3/R2/SFTP write lock, stricter `verifyToken`). The Share module v1.5.2 and the Intake module v1.8.1 ship alongside: a share link is bound to its file, and link payloads are sealed.
+
+### Security
+- Quota: trashed files count toward the quota of the prefix that trashed them. Trash lives in the disk-wide `_fluxfiles/trash/`, outside every prefix, so a tenant with `max_storage` could upload, trash and repeat without limit while `/quota` reported 0 used. `QuotaManager::setMetadata()` adds the sizes of the in-scope `trash.json` entries; it is wired in `FileManagerFactory::wire()`, the standalone `/quota` and `/usage`, and the Laravel meter. The WordPress meter follows with the next plugin release; WordPress enforcement already counts the trash.
+- Rate limits: the sweep keeps longer-window limits. Both storages used to sweep by the caller's window, so ordinary 60 s traffic wiped the daily Intake/Share mail caps, and an anonymous sender could exceed the 3 receipts/day cap to a victim. File shards record their window (`w`), the DB sweep is scoped to its bucket, and `NotifySupport::allow()` uses a per-window bucket (`notify_86400`). Existing daily counters start fresh once after upgrading.
+- S3/R2/SFTP: the JSON bookkeeping (index, folder and trash manifests, legal holds, audit log) is now written under a lock on the app server: one lock file per storage location in `FLUXFILES_LOCK_PATH`, default `<FLUXFILES_STORAGE_PATH>/locks`. Before, concurrent requests silently lost entries: 5 writers kept 4 of 100 audit lines, with the HMAC chain still verifying, and 33 of 100 legal holds. A request waits at most 30 s for the lock, then writes without it and logs a warning; `FLUXFILES_LOCK_PATH=off` disables the lock. Several app servers writing one bucket still need `FLUXFILES_STORAGE_BACKEND=db` (DEPLOYMENT.md, CONFIG.md).
+- `fluxfiles` (npm) `verifyToken()` and `fluxfiles-token` (PyPI) `verify_token()` now require a numeric `exp` and refuse typed tokens (`t`, legacy `share`/`intake`), the same as core's `JwtMiddleware`. A host using them as an auth gate could previously be handed another user's `/img` or `/stream` token.
+- Share module 1.5.2: a link serves only the file it was created for (`404 share_gone` once the file at the path has been replaced), and the link payload no longer shows the file path, tenant prefix or operator id. Intake module 1.8.1: the portal link payload no longer shows the operator id, upload folder or tenant prefix. Links minted before keep working.
+
 ## [1.0.50] — 2026-11-21
 
 > Released: `core-v1.6.6`, `sdk-v1.0.3`, `laravel-v1.1.1` (an embedded manager stays open after a selection, #309) and `wordpress-v1.3.3` (bundles core 1.6.6 with the 1.6.5 security fixes, plus the synced browser SDK).
