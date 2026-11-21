@@ -48,6 +48,6 @@ MIT — see [LICENSE](LICENSE) for details.
 ## Links
 
 - Main repository: `https://github.com/thai-pc/fluxfiles`
-- Documentation: `https://github.com/thai-pc/fluxfiles#javascript-sdk-vanilla`
+- Documentation: `https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#javascript-sdk-vanilla`
 - Issues: `https://github.com/thai-pc/fluxfiles/issues`
 

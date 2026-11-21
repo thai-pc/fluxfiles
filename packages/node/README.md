@@ -72,7 +72,7 @@ sharing the quota/dedup/variants pipeline). Server-wide defaults come from
 
 When the token targets a FluxFiles server that has an **SFTP disk** configured
 (`SFTP_*` env on that server — see the
-[core README](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting)),
+[core README](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#sftp-disk-vps--shared-hosting)),
 you can hand a token the SFTP file-manager tools. `chmod` is on by default for SFTP:
 
 ```ts

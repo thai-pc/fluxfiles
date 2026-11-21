@@ -27,27 +27,27 @@ user database. FluxFiles reads them from a **signed JWT** that your backend mint
 each user and request. The token carries the disks the user may open, the folder they
 are confined to (`prefix`), their permissions, the upload size and extension limits and
 the quota. The server enforces those claims on every API call and stores no per-tenant
-configuration ([Multi-tenant](../../README.md#multi-tenant)). The UI runs in an iframe.
+configuration ([Multi-tenant](GUIDE.md#multi-tenant)). The UI runs in an iframe.
 The editor plugins, the JS SDK, React/Vue, Laravel and WordPress all embed it, and they
 pass the token over `postMessage`, never in a URL
-([Token handling](../../README.md#token-handling)). Every claim is listed in the
+([Token handling](GUIDE.md#token-handling)). Every claim is listed in the
 [configuration reference](../reference/CONFIG.md).
 
 ## Steps common to every migration
 
 1. **Check the runtime.** FluxFiles needs PHP 8.1 or newer, with `gd`, `curl`, `json`,
    `openssl`, `mbstring` and `fileinfo`, plus `zip` for extracting archives
-   ([Requirements](../../README.md#requirements)). If your host cannot run PHP 8.1, use
-   the Docker image ([Run with Docker](../../README.md#run-with-docker-fastest)).
+   ([Requirements](GUIDE.md#requirements)). If your host cannot run PHP 8.1, use
+   the Docker image ([Run with Docker](GUIDE.md#run-with-docker-fastest)).
 2. **Install and configure the core.** Run `composer require fluxfiles/fluxfiles`, or use
    Docker. Then set `FLUXFILES_SECRET` (32 bytes or longer) and
    `FLUXFILES_ALLOWED_ORIGINS` (the origin of every page that embeds the UI)
-   ([Configure](../../README.md#2-configure)). The code that mints tokens must see the
+   ([Configure](GUIDE.md#2-configure)). The code that mints tokens must see the
    same `FLUXFILES_SECRET`.
 3. **Point a disk at your existing files.** The built-in `local` disk stores files in
    `storage/uploads` inside the package. To keep your current upload directory where it
    is, write your own disks file and name it with `FLUXFILES_DISKS_CONFIG`
-   ([Adding a Custom Disk](../../README.md#adding-a-custom-disk)):
+   ([Adding a Custom Disk](GUIDE.md#adding-a-custom-disk)):
 
    ```php
    <?php
@@ -63,7 +63,7 @@ pass the token over `postMessage`, never in a URL
    A local root inside the web root also exposes FluxFiles' `_fluxfiles/` bookkeeping
    folder (audit log, index, trash) unless you deny it at the web server. Add the deny
    rule from [`DEPLOYMENT.md`](DEPLOYMENT.md) at the same time. For S3, R2, any
-   S3-compatible store or SFTP, see [Storage Disks](../../README.md#storage-disks).
+   S3-compatible store or SFTP, see [Storage Disks](GUIDE.md#storage-disks).
 4. **Mint a token on the server** for the logged-in user. This replaces the session
    variables, access keys or user list your old tool used:
 
@@ -99,7 +99,7 @@ pass the token over `postMessage`, never in a URL
 Files that already sit on a disk FluxFiles can open appear in listings straight away.
 **Search, folder search and ownership** depend on FluxFiles' own index, which is only
 written when content arrives through the API. Run the indexer once
-([Import Existing Files](../../README.md#import-existing-files)):
+([Import Existing Files](GUIDE.md#import-existing-files)):
 
 ```bash
 # Composer install: php vendor/bin/fluxfiles …   Monorepo clone: packages/core/bin/fluxfiles …
@@ -150,7 +150,7 @@ Framework installs have the same workflow:
 copy them with your usual bucket tooling, then index the bucket
 (`--disk=s3` or `--disk=r2`; listing is slower because the bucket is paged remotely).
 For smaller moves, the UI and API can copy or move a selection between disks, with its
-metadata and variants ([Cross-Disk Operations](../../README.md#cross-disk-operations)).
+metadata and variants ([Cross-Disk Operations](GUIDE.md#cross-disk-operations)).
 
 ---
 
@@ -176,13 +176,13 @@ and [README](https://github.com/trippo/ResponsiveFilemanager/blob/master/README.
 | RFM | FluxFiles |
 |---|---|
 | External plugin for TinyMCE 4.x and CKEditor | [`@fluxfiles/tinymce`](../../packages/tinymce/README.md) (TinyMCE 4–8), [`@fluxfiles/ckeditor4`](../../packages/ckeditor4/README.md) or [`@fluxfiles/ckeditor5`](../../packages/ckeditor5/README.md) (CKEditor 5 v42+) |
-| Standalone file manager (`dialog.php` in a popup or iframe) | JS SDK `FluxFiles.open({ mode: 'picker' })`, or `fluxfiles_embed()` for a server-rendered iframe ([PHP Embed Helper](../../README.md#php-embed-helper)) |
+| Standalone file manager (`dialog.php` in a popup or iframe) | JS SDK `FluxFiles.open({ mode: 'picker' })`, or `fluxfiles_embed()` for a server-rendered iframe ([PHP Embed Helper](GUIDE.md#php-embed-helper)) |
 | TinyMCE options `external_filemanager_path`, `filemanager_title`, `filemanager_access_key` | `fluxfiles_endpoint`, `fluxfiles_token`, `fluxfiles_disk` ([TinyMCE plugin options](../../packages/tinymce/README.md#configuration)). The access key has no equivalent: the signed token replaces it. |
 | `session_start()` in `config.php`; optional `USE_ACCESS_KEYS` (off by default) | A JWT minted by `fluxfiles_token()` on your server. FluxFiles answers `401` to any API call without a valid token, so there is no unprotected default to forget. |
 | "A subfolder as the root … for each user, page or FileManager call" | The `prefix` claim. Mint a different token per user or page. |
 | Local upload folder | The `local` disk, with its root set through `FLUXFILES_DISKS_CONFIG` |
-| FTP storage (`ftp_host`, `ftp_folder`) | **No equivalent.** FluxFiles has no FTP driver. If the server also accepts SSH, use the [SFTP disk](../../README.md#sftp-disk-vps--shared-hosting). Otherwise copy the files to local or S3 storage. |
-| `MaxSizeUpload` (MB) | `max_upload` (MB per file). PHP and the web server must allow at least as much ([Upload size limits](../../README.md#upload-size-limits-three-layers)). |
+| FTP storage (`ftp_host`, `ftp_folder`) | **No equivalent.** FluxFiles has no FTP driver. If the server also accepts SSH, use the [SFTP disk](GUIDE.md#sftp-disk-vps--shared-hosting). Otherwise copy the files to local or S3 storage. |
+| `MaxSizeUpload` (MB) | `max_upload` (MB per file). PHP and the web server must allow at least as much ([Upload size limits](GUIDE.md#upload-size-limits-three-layers)). |
 | `MaxSizeTotal` | `max_storage` (MB under the prefix), plus `max_files` if you want a file count limit |
 | File-type restrictions | `allowed_ext`. Executable and server-script extensions are always refused on upload, whatever the token says. |
 | `delete_files` | `delete` in `perms` |
@@ -191,10 +191,10 @@ and [README](https://github.com/trippo/ResponsiveFilemanager/blob/master/README.
 | `chmod_files` | `allow_chmod`, on SFTP disks only |
 | `edit_text_files` | `allow_code_edit` (default `false`) opens a CodeMirror editor |
 | `create_text_files` | **No equivalent.** The editor saves over existing files only. Upload a new file instead. |
-| `url_upload` | `allow_url_import` (off by default; SSRF-guarded) ([Import from URL](../../README.md#import-from-url)) |
+| `url_upload` | `allow_url_import` (off by default; SSRF-guarded) ([Import from URL](GUIDE.md#import-from-url)) |
 | TOAST UI image editor (`tui_active`) | Crop with aspect presets and a burn-in watermark editor. FluxFiles has no general image editor. |
 | Automatic thumbnails, resize on upload | WebP variants (thumb/medium/large, sized by the `variants` claim) and on-demand resizing via `/img`. The uploaded original is kept as it is. |
-| Google Docs viewer preview (`googledoc_enabled`) | Built-in image, video, audio and PDF preview. Office files open in your own Collabora/OnlyOffice through `office_url` ([PDF tools, office and e-sign](../../README.md#pdf-tools-office-and-e-sign-bring-your-own)). |
+| Google Docs viewer preview (`googledoc_enabled`) | Built-in image, video, audio and PDF preview. Office files open in your own Collabora/OnlyOffice through `office_url` ([PDF tools, office and e-sign](GUIDE.md#pdf-tools-office-and-e-sign-bring-your-own)). |
 
 ### Before and after
 
@@ -330,7 +330,7 @@ KCFinder concepts below are from its
 | FCKeditor integration | **No plugin.** Use the JS SDK's `onSelect` callback. |
 | Settings passed through the PHP session | A JWT minted by `fluxfiles_token()` |
 | Local upload folder | The `local` disk, with its root set through `FLUXFILES_DISKS_CONFIG` |
-| Multiple-file and drag-and-drop upload | Built in. Each file is checked on its own ([Uploading multiple files](../../README.md#uploading-multiple-files)). |
+| Multiple-file and drag-and-drop upload | Built in. Each file is checked on its own ([Uploading multiple files](GUIDE.md#uploading-multiple-files)). |
 | Download several files or a folder as ZIP | `allow_zip` and `allow_download` (both default `true`) |
 | Clipboard copy and move | Copy and move under `write`, plus copy and move between disks |
 | Resize on upload (max resolution) | **No equivalent.** The original is kept. WebP variants and `/img` give resized copies. |
@@ -370,7 +370,7 @@ CKEDITOR.replace('editor', {
 Remove `filebrowserBrowseUrl` and the session code that set up KCFinder. The plugin
 inserts images with `alt`, `width` and `height` from the file's metadata. It prefers
 the file's `permanent_url`, because the `url` on a private disk is a presigned link
-that expires ([`permanent_url` vs `url`](../../README.md#embedding-selected-files-permanent_url-vs-url)).
+that expires ([`permanent_url` vs `url`](GUIDE.md#embedding-selected-files-permanent_url-vs-url)).
 
 ### Moving existing files
 
@@ -489,7 +489,7 @@ RichFilemanager concepts below are from its
 | CKEditor, TinyMCE integrations | [`@fluxfiles/ckeditor4`](../../packages/ckeditor4/README.md), [`@fluxfiles/tinymce`](../../packages/tinymce/README.md); [`@fluxfiles/summernote`](../../packages/summernote/README.md) for Summernote |
 | Imperavi Redactor, colorbox, "simple textfield" | **No Redactor plugin.** Use the JS SDK: `FluxFiles.open({ onSelect })` fills a field or inserts into any editor. |
 | Connectors in PHP, Java, ASHX, ASP, Node.js, Python Flask | One PHP core. Your backend only mints tokens: PHP, [Node](../../packages/node) or [Python](../../packages/python). Use the [Laravel](../../packages/laravel/README.md) and [WordPress](../../packages/wordpress/README.md) adapters for those frameworks. |
-| Local storage, AWS S3 through the PHP connector | `local`, `s3` (AWS or any S3-compatible store), `r2` and `sftp` disks; per-tenant buckets with [BYOB](../../README.md#byob-bring-your-own-bucket) |
+| Local storage, AWS S3 through the PHP connector | `local`, `s3` (AWS or any S3-compatible store), `r2` and `sftp` disks; per-tenant buckets with [BYOB](GUIDE.md#byob-bring-your-own-bucket) |
 | "Limit max size of the storage (root folder)" | `max_storage` (MB under the prefix) |
 | User permissions based on the session | `perms` (`read`/`write`/`delete`) and the `allow_*` claims in a signed token |
 | "Pass config user file in URL" | **No equivalent, by design.** The configuration is the signed token, and the token never goes in a URL. |
@@ -719,15 +719,15 @@ and [security advisories](https://github.com/filebrowser/filebrowser/security/ad
 
 | File Browser | FluxFiles |
 |---|---|
-| Go binary or container serving one directory | The FluxFiles Docker image ([Run with Docker](../../README.md#run-with-docker-fastest)) or a PHP install; local, S3, R2 and SFTP disks |
+| Go binary or container serving one directory | The FluxFiles Docker image ([Run with Docker](GUIDE.md#run-with-docker-fastest)) or a PHP install; local, S3, R2 and SFTP disks |
 | Auth methods `json`, `proxy` (header), `hook` (script), `noauth` | Your app mints a token per user. **No proxy-header or hook auth.** The paid SSO module offers OIDC login. |
 | Per-user scope | `prefix` |
 | Per-user permissions | `perms` and the `allow_*` claims |
-| Sessions are JWTs that "cannot be revoked" | FluxFiles access tokens are also stateless and valid until `exp`, with no server-side session to revoke. Mint them short-lived (`ttl`) and renew them through `onTokenRefresh` ([Token Refresh](../../README.md#token-refresh)). |
+| Sessions are JWTs that "cannot be revoked" | FluxFiles access tokens are also stateless and valid until `exp`, with no server-side session to revoke. Mint them short-lived (`ttl`) and renew them through `onTokenRefresh` ([Token Refresh](GUIDE.md#token-refresh)). |
 | TUS resumable uploads | tus on local/SFTP disks (standalone core); multipart chunks on S3/R2 |
 | Public share links with passwords | The paid Share module (`allow_share`); not in the free core |
 | Archive download as zip/tar | zip only |
-| Command runner and hooks (off by default via `--disable-exec`) | **None.** FluxFiles has no built-in shell. `terminal_pty_url` embeds your own ttyd/gotty/wetty ([Terminal](../../README.md#terminal-bring-your-own-ttyd)). |
+| Command runner and hooks (off by default via `--disable-exec`) | **None.** FluxFiles has no built-in shell. `terminal_pty_url` embeds your own ttyd/gotty/wetty ([Terminal](GUIDE.md#terminal-bring-your-own-ttyd)). |
 | Built-in previews and editor | Image, video, audio and PDF preview; CodeMirror editor (`allow_code_edit`) |
 | 34 UI translations | 16 languages with RTL |
 

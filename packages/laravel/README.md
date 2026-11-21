@@ -87,7 +87,7 @@ Managing a **remote VPS / shared host** over SFTP is supported in both modes.
 
 - **`standalone` mode:** run the FluxFiles server (or the Docker image), give it the
   `SFTP_*` env vars (see the
-  [core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting)),
+  [core README → SFTP disk](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#sftp-disk-vps--shared-hosting)),
   and point Laravel at it with `FLUXFILES_ENDPOINT`. Then mint tokens with the
   `sftp` disk:
 
@@ -293,7 +293,7 @@ $token = FluxFiles::token(auth()->id(), [
 Always derive `prefix` from the **authenticated** tenant server-side — never from
 client input. For full isolation, give each tenant their **own bucket** with BYOB
 (`byob_disks`). See the root README's
-[Multi-tenant](https://github.com/thai-pc/fluxfiles#multi-tenant) section for the
+[Multi-tenant](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#multi-tenant) section for the
 full claim list, and [Permissions & Deployment](#permissions--deployment) for the
 storage each tenant's `_fluxfiles/` index needs.
 

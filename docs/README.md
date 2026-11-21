@@ -6,6 +6,7 @@ every new document to the matching section below.
 
 ## Start here (guides)
 
+- [Guide](guides/GUIDE.md) — the full reference that used to be the repository README: install, Docker, configure, embed (SDK options, events, commands, token refresh), storage disks and BYOB, file operations, admin tools, token structure, multi-tenant, adapters, i18n, security, testing, troubleshooting.
 - [Configuration reference](reference/CONFIG.md) — every JWT claim and server env var (the single source of truth; CI-guarded against `Claims.php`).
 - [Deployment](guides/DEPLOYMENT.md) — self-hosting, web-server configuration, upload limits.
 - [API reference](guides/API.md) — standalone HTTP routes, incl. tus resumable upload and the paid-module routes.
