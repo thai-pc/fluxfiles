@@ -107,7 +107,9 @@ class RateLimiterFileStorage implements RateLimiterStorageInterface
 
             ftruncate($fp, 0);
             rewind($fp);
-            fwrite($fp, json_encode(['e' => $epoch, 't' => array_slice($entries, -$limit)]));
+            // 'w' = this shard's window, so the sweep never drops a long-window
+            // shard (a daily mail cap) on behalf of a 60 s caller (audit R4-1).
+            fwrite($fp, json_encode(['e' => $epoch, 'w' => $this->windowSeconds, 't' => array_slice($entries, -$limit)]));
             fflush($fp);
             flock($fp, LOCK_UN);
         } finally {
@@ -173,7 +175,12 @@ class RateLimiterFileStorage implements RateLimiterStorageInterface
         return $epoch;
     }
 
-    /** Drop shard files whose newest entry is older than the window (nothing in them counts any more). */
+    /**
+     * Drop shard files whose newest entry is older than THEIR OWN window (nothing in
+     * them counts any more). Shards with different windows share a directory, so
+     * the caller's window is only a cheap pre-filter; each candidate's own `w`
+     * decides. A shard without `w` (written before it existed) is kept for a day.
+     */
     private function sweep(string $dir, int $now): void
     {
         $cutoff = $now - max($this->windowSeconds, 1) - 60;
@@ -185,9 +192,15 @@ class RateLimiterFileStorage implements RateLimiterStorageInterface
             if (substr($name, -5) !== '.json') {
                 continue;
             }
-            $m = @filemtime($dir . '/' . $name);
-            if ($m !== false && $m < $cutoff) {
-                @unlink($dir . '/' . $name);
+            $path = $dir . '/' . $name;
+            $m = @filemtime($path);
+            if ($m === false || $m >= $cutoff) {
+                continue;
+            }
+            $data = json_decode((string) @file_get_contents($path, false, null, 0, 65536), true);
+            $w = (is_array($data) && is_int($data['w'] ?? null)) ? $data['w'] : 86400;
+            if ($m < $now - max($w, 1) - 60) {
+                @unlink($path);
             }
         }
     }

@@ -144,7 +144,9 @@ final class RateLimiterDbStorage implements RateLimiterStorageInterface
         // 1%-probabilistic global sweep, best-effort — never let a sweep failure break the request.
         if (random_int(1, 100) === 1) {
             try {
-                $pdo->prepare("DELETE FROM {$this->table} WHERE ts < ?")->execute([$windowStart]);
+                // Only this bucket: rows of a longer window (a daily mail cap) must not be
+                // swept by a 60 s caller (audit R4-1). Each bucket has one window.
+                $pdo->prepare("DELETE FROM {$this->table} WHERE bucket = ? AND ts < ?")->execute([$actionType, $windowStart]);
             } catch (\Throwable $e) {
                 // cleanup only, ignore
             }
