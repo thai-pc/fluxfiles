@@ -23,6 +23,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
+// These cases model a disk with NO lock at all (two handlers in one process
+// stand in for two concurrent requests). Since core 1.6.7 S3/R2/SFTP get a
+// host-local lock, which would make the second handler wait for the first;
+// FLUXFILES_LOCK_PATH=off is the documented way to run without it.
+putenv('FLUXFILES_LOCK_PATH=off');
+$_ENV['FLUXFILES_LOCK_PATH'] = 'off';
+
 use FluxFiles\ApiException;
 use FluxFiles\Claims;
 use FluxFiles\DiskManager;

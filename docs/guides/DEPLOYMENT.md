@@ -311,6 +311,24 @@ The server warns before this becomes a problem. When the index passes
 per disk. The usage dashboard also shows operators (tokens with no `prefix`) a
 banner.
 
+### S3, R2 and SFTP with several app servers
+
+With the JSON backend, the bookkeeping files in `_fluxfiles/` (index, folder and
+trash manifests, legal holds, the audit log) are rewritten as a whole. On a local
+disk a file lock orders the writers. S3, R2 and SFTP have no locks, so FluxFiles
+locks on the **app server** instead: one lock file per storage location under
+`FLUXFILES_LOCK_PATH` (default `<FLUXFILES_STORAGE_PATH>/locks`, then the system
+temp dir). That orders every PHP worker of one server. A request waits at most
+30 seconds for the lock, then writes without it and logs a warning;
+`FLUXFILES_LOCK_PATH=off` turns the locks off.
+
+It cannot order **two or more app servers** writing the same bucket or SFTP root.
+Concurrent writes from different servers can then lose an audit line or a legal
+hold without any error. If you run several app servers against one S3/R2/SFTP
+disk, use the database backend (`FLUXFILES_STORAGE_BACKEND=db`), which keeps that
+bookkeeping in your database with real transactions. This matters most when you
+rely on legal holds or the audit log for compliance.
+
 ## CLI health checks
 
 Two commands check the integrations from the shell (standalone installs; they read the

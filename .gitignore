@@ -26,6 +26,7 @@ packages/core/storage/demo_ip.json
 packages/core/storage/license/
 # tus resumable-upload staging (partial bytes, swept after 24h)
 packages/core/storage/tus/
+packages/core/storage/locks/
 
 # Build output
 packages/react/dist/
