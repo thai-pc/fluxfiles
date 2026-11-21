@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.3.2
+Stable tag: 1.3.3
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -180,6 +180,14 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.3.3 =
+* Security: a user limited to their own folder can no longer rename that folder itself (doing so used to move all their files into a neighbouring folder).
+* Security: a folder setting that contains ".." (for example "users/..") is refused instead of opening a higher folder.
+* Security: the watermark logo is size-checked, so a tiny crafted image can no longer use up the server's memory.
+* Security: for a user's own SFTP storage, the private key must be the key text itself, never a path to a file on the server.
+* The file picker script bundled with the plugin is brought up to date with the FluxFiles SDK. It now only accepts messages from its own file manager window.
+* Updates the bundled FluxFiles core to 1.6.6.
+
 = 1.3.2 =
 * Optimisation plugins that rewrite script or style tags (removing version query strings, forcing async, rewriting the tag) no longer affect the file manager page.
 
@@ -321,6 +329,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.3.3 =
+Security update: fixes four issues found in a security audit (folder rename, folder settings, watermark logo size, SFTP keys). Recommended for all sites. No change to your files or settings.
 
 = 1.3.2 =
 Keeps the file manager working next to optimisation plugins that rewrite script tags. No change to your files or settings.
