@@ -432,6 +432,19 @@ def test_verify_token_round_trips_and_rejects_tampering_or_expiry() -> None:
         verify_token(expired, SECRET)
 
 
+def test_verify_token_rejects_missing_exp_and_typed_tokens() -> None:
+    # Audit 2026-11-20 R3-1: mirror core's JwtMiddleware.
+    now = int(time.time())
+    with pytest.raises(jwt.MissingRequiredClaimError):
+        verify_token(jwt.encode({"sub": "u", "iat": now}, SECRET, algorithm="HS256"), SECRET)
+    for extra in ({"t": "img"}, {"t": "stream"}, {"t": "share"}, {"t": "intake"}, {"share": True}, {"intake": 1}):
+        tok = jwt.encode({"sub": "buyer", "iat": now, "exp": now + 600, **extra}, SECRET, algorithm="HS256")
+        with pytest.raises(FluxFilesTokenError):
+            verify_token(tok, SECRET)
+    ok = jwt.encode({"sub": "u", "iat": now, "exp": now + 600, "share": False}, SECRET, algorithm="HS256")
+    assert verify_token(ok, SECRET)["sub"] == "u"
+
+
 def test_decode_token_does_not_require_the_secret() -> None:
     token = create_token(secret=SECRET, user_id="u", prefix="users/1")
     assert decode_token(token)["prefix"] == "users/1"

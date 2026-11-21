@@ -517,6 +517,20 @@ describe('verifyToken', () => {
     const expired = createToken({ secret: SECRET, userId: 'u', claims: { exp: Math.floor(Date.now() / 1000) - 10 } });
     expect(() => verifyToken(expired, SECRET)).toThrow(/expired/);
   });
+  // Audit 2026-11-20 R3-1: mirror core's JwtMiddleware.
+  it('rejects a token without exp, and the narrow typed tokens signed with the same secret', () => {
+    const now = Math.floor(Date.now() / 1000);
+    const enc = (o: unknown) => base64url(JSON.stringify(o));
+    const sign = (payload: unknown) => {
+      const head = `${enc({ alg: 'HS256', typ: 'JWT' })}.${enc(payload)}`;
+      return `${head}.${base64url(hmacSha256(head, SECRET))}`;
+    };
+    expect(() => verifyToken(sign({ sub: 'u', iat: now }), SECRET)).toThrow(/no exp/);
+    for (const extra of [{ t: 'img' }, { t: 'stream' }, { t: 'share' }, { t: 'intake' }, { share: true }, { intake: 1 }]) {
+      expect(() => verifyToken(sign({ sub: 'buyer', iat: now, exp: now + 600, ...extra }), SECRET)).toThrow(/not an API access token/);
+    }
+    expect(verifyToken(sign({ sub: 'u', iat: now, exp: now + 600, share: false }), SECRET).sub).toBe('u');
+  });
 });
 
 describe('BYOB encrypt/decrypt round-trip (Node ↔ Node)', () => {

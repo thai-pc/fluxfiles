@@ -10,8 +10,12 @@ from .types import FluxClaims
 
 
 def verify_token(token: str, secret: str | None = None) -> FluxClaims:
-    """Verify an HS256 FluxFiles token: signature + expiry. Returns the decoded
-    claims, or raises on a bad signature, wrong algorithm, or an expired token.
+    """Verify an HS256 FluxFiles **API access token**: signature, a numeric
+    ``exp`` that has not passed, and no type marker. Same rules as core's
+    JwtMiddleware: a token without ``exp`` never expires, and the narrow tokens
+    signed with the same secret (``t`` = img/stream/share/intake/..., or the
+    legacy ``share``/``intake`` flags) are only safe on their own endpoints, so
+    neither is accepted here. Returns the decoded claims, or raises.
 
     PyJWT's own exceptions propagate unwrapped (`jwt.ExpiredSignatureError`,
     `jwt.InvalidSignatureError`, …) — a Python user of a JWT-adjacent library
@@ -20,7 +24,9 @@ def verify_token(token: str, secret: str | None = None) -> FluxClaims:
     key = secret if secret is not None else os.environ.get("FLUXFILES_SECRET", "")
     if not key:
         raise FluxFilesTokenError("FluxFiles: no secret provided to verify_token")
-    claims = jwt.decode(token, key, algorithms=["HS256"])
+    claims = jwt.decode(token, key, algorithms=["HS256"], options={"require": ["exp"]})
+    if "t" in claims or claims.get("share") or claims.get("intake"):
+        raise FluxFilesTokenError("FluxFiles: not an API access token")
     return cast(FluxClaims, claims)
 
 
