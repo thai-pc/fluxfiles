@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Full history + tags: the build stamps the bundled core version from
           # `git describe --match 'core-v*'` and fails without a reachable core tag.

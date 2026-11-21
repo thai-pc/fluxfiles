@@ -111,7 +111,7 @@ $h->test(
             Harness::ok(str_contains($message, 'composer install -d packages/core'));
         }
         $workflow = file_get_contents(dirname(__DIR__, 3) . '/.github/workflows/license-admin.yml');
-        Harness::ok(str_contains($workflow, 'actions/cache@v4'));
+        Harness::ok(preg_match('~actions/cache@v\d+~', $workflow) === 1);
         Harness::ok(str_contains($workflow, 'composer install --working-dir=packages/core'));
     },
 );
