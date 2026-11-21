@@ -5,6 +5,17 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.50] — 2026-11-21
+
+> Released: `core-v1.6.6`, `sdk-v1.0.3`, `laravel-v1.1.1` (an embedded manager stays open after a selection, #309) and `wordpress-v1.3.3` (bundles core 1.6.6 with the 1.6.5 security fixes, plus the synced browser SDK).
+
+### Fixed
+- Browser SDK: opened with `container`, selecting a file (double-click or "Choose N items") removed the embedded manager from the page, and later `command()`/`navigate()` calls went nowhere because the message listener was gone (#309). Only the modal overlay closes itself on select now. This affected `fluxfiles_embed()`, the Laravel `<x-fluxfiles>` component and any page passing `container`. Callers that want the container gone on select (the WordPress modals) already call `FluxFiles.close()` in `onSelect`. The copies shipped by core (`/fluxfiles.js`), Laravel and WordPress are updated.
+- WordPress: the plugin's own copy of the SDK (`assets/fluxfiles.js`, used by the media modals and the block) had drifted far behind `packages/sdk`. Among other things it lacked the check that a message comes from the plugin's own iframe (`e.source`). It is synced, and the WP smoke now fails when it differs, like Laravel's.
+
+### Security
+- `wordpress-v1.3.3` bundles core 1.6.6 and with it the `core-v1.6.5` fixes (tenant root rename, `prefix` dot segments, BYOB SFTP key paths, watermark logo size, demo trash purge); see `[1.0.49]`.
+
 ### Docs
 - Design specs for the paid modules and the Pro add-on moved out of this public repo into the owner's private docs repo; code comments now cite `fluxfiles-private-docs: design/<FILE>.md`. User-facing docs for those modules (FEATURES, CONFIG) are unchanged. A new guard, `tests/unit/test-no-paid-specs-public.php`, keeps `docs/design/` to free/core records.
 
