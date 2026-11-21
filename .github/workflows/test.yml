@@ -24,7 +24,7 @@ jobs:
         php: ['8.1', '8.2', '8.3', '8.4', '8.5']
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -87,7 +87,7 @@ jobs:
     name: Lock files valid + Laravel DB adapter
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -121,7 +121,7 @@ jobs:
     steps:
       # Need full history + tags so the guard can build core at each adapter's
       # declared composer floor (a `core-vX.Y.Z` monorepo tag) in a worktree.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -144,10 +144,10 @@ jobs:
     name: UI min assets are fresh
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       # fm.min.js / fm.min.css are committed build outputs (what the page serves).
@@ -164,7 +164,7 @@ jobs:
     name: iframe allow parity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       # Pure-bash guard: SDK / React / Vue / WordPress must grant the identical
@@ -181,7 +181,7 @@ jobs:
         php: ['8.1', '8.2', '8.3', '8.4', '8.5']
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -235,7 +235,7 @@ jobs:
         php: ['8.1', '8.2', '8.3', '8.4', '8.5']
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -315,7 +315,7 @@ jobs:
     name: Live S3 (LocalStack)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -443,7 +443,7 @@ jobs:
           --health-timeout=5s
           --health-retries=10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -496,7 +496,7 @@ jobs:
           --health-timeout=5s
           --health-retries=10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -530,11 +530,11 @@ jobs:
       matrix:
         pkg: [sdk, react, vue, ckeditor4, ckeditor5, tinymce, summernote]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -548,7 +548,7 @@ jobs:
     name: Node token SDK (PHP↔Node parity)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -565,7 +565,7 @@ jobs:
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -591,7 +591,7 @@ jobs:
     name: Python token SDK (PHP↔Python parity)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -608,7 +608,7 @@ jobs:
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -624,7 +624,7 @@ jobs:
     name: Browser e2e (Playwright)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -638,7 +638,7 @@ jobs:
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -656,7 +656,7 @@ jobs:
     name: Editor plugins e2e (real TinyMCE / CKEditor 4 / CKEditor 5 / Summernote)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -670,7 +670,7 @@ jobs:
       - name: Install core dependencies (the real-picker specs serve the picker from a live core)
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -694,10 +694,10 @@ jobs:
     name: Pack & install (published artifacts)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - name: Build, pack, install each wrapper into a throwaway consumer
@@ -709,7 +709,7 @@ jobs:
     name: WordPress.org zip guard
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # the build stamps the bundled core version from the latest core-v* tag
@@ -736,7 +736,7 @@ jobs:
     name: Docker production image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Build production image

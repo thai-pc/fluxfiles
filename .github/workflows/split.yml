@@ -23,7 +23,7 @@ jobs:
             remote: "fluxfiles-laravel"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: startsWith(github.ref_name, matrix.package.tag_prefix)
         with:
           fetch-depth: 0

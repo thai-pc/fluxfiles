@@ -50,10 +50,10 @@ jobs:
             build: "true"   # builds dist/ (incl. the executable dist/cli.js bin) via tsup
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: startsWith(github.ref_name, matrix.tag_prefix)
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         if: startsWith(github.ref_name, matrix.tag_prefix)
         with:
           node-version: 24
