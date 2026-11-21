@@ -163,7 +163,9 @@ final class NotifySupport
     public static function allow(string $bucket, int $limit, int $windowSeconds): bool
     {
         try {
-            RateLimiterFactory::make(max(1, $limit), max(1, $limit), $windowSeconds)->check($bucket, 'read');
+            // A bucket per window ('notify_86400'): the DB sweep is scoped by bucket, so a
+            // daily cap is never swept by the 60 s limiter that shares the table.
+            RateLimiterFactory::make(max(1, $limit), max(1, $limit), $windowSeconds)->check($bucket, 'notify_' . $windowSeconds);
             return true;
         } catch (ApiException $e) {
             return false;

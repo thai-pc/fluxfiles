@@ -1349,7 +1349,11 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     private function acquireLock(string $disk, string $lockFileName, array &$locks): void
     {
         $isLocal = ($this->diskManager->config($disk)['driver'] ?? '') === 'local';
-        if (!$isLocal || isset($locks[$disk])) {
+        if (isset($locks[$disk])) {
+            return;
+        }
+        if (!$isLocal) {
+            $this->acquireHostLock($disk, $lockFileName, $locks);
             return;
         }
         $config = $this->diskManager->config($disk);
@@ -1384,6 +1388,87 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         } else {
             fclose($fp);
         }
+    }
+
+    /**
+     * S3/R2/SFTP have no flock, so their sidecars (index, dirs, trash, holds, audit
+     * log) used a bare read-modify-write: concurrent requests lost entries silently
+     * (audit 2026-11-20 R6-1: 4 of 100 audit lines and 33 of 100 holds survived 5
+     * writers). Serialise writers with a lock file on THIS host, keyed by the
+     * storage location (not the disk name, so two disk names or BYOB tokens that
+     * point at the same bucket/prefix share one lock). That covers every PHP worker
+     * of a single server; several app servers writing one bucket still need the
+     * DB backend (`FLUXFILES_STORAGE_BACKEND=db`), see docs/guides/OPERATIONS.md.
+     * Best-effort: when no lock directory is writable, nothing is locked (the old
+     * behaviour) rather than failing the request.
+     *
+     * @param resource[] &$locks
+     */
+    private function acquireHostLock(string $disk, string $lockFileName, array &$locks): void
+    {
+        $dir = self::hostLockDir();
+        if ($dir === null) {
+            return;
+        }
+        $c = $this->diskManager->config($disk);
+        $where = [];
+        foreach (['driver', 'bucket', 'endpoint', 'region', 'prefix', 'root', 'host', 'port', 'path_style'] as $k) {
+            if (isset($c[$k]) && is_scalar($c[$k])) {
+                $where[$k] = (string) $c[$k];
+            }
+        }
+        $file = $dir . '/' . sha1((string) json_encode($where)) . '-' . basename($lockFileName);
+        $fp = @fopen($file, 'c+');
+        if ($fp === false) {
+            return;
+        }
+        @chmod($file, 0600);
+        // Bounded wait: a holder that never lets go (a stuck worker, or a second
+        // handler for the same storage inside this very process) must not hang
+        // the request forever. Past the deadline the write goes ahead unlocked,
+        // exactly as before this lock existed, and says so in the log.
+        $deadline = microtime(true) + self::HOST_LOCK_WAIT_SECONDS;
+        do {
+            if (flock($fp, LOCK_EX | LOCK_NB)) {
+                $locks[$disk] = $fp;
+                return;
+            }
+            usleep(20000);
+        } while (microtime(true) < $deadline);
+        fclose($fp);
+        \FluxFiles\Log::warn('FluxFiles: waited ' . self::HOST_LOCK_WAIT_SECONDS . " s for the {$lockFileName} host lock of disk '{$disk}'; writing without it");
+    }
+
+    /** How long a request waits for a host lock before writing without it. */
+    private const HOST_LOCK_WAIT_SECONDS = 30;
+
+    /** Writable directory for host-local locks, or null. Cached per process. */
+    private static function hostLockDir(): ?string
+    {
+        static $dir = false;
+        if ($dir !== false) {
+            return $dir;
+        }
+        $env = static fn (string $k): string => (string) ($_ENV[$k] ?? (getenv($k) ?: ''));
+        $candidates = [];
+        if (strtolower($env('FLUXFILES_LOCK_PATH')) === 'off') {
+            return $dir = null;   // operator opt-out: no host locks (the pre-1.6.7 behaviour)
+        }
+        if ($env('FLUXFILES_LOCK_PATH') !== '') {
+            $candidates[] = rtrim($env('FLUXFILES_LOCK_PATH'), '/');
+        }
+        $candidates[] = rtrim($env('FLUXFILES_STORAGE_PATH') !== '' ? $env('FLUXFILES_STORAGE_PATH') : __DIR__ . '/../storage', '/') . '/locks';
+        $candidates[] = rtrim(sys_get_temp_dir(), '/') . '/fluxfiles-locks';
+        foreach ($candidates as $d) {
+            // Re-check is_dir() after a failed mkdir(): concurrent workers race to
+            // create it, and a loser must not fall through to a DIFFERENT directory
+            // (it would then lock a file nobody else holds).
+            if ((is_dir($d) || @mkdir($d, 0700, true) || is_dir($d)) && is_writable($d)) {
+                return $dir = $d;
+            }
+        }
+        \FluxFiles\Log::warn('FluxFiles: no writable lock directory (FLUXFILES_LOCK_PATH); S3/SFTP metadata writes are not serialised');
+        return $dir = null;
     }
 
     /** @param resource[] &$locks */

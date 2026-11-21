@@ -16,8 +16,12 @@ export function decodeToken(token: string): FluxClaims {
 }
 
 /**
- * Verify an HS256 FluxFiles token: signature + expiry. Returns the decoded
- * claims, or throws on a bad signature, wrong algorithm, or an expired token.
+ * Verify an HS256 FluxFiles **API access token**: signature, a numeric `exp`
+ * that has not passed, and no type marker. Same rules as core's JwtMiddleware:
+ * a token without `exp` never expires, and the narrow tokens signed with the
+ * same secret (`t` = img/stream/share/intake/…, or the legacy `share`/`intake`
+ * flags) are only safe on their own endpoints, so neither is accepted here.
+ * Returns the decoded claims, or throws.
  */
 export function verifyToken(token: string, secret?: string): FluxClaims {
   const key = secret ?? process.env.FLUXFILES_SECRET ?? '';
@@ -43,7 +47,14 @@ export function verifyToken(token: string, secret?: string): FluxClaims {
       throw new Error(`FluxFiles: invalid ${name} claim`);
     }
   }
-  if (typeof claims.exp === 'number' && claims.exp <= now) {
+  if (typeof claims.exp !== 'number') {
+    throw new Error('FluxFiles: token has no exp claim');
+  }
+  const c = claims as unknown as Record<string, unknown>;
+  if (c.t !== undefined || Boolean(c.share) || Boolean(c.intake)) {
+    throw new Error('FluxFiles: not an API access token');
+  }
+  if (claims.exp <= now) {
     throw new Error('FluxFiles: token has expired');
   }
   if ((typeof claims.nbf === 'number' && claims.nbf > now)

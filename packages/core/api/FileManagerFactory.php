@@ -47,7 +47,7 @@ final class FileManagerFactory
         #[\SensitiveParameter] string $streamSecret,
         ?AiTagger $aiTagger = null
     ): FileManager {
-        $fm->setQuotaManager(new QuotaManager($diskManager));
+        $fm->setQuotaManager((new QuotaManager($diskManager))->setMetadata($metaRepo));
         // Enables gated-local media: file URLs on a `private => true` local disk become
         // tokened /api/fm/stream links, and list() emits img_base for /api/fm/img.
         $fm->setStreamSecret($streamSecret);
