@@ -60,6 +60,49 @@ class QuotaManager
         $this->meterTtl = max(0, $meterTtl);
     }
 
+    /** @var MetadataRepositoryInterface|null source of the trash manifest (see trashBytes()) */
+    private $meta = null;
+
+    /**
+     * Count soft-deleted files toward the prefix that trashed them. Trash lives in
+     * the disk-wide `_fluxfiles/trash/`, outside every prefix, so without this a
+     * scoped tenant could upload → trash → repeat past max_storage (audit
+     * 2026-11-20 R2-2). Optional: without it, usage is the prefix walk only.
+     */
+    public function setMetadata(MetadataRepositoryInterface $meta): self
+    {
+        $this->meta = $meta;
+        return $this;
+    }
+
+    /**
+     * Bytes held in the trash for items whose original key is inside $prefix.
+     * 0 for the empty prefix: its walk already covers `_fluxfiles/trash/`.
+     */
+    public function trashBytes(string $disk, string $prefix): int
+    {
+        $p = trim($prefix, '/');
+        if ($p === '' || $this->meta === null) {
+            return 0;
+        }
+        try {
+            $all = $this->meta->allTrash($disk);
+        } catch (\Throwable $e) {
+            return 0;
+        }
+        $sum = 0;
+        foreach ($all as $e) {
+            if (!is_array($e)) {
+                continue;
+            }
+            $k = trim((string) ($e['original_key'] ?? ''), '/');
+            if ($k === $p || str_starts_with($k, $p . '/')) {
+                $sum += max(0, (int) ($e['size'] ?? 0));
+            }
+        }
+        return $sum;
+    }
+
     /**
      * One recursive pass: raw bytes of EVERY file (internal ones included — the
      * quota meter's figure) and the count of user-visible files.
@@ -88,6 +131,7 @@ class QuotaManager
                 $files++;
             }
         }
+        $bytes += $this->trashBytes($disk, $prefix);
 
         return ['bytes' => $bytes, 'files' => $files];
     }

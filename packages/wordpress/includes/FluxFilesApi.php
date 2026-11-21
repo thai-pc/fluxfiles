@@ -2384,6 +2384,9 @@ class FluxFilesApi
             $claims->requireDisk($disk);
             $claims->requirePerm('read');
             $quotaManager = new QuotaManager($this->diskManager);
+            if (method_exists($quotaManager, 'setMetadata')) {   // core >= 1.6.7: count trash
+                $quotaManager->setMetadata($this->metaRepo);
+            }
             $top = $claims->usageTopFoldersCount > 0 ? $claims->usageTopFoldersCount : 10;
             $depth = $claims->usageFolderDepth > 0 ? $claims->usageFolderDepth : 1;
 
@@ -3018,6 +3021,9 @@ class FluxFilesApi
             $claims->requireDisk($disk);
             $claims->requirePerm('read');
             $quotaManager = new QuotaManager($this->diskManager);
+            if (method_exists($quotaManager, 'setMetadata')) {   // core >= 1.6.7: count trash
+                $quotaManager->setMetadata($this->metaRepo);
+            }
 
             return $this->ok($quotaManager->getQuotaInfo(
                 $disk,

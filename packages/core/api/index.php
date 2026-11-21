@@ -408,7 +408,7 @@ try {
     // Audit log (lưu trong user storage)
     $auditLog = new AuditLogStorage($metaRepo, $claims->allowedDisks);
     $chunker = new \FluxFiles\ChunkUploader($diskManager);
-    $quotaManager = new QuotaManager($diskManager);
+    $quotaManager = (new QuotaManager($diskManager))->setMetadata($metaRepo);
 
     // Resumable uploads (tus 1.0) — not a JSON-envelope API: status + headers only.
     if ($isTus) {
