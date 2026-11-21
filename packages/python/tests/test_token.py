@@ -437,7 +437,10 @@ def test_verify_token_rejects_missing_exp_and_typed_tokens() -> None:
     now = int(time.time())
     with pytest.raises(jwt.MissingRequiredClaimError):
         verify_token(jwt.encode({"sub": "u", "iat": now}, SECRET, algorithm="HS256"), SECRET)
-    for extra in ({"t": "img"}, {"t": "stream"}, {"t": "share"}, {"t": "intake"}, {"share": True}, {"intake": 1}):
+    typed: list[dict[str, Any]] = [
+        {"t": "img"}, {"t": "stream"}, {"t": "share"}, {"t": "intake"}, {"share": True}, {"intake": 1},
+    ]
+    for extra in typed:
         tok = jwt.encode({"sub": "buyer", "iat": now, "exp": now + 600, **extra}, SECRET, algorithm="HS256")
         with pytest.raises(FluxFilesTokenError):
             verify_token(tok, SECRET)
