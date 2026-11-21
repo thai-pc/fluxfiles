@@ -7,7 +7,19 @@
 [![Packagist Version](https://img.shields.io/packagist/v/fluxfiles/fluxfiles?label=packagist&color=f28d1a)](https://packagist.org/packages/fluxfiles/fluxfiles)
 [![Docker image](https://img.shields.io/badge/ghcr.io-fluxfiles-2496ed?logo=docker&logoColor=white)](https://github.com/thai-pc/fluxfiles/pkgs/container/fluxfiles)
 [![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
+[![Tests](https://github.com/thai-pc/fluxfiles/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/thai-pc/fluxfiles/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
+[![laravel on Packagist](https://img.shields.io/packagist/v/fluxfiles/laravel?label=laravel&color=ff2d20)](https://packagist.org/packages/fluxfiles/laravel)
+[![sdk on npm](https://img.shields.io/npm/v/fluxfiles?label=sdk&color=cb3837)](https://www.npmjs.com/package/fluxfiles)
+[![react on npm](https://img.shields.io/npm/v/@fluxfiles/react?label=react&color=61dafb)](https://www.npmjs.com/package/@fluxfiles/react)
+[![vue on npm](https://img.shields.io/npm/v/@fluxfiles/vue?label=vue&color=42b883)](https://www.npmjs.com/package/@fluxfiles/vue)
+[![ckeditor4 on npm](https://img.shields.io/npm/v/@fluxfiles/ckeditor4?label=ckeditor4&color=1eb5ff)](https://www.npmjs.com/package/@fluxfiles/ckeditor4)
+[![ckeditor5 on npm](https://img.shields.io/npm/v/@fluxfiles/ckeditor5?label=ckeditor5&color=0ae)](https://www.npmjs.com/package/@fluxfiles/ckeditor5)
+[![tinymce on npm](https://img.shields.io/npm/v/@fluxfiles/tinymce?label=tinymce&color=2dc26b)](https://www.npmjs.com/package/@fluxfiles/tinymce)
+[![summernote on npm](https://img.shields.io/npm/v/@fluxfiles/summernote?label=summernote&color=73a839)](https://www.npmjs.com/package/@fluxfiles/summernote)
+[![node on npm](https://img.shields.io/npm/v/@fluxfiles/node?label=node&color=339933)](https://www.npmjs.com/package/@fluxfiles/node)
+[![mcp on npm](https://img.shields.io/npm/v/@fluxfiles/mcp?label=mcp&color=6b4fbb)](https://www.npmjs.com/package/@fluxfiles/mcp)
+[![python on PyPI](https://img.shields.io/pypi/v/fluxfiles-token?label=python&color=3776ab)](https://pypi.org/project/fluxfiles-token/)
 
 **An embeddable file manager for PHP 8.1+.** Files stay on your own storage: local disk, AWS S3, Cloudflare R2 or SFTP. Your backend signs a short-lived JWT that decides what each user can see and do, so FluxFiles keeps no user database of its own.
 
