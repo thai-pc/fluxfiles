@@ -53,5 +53,13 @@
   "publishConfig": {
     "access": "public"
   },
-  "keywords": ["fluxfiles", "mcp", "model-context-protocol", "ai", "agent", "file-manager", "claude"]
+  "keywords": [
+    "fluxfiles",
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "agent",
+    "file-manager",
+    "claude"
+  ]
 }

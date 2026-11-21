@@ -65,7 +65,7 @@ jobs:
           coverage: none
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Install isolated test-only browser dependencies
         run: |
           npm install --prefix "$RUNNER_TEMP/admin-browser" --no-audit --no-fund playwright@1.65.1
