@@ -149,7 +149,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
       # fm.min.js / fm.min.css are committed build outputs (what the page serves).
       # Rebuild with the esbuild version pinned in scripts/build-ui.sh and fail on
       # any difference: someone edited fm.js/fm.css without running the build.
@@ -536,7 +536,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Install + test ${{ matrix.pkg }}
         working-directory: packages/${{ matrix.pkg }}
@@ -567,7 +567,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Install + typecheck + build + test @fluxfiles/node
         working-directory: packages/node
@@ -640,7 +640,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Install Playwright + chromium
         working-directory: packages/core/tests/browser
@@ -672,7 +672,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Build editor plugins (the tests load the shipped plugin.min.js)
         run: |
@@ -699,7 +699,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Build, pack, install each wrapper into a throwaway consumer
         run: |
           for p in sdk react vue ckeditor5 mcp; do bash scripts/ci-retry.sh npm install --prefix packages/$p --no-audit --no-fund; done
