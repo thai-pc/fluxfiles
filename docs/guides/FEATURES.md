@@ -15,7 +15,7 @@ guide's [On-demand WebP & AVIF](GUIDE.md#on-demand-webp--avif) section for the r
 
 - **AVIF or WebP, negotiated for free.** With the default `format=auto`, the
   endpoint reads the browser's `Accept` header and serves **AVIF** when accepted
-  (smallest, on builds with GD AVIF support; the Docker image has it since the release after 1.7.0), else **WebP**, else the original
+  (smallest, on builds with GD AVIF support; the Docker image has it since 1.7.1), else **WebP**, else the original
   untouched for ancient clients. AVIF and WebP cache as separate files and the
   response sends `Vary: Accept`. Force one with `&format=avif` / `&format=webp`.
   _(This is core/free — there is no paid "AVIF" tier.)_
