@@ -5,6 +5,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.53] — 2026-11-22
+
+> Released: `mcp-v1.1.2`.
+
+### Fixed
+- `@fluxfiles/mcp`: the server reports its real version to MCP clients. 1.1.1 still introduced itself as 1.1.0. A test now ties the constant to `package.json`.
+
 ## [1.0.52] — 2026-11-22
 
 > Released: `core-v1.7.0`: faster image and document loading, measured on a local disk, real S3 and R2 buckets, Laravel and WordPress. A folder of 48 large images without thumbnails opens in about 2 s instead of 24 s at 20 Mbps, selecting an image downloads about 0.02 MB instead of 2.3 MB, and an S3/R2 listing of files outside the index takes a third to a half of the time. The first view of a bucket folder without thumbnails is not faster, because the server resizes each image once. Laravel gets it with `composer update`; the WordPress plugin bundles core and follows in its own release.
