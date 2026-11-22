@@ -36,7 +36,7 @@ Match the surrounding file's style, comment density, and naming.
   `index.php`, like `/img`, `/stream`, `/api/fm/intake/*` — emit the `{data,error,error_code}`
   JSON envelope + exit.
 - **Core hooks** for cross-cutting module behavior mirror `FileManager::setUploadOptimizer`
-  / `setVersionKeeper` — wired in `index.php` only when installed+licensed+claim.
+  / `setVersionKeeper` — wired in `FileManagerFactory::wire()` only when installed+licensed+claim.
 - **Security**: SSRF-guard any outbound fetch (`SsrfGuard::assertSafeUrl`); `assertOwner`
   on destructive ops (owner_only); `assertNotSystem` / path scoping; never JWT in a URL
   (adapters use postMessage, API uses Bearer; `?token=` is dev-only, stripped on boot);

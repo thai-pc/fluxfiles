@@ -1,5 +1,8 @@
 # Licence admin — MVP, Phase 2 and Phase 3
 
+> Historical record (PRs #245 and #246): merged, and deployed to production and sandbox on
+> 2026-11-09 (CHANGELOG `[1.0.28]`). Test counts and "no merge/deployment" notes describe the PR.
+
 Implements all phases in `docs/design/LICENSE-ADMIN-UI-DESIGN.md` after the owner's
 scope expansion. One branch and PR, independent production/sandbox deployments.
 No merge, tag, deployment, real mail/Telegram or private configuration changes.

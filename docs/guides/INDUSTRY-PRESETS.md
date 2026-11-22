@@ -7,7 +7,7 @@ turn that into a copy-paste starting point instead of reading all the claims in
 [`CONFIG.md`](../reference/CONFIG.md) from scratch.
 
 Each preset lists: who it's for, what it turns on, and whether it needs a paid
-module (see [fluxfiles.io/pricing](https://fluxfiles.io/pricing) — the free core
+module (see [pricing](https://fluxfiles.thai-pc.com/pricing/) — the free core
 covers everything that isn't marked **Pro**/**Studio**/**Enterprise** below). All
 snippets use the one-options-array form of `fluxfiles_token()`; every claim not
 named as its own option goes through the `claims` escape hatch (see §1 of

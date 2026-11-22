@@ -12,24 +12,24 @@ git clone git@github.com:YOUR-USERNAME/fluxfiles.git
 cd fluxfiles/packages/core/lang
 
 # 3. Create a branch for your language (use the ISO 639-1 code)
-git checkout -b i18n/add-th
+git checkout -b i18n/add-pl
 
 # 4. Copy English as the starting template
-cp en.json th.json
+cp en.json pl.json
 
-# 5. Edit th.json — translate values, keep keys + {placeholders} untouched
+# 5. Edit pl.json — translate values, keep keys + {placeholders} untouched
 
 # 6. Verify
 cd ../..   # back to packages/core
 php tests/unit/test-i18n.php
 
 # 7. Commit and push to your fork
-git add lang/th.json
-git commit -m "i18n: add Thai (th)"
-git push -u origin i18n/add-th
+git add lang/pl.json
+git commit -m "i18n: add Polish (pl)"
+git push -u origin i18n/add-pl
 
 # 8. Open a PR from your fork to thai-pc/fluxfiles:master
-gh pr create --title "i18n: add Thai (th)" --body "Adds Thai translation." --repo thai-pc/fluxfiles
+gh pr create --title "i18n: add Polish (pl)" --body "Adds Polish translation." --repo thai-pc/fluxfiles
 # (or use the GitHub UI — the 'Compare & pull request' banner appears after push)
 ```
 
@@ -60,7 +60,7 @@ git fetch upstream
 Never commit directly to `master` on your fork — branch names make the PR easier to review:
 
 ```bash
-git checkout -b i18n/add-{code}     # e.g. i18n/add-th
+git checkout -b i18n/add-{code}     # e.g. i18n/add-pl
 ```
 
 ### 4. Create the translation file
@@ -69,15 +69,15 @@ git checkout -b i18n/add-{code}     # e.g. i18n/add-th
 cp packages/core/lang/en.json packages/core/lang/{code}.json
 ```
 
-The `{code}` must be an [ISO 639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) lowercase code (e.g. `th`, `pl`, `sv`).
+The `{code}` must be an [ISO 639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) lowercase code of a language that is not shipped yet (e.g. `pl`, `sv`).
 
 ### 5. Fill in `_meta`
 
 ```json
 {
   "_meta": {
-    "locale":    "th",
-    "name":      "ภาษาไทย",
+    "locale":    "pl",
+    "name":      "Polski",
     "direction": "ltr",
     "version":   "1.20.0",
     "authors":   ["Your Name"]
@@ -95,7 +95,7 @@ For RTL languages (Arabic, Hebrew, Persian, Urdu), set `"direction": "rtl"`.
 
 ### 7. Verify locally
 
-Run the i18n test suite — it validates JSON, key completeness, placeholder preservation, and plural rules:
+Run the i18n test suite — it validates JSON, key completeness, placeholder preservation, and that each locale loads:
 
 ```bash
 cd packages/core
@@ -107,13 +107,13 @@ Or check a single key manually:
 ```bash
 php -r "
   require __DIR__ . '/api/I18n.php';
-  \$i = new FluxFiles\I18n(__DIR__ . '/lang', 'th');
+  \$i = new FluxFiles\I18n(__DIR__ . '/lang', 'pl');
   echo \$i->t('upload.drop_hint') . PHP_EOL;
   echo \$i->t('file.items', ['count' => 5]) . PHP_EOL;
 "
 ```
 
-All 16+ languages must pass before your PR is merged.
+All languages must pass before your PR is merged.
 
 ### 8. Commit and push
 
@@ -132,7 +132,7 @@ gh pr create \
   --repo thai-pc/fluxfiles \
   --base master \
   --title "i18n: add {Language Name} ({code})" \
-  --body "Adds {language} translation for v1.20+.\n\nTested: \`php tests/unit/test-i18n.php\` passes."
+  --body "Adds {language} translation.\n\nTested: \`php tests/unit/test-i18n.php\` passes."
 ```
 
 **Using the GitHub web UI:**

@@ -5,7 +5,7 @@ Adds a **FluxFiles** toolbar button to CKEditor 4 for browsing and inserting fil
 ## Requirements
 
 - CKEditor 4
-- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This plugin is only the editor button — it loads the FluxFiles SDK (`fluxfiles.js`) from that server and `endpoint` must point at it.
+- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This plugin is only the editor button: your page must load the FluxFiles SDK (`fluxfiles.js`, served by that server at `/fluxfiles.js`), and `endpoint` must point at that server.
 
 ## Installation
 
@@ -20,7 +20,7 @@ or copy the plugin folder into your CKEditor `plugins/` directory:
 ```
 ckeditor/plugins/fluxfiles/
 ├── plugin.js        # readable source
-├── plugin.min.js    # minified (~1.3 KB) — use in production
+├── plugin.min.js    # minified (~4.6 KB) — use in production
 └── README.md
 ```
 
@@ -80,6 +80,9 @@ The modal closes automatically after selection.
 | `theme` | string | `null` | Picker theme: `light` / `dark` / `auto` |
 | `multiple` | boolean | `false` | Allow multi-file selection |
 | `allowedTypes` | string[] | `null` | Extensions (`.pdf` or `pdf`) or MIME types / patterns (`image/*`, `application/pdf`). Shown only in picker mode: non-matching files are hidden and cannot be selected. UI convenience, not a security boundary (the token's `allowed_ext` claim is the server-side check) |
+| `path` | string | `''` | Folder the picker opens in |
+| `maxUploadMb` | number | `null` | Max size per uploaded file, MB |
+| `maxFiles` | number | `null` | Max files per upload batch |
 | `imageDialog` | boolean | `true` | Inject the **Browse FluxFiles** button into the native Image dialog |
 
 **Files with no permanent URL.** Two cases:

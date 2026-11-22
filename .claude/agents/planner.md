@@ -22,8 +22,8 @@ code is the truth.
 
 **1. Build / embed / don't build.**
 - Where excellent free self-hostable OSS exists, the answer is **embed it behind a free
-  config toggle**, not build a competitor (terminal → ttyd via `terminal_pty_url`;
-  planned: PDF → Stirling-PDF, office → Collabora/OnlyOffice, e-sign → DocuSeal).
+  config toggle**, not build a competitor (all shipped: terminal → ttyd via
+  `terminal_pty_url`, PDF → Stirling-PDF, office → Collabora/OnlyOffice, e-sign → DocuSeal).
   Say so explicitly and name the OSS + the toggle claim.
 - "Don't build" is a real, valuable answer. Say it when the feature is commodity, when
   it fights the grain, or when it duplicates something already shipped.

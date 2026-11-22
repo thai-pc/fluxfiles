@@ -52,5 +52,6 @@ so once at the top of the spec rather than quietly redesigning around it.
 Use WebSearch/WebFetch to ground market/competitor claims (pricing, OSS alternatives)
 when the spec involves a paid feature — cite sources briefly.
 
-Keep it concrete and short. Write the doc to `docs/` (or return it inline if the caller
-wants to place it). End by listing the exact claims to add to `docs/reference/CONFIG.md`.
+Keep it concrete and short. Write a free/core doc to `docs/design/` (add it to the allowlist in
+`tests/unit/test-no-paid-specs-public.php`); a paid-module or Pro spec never goes in this public
+repo (see `.claude/CLAUDE.md`): return it inline, as you do if the caller wants to place it. End by listing the exact claims to add to `docs/reference/CONFIG.md`.

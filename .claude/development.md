@@ -4,12 +4,13 @@
 
 - PHP requirement: `>= 8.1` (8.1–8.5 tested in CI; keeping PHP patched is the operator's job). Four places must agree — every `composer.json` `require.php` + `config.platform.php`, the WP plugin header, `readme.txt` `Requires PHP` and `FLUXFILES_MIN_PHP`; `test-wp-smoke.php` guards the WP side. Raising it again = same edits + `composer update --lock`.
 - Core PHP dependencies live in `packages/core/composer.json`.
-- Root `vendor/` exists in this checkout, but core package commands should usually run with `-d packages/core` or from `packages/core`.
+- There is no root `composer.json`; run core package commands with `-d packages/core` or from `packages/core`.
 - Node packages:
   - `packages/react`: tsup + TypeScript, React peer dependency.
   - `packages/vue`: Vite + Vue + vue-tsc.
   - `packages/sdk`: plain JS package with type definitions.
-  - `packages/node`, `packages/mcp`: TypeScript, vitest.
+  - `packages/node`, `packages/mcp`, `packages/ckeditor5`: TypeScript, tsup, vitest.
+  - `packages/ckeditor4`, `packages/tinymce`, `packages/summernote`: plain JS, minified with esbuild.
 - Python package: `packages/python` (`fluxfiles-token`, pytest).
 
 Do not print `.env` contents. Use `.env.example` and package config files when documenting settings.
@@ -50,8 +51,8 @@ php packages/laravel/tests/test-laravel-smoke.php
 
 ### Self-booting HTTP e2e (`tests/e2e/*-http.php`)
 
-Each of these boots its own `php -S`, backs up/restores `packages/core/.env`, and
-needs the `curl` extension — they run sequentially against distinct ports so they
+Each of these boots its own `php -S`, needs the `curl` extension, and either
+backs up/restores `packages/core/.env` or runs on its own temp storage — they run sequentially against distinct ports so they
 don't collide with each other or with a dev server you already have open. CI runs
 **every file matching this glob automatically** in the `selfboot-e2e` job
 (`for f in tests/e2e/*-http.php; do php "$f"; done`) — a new file matching
@@ -77,6 +78,10 @@ php packages/core/tests/e2e/test-sso-http.php                 # SSO bridge (OIDC
 php packages/core/tests/e2e/test-dlp-http.php                 # DLP fail-closed gate — port 8151
 php packages/core/tests/e2e/test-ai-test-http.php            # POST /ai/test vs a fake provider (own temp storage) — ephemeral ports
 php packages/core/tests/e2e/test-write-policy-http.php        # quota/owner policy on writes (DB backend) — ephemeral port
+php packages/core/tests/e2e/test-cli-ai-doctor-http.php       # CLI `ai:test` / `doctor` vs a fake provider — ephemeral port
+php packages/core/tests/e2e/test-disks-config-http.php        # broken FLUXFILES_DISKS_CONFIG answers a generic 500 — ephemeral port
+php packages/core/tests/e2e/test-html-etag-http.php           # /public/index.html ETag — ephemeral port
+php packages/core/tests/e2e/test-license-refresh-http.php     # CLI `license refresh` / `update` vs fake servers — ephemeral ports
 ```
 
 (`test-virus-http.php`'s 8107 and `test-audit-export-http.php`'s 8106-8108 overlap
@@ -156,6 +161,7 @@ cd packages/sdk       && npm install && npm test
 cd packages/react     && npm install && npm test
 cd packages/vue       && npm install && npm test
 cd packages/ckeditor4 && npm install && npm test
+cd packages/ckeditor5 && npm install && npm test
 cd packages/tinymce   && npm install && npm test
 cd packages/summernote && npm install && npm test
 
@@ -223,7 +229,7 @@ composer install -d packages/laravel
 ## Release/Package Notes
 
 - Version numbers are mirrored across packages such as `packages/react/package.json`, `packages/vue/package.json`, `packages/mcp/package.json`, Laravel composer constraints, and changelog content. Check all package manifests when doing release work.
-- `packages/vue/dist`, `packages/react/dist` and `packages/node/dist` are generated publish artifacts.
+- `packages/{vue,react,node,mcp,ckeditor5}/dist` are generated publish artifacts.
 - `scripts/build-wordpress.sh` is used for WordPress packaging; `wordpress-release.yml` runs it on a `wordpress-v*` tag.
 
 ## Common Pitfalls

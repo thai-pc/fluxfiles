@@ -22,7 +22,7 @@ button, double-clicks a seeded file in the iframe and asserts the editor content
 
 - an image file becomes an `<img>` with `src` = the file's URL and `alt` = its name;
 - a text file becomes a link (`href` = the file's URL, text = its name);
-- CKEditor 5 also covers the image-insert dropdown entry (see the known bug below).
+- CKEditor 5 also covers the image-insert dropdown entry (see below).
 
 How it works:
 - `global-setup.ts` writes a throwaway `FLUXFILES_SECRET` into `packages/core/.env`
@@ -38,10 +38,9 @@ How it works:
 - Ports: 8197 static, 8201 core, 8203 Vite (override with `FF_EDITORS_PORT`,
   `FF_EDITORS_CORE_PORT`, `FF_EDITORS_CK5_PORT`).
 
-Known adapter bug, tracked as a `test.fail()` in the spec: the CKEditor 5 adapter
-registers its "FluxFiles" image-insert integration, but CKEditor only renders
-integrations named in `image.insert.integrations` (default `upload, assetManager, url`),
-so the dropdown entry is missing with the default config. The spec proves the entry works once listed.
+CKEditor only renders image-insert integrations named in `image.insert.integrations`
+(default `upload, assetManager, url`). The CKEditor 5 adapter adds itself to that default
+list and leaves a custom list alone; the spec covers both cases.
 
 CI: the `editor-e2e` job in `.github/workflows/test.yml` runs everything here.
 

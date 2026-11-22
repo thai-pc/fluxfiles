@@ -1,6 +1,6 @@
 # Connection test (AI + storage) — design
 
-Status: proposed · Target: core 1.6.0, wordpress 1.3.0, laravel next · Free/core (no module)
+Status: **Implemented** in core-v1.6.0, wordpress-v1.3.0 and laravel-v1.1.0 (CHANGELOG `[1.0.40]`–`[1.0.43]`) · Free/core (no module)
 
 > **Decision (owner, revised 2026-11-15):** `/ai/test`, the doctor `ai` block and the UI AI row use the same eligibility as manual `/ai-tag`: disk in token + `write` + AI configured. `ai_auto_tag` plays no part.
 
@@ -515,7 +515,7 @@ transport. The `adapter-core-floor` guard enforces the `^1.6.0` floor.
    diagnostics from webhooks globally in a separate change if that is unwanted.
 6. **Site Health storage check is list-only** (no write/delete probe). Permission drift on
    PutObject is caught only by the manual Cloud test or `fluxfiles doctor`.
-7. **DONE (Unreleased): core follow-up: `BucketDoctor` had no timeouts.** Fixed: per-command `@http` (5 s connect, 15 s total) + `@retries` 0, fail-fast skip after a connection error, 45 s budget, bounded presign probe and SFTP. Original problem: Its S3 calls inherit the SDK defaults
+7. **DONE (core-v1.6.2): core follow-up: `BucketDoctor` had no timeouts.** Fixed: per-command `@http` (5 s connect, 15 s total) + `@retries` 0, fail-fast skip after a connection error, 45 s budget, bounded presign probe and SFTP. Original problem: Its S3 calls inherit the SDK defaults
    (no connect/total timeout, 3 retries), so the Cloud test against a dead endpoint can run for
    minutes. Give it `@http` defaults and `@retries`, and skip the remaining S3 checks after a
    connection-class reachability failure. The WordPress Site Health probe already bounds its own

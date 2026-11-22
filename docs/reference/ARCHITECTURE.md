@@ -42,7 +42,7 @@ Two hard constraints shape every decision:
 ```
 FluxFiles/
 ├── packages/
-│   ├── core/         ★ the engine — PHP API + zero-build UI + the browser SDK source
+│   ├── core/         ★ the engine — PHP API + zero-build UI (+ a copy of the browser SDK)
 │   ├── laravel/        PHP adapter   (composer-requires core)         → Packagist
 │   ├── wordpress/      PHP adapter   (bundles core into a plugin ZIP) → GitHub release ZIP
 │   ├── sdk/            browser SDK   (the postMessage bridge)         → npm  `fluxfiles`
@@ -50,10 +50,11 @@ FluxFiles/
 │   ├── mcp/            MCP server for AI agents (TypeScript)         → npm  @fluxfiles/mcp
 │   ├── python/         server-side JWT minter (Python 3.10+)         → PyPI fluxfiles-token
 │   ├── react/  vue/    framework wrappers (TypeScript)               → npm  @fluxfiles/{react,vue}
-│   └── ckeditor4/  tinymce/  summernote/   rich-text-editor plugins  → npm  @fluxfiles/*
+│   └── ckeditor4/ ckeditor5/ tinymce/ summernote/  editor plugins   → npm  @fluxfiles/*
 │
-├── .github/workflows/  test.yml · split.yml · npm-publish.yml · pypi-publish.yml · docker-publish.yml · wordpress-release.yml
+├── .github/workflows/  test.yml · split.yml · npm-publish.yml · pypi-publish.yml · docker-publish.yml · wordpress-release.yml · license-admin.yml
 ├── scripts/            build-wordpress.sh · check-adapter-core-floor.sh · pack-smoke.sh · pack-modules.php · ci-retry.sh · landing-screenshots/ · …
+├── services/           license-server/ — the vendor's licence server (not part of any published package)
 ├── docker/             Dockerfile · Dockerfile.prod · nginx.conf · entrypoint.sh
 ├── docs/               guides/ · reference/ · design/ · security/ — indexed in docs/README.md (a few owner-only notes are gitignored: ROADMAP, COMMERCIAL-STRATEGY, LICENSING-PLAN, COMPETITOR-RESEARCH, WP-PRO-ADDON-DESIGN, LICENSE-SERVER-DEPLOYMENT)
 ├── .claude/            CLAUDE.md · architecture.md · api-map.md · development.md   (AI-agent context)
@@ -68,8 +69,8 @@ are not part of this tree on a public checkout.
 
 ```
 core/
-├── api/                ~63 PHP files (~50 top-level + 13 under `Db/` for the opt-in
-│                       DB storage backend) — the whole engine
+├── api/                ~108 PHP files (~83 top-level, 14 under `Db/` for the opt-in
+│                       DB storage backend, 11 under `Mail/`) — the whole engine
 │   ├── index.php         HTTP entrypoint: CORS, locale routes, auth, DI wiring, route dispatch
 │   ├── FileManager.php   central file-operation service + most security checks
 │   ├── DiskManager.php   Flysystem factory (local / S3 / R2 / SFTP) + BYOB disks
@@ -81,13 +82,13 @@ core/
 │         QuotaManager, RateLimiter*, SsrfGuard, CredentialEncryptor, helpers.php,
 │         UrlImporter, BucketDoctor, ChunkUploader, Jwt/ImageCompat shims, …
 ├── embed.php           PHP token helpers: fluxfiles_token() / fluxfiles_byob_token()
-├── router.php          dev server; also serves /fluxfiles.js from packages/sdk
+├── router.php          dev server; also serves /fluxfiles.js (core's own copy, equal to packages/sdk)
 ├── assets/             fm.js + fm.css — Alpine.js UI, served as the committed fm.min.js/fm.min.css from scripts/build-ui.sh (vendored Alpine/CodeMirror under assets/vendor/)
 ├── public/             index.html (the iframe entry document), share.html + intake.html (redirect stubs to /api/fm/&lt;id&gt;/page)
 ├── lang/               16 locale JSON files
 ├── config/disks.php    disk definitions (env-driven)
 ├── db/migrations/      SQL migrations for the opt-in DB backend
-├── bin/fluxfiles       small CLI (serve, index, update)
+├── bin/fluxfiles       small CLI (serve, about, index, update, license refresh, doctor, ai:test, notify:run)
 └── tests/{unit,integration,e2e,browser,apps}
 ```
 
@@ -107,7 +108,7 @@ file to it).
         (A) composer require   │   (B) iframe + postMessage   │   (C) token contract
        ┌───────────┴─────────┐ │ ┌──────────┴───────────┐     │ ┌──────┴──────────┐
    laravel              wordpress │  sdk → react / vue          │   node / python
-  (proxy the API,    (bundle core │      → ckeditor4 / tinymce  │  (mint JWTs, no
+  (proxy the API,    (bundle core │      → ckeditor4/5, tinymce │  (mint JWTs, no
    serve the UI)     into a ZIP)  │        / summernote         │   PHP dependency)
 ```
 
@@ -134,7 +135,7 @@ The host's existing auth maps to a FluxFiles JWT.
   `Db\MetadataRowLogic` — which the proxies can
   call instead of keeping their own copies.
 
-### (B) Browser embed — `sdk`, `react`, `vue`, `ckeditor4`, `tinymce`, `summernote`
+### (B) Browser embed — `sdk`, `react`, `vue`, `ckeditor4`, `ckeditor5`, `tinymce`, `summernote`
 Put a core server somewhere, then embed it as an `<iframe>` and talk over a
 **`postMessage` bridge** (`FM_CONFIG` / `FM_SELECT` / `FM_EVENT` / `FM_COMMAND` / …).
 No code dependency on core — the contract is the message protocol over HTTP.
@@ -143,8 +144,8 @@ No code dependency on core — the contract is the message protocol over HTTP.
   run from the monorepo or a published install.
 - **`react` / `vue`** do **not** bundle the SDK — they re-implement the same bridge
   in TypeScript (`useFluxFiles.ts`) so the package is tree-shakeable and typed.
-- **`ckeditor4` / `tinymce` / `summernote`** load `fluxfiles.js` and call
-  `FluxFiles.open()` to pick a file for the editor.
+- **`ckeditor4` / `tinymce` / `summernote`** call `FluxFiles.open()` to pick a file for
+  the editor; the host page loads `fluxfiles.js`.
 - All iframe surfaces grant the same `allow="clipboard-write; fullscreen"` +
   `allowfullscreen` — **keep these in sync across all four when you touch one**
   (CI job `iframe-allow`).
@@ -191,7 +192,7 @@ AES-256-GCM BYOB) — same claim names, same role/edition presets, same wire for
 | Registry | Packages | Workflow | Triggering tags |
 |---|---|---|---|
 | **Packagist** (subtree-split to read-only mirror repos) | core, laravel | `split.yml` | `core-v*`, `laravel-v*` |
-| **npm** | sdk, node, mcp, react, vue, ckeditor4, tinymce, summernote | `npm-publish.yml` | `sdk-v*`, `node-v*`, `mcp-v*`, `react-v*`, … |
+| **npm** | sdk, node, mcp, react, vue, ckeditor4, ckeditor5, tinymce, summernote | `npm-publish.yml` | `sdk-v*`, `node-v*`, `mcp-v*`, `react-v*`, … |
 | **PyPI** (Trusted Publishing / OIDC, no stored token) | python | `pypi-publish.yml` | `python-v*` |
 | **GitHub release ZIP** (bundles core + sdk + vendor/) | wordpress | `wordpress-release.yml` (runs `scripts/build-wordpress.sh`, attaches the ZIP + sha256 + a catalogue entry with `requires_php`) | `wordpress-v*` |
 | **GHCR Docker** (standalone app image) | core | `docker-publish.yml` | `core-v*` |
@@ -214,7 +215,7 @@ Notes:
 
 ---
 
-## 6. CI map (`.github/workflows/test.yml`, 17 jobs)
+## 6. CI map (`.github/workflows/test.yml`, 18 jobs)
 
 `core-php` (unit+integration, PHP 8.1–8.5) · `lockfiles-and-laravel-db` (every
 `composer.lock` agrees with its `composer.json`; Laravel DB adapter test) ·
@@ -225,7 +226,8 @@ Notes:
 MySQL/Postgres services) · `wrappers` (react/vue/sdk/editors vitest) · `node-sdk`
 (also builds and tests `@fluxfiles/mcp`) · `python-token` (PHP↔Python parity — decode +
 BYOB round-trip, shared fixtures) · `browser-e2e` (Playwright) · `editor-e2e` ·
-`pack-smoke` (published dist/types) · `docker-build`. Publishing is separate (`split` /
+`pack-smoke` (published dist/types) · `wp-dist-guard` (the plugin ZIP against the
+WordPress.org rules) · `docker-build`. Publishing is separate (`split` /
 `npm-publish` / `pypi-publish` / `docker-publish` / `wordpress-release`).
 
 ---

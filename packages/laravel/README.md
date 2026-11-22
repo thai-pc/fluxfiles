@@ -87,7 +87,7 @@ Managing a **remote VPS / shared host** over SFTP is supported in both modes.
 
 - **`standalone` mode:** run the FluxFiles server (or the Docker image), give it the
   `SFTP_*` env vars (see the
-  [core README → SFTP disk](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#sftp-disk-vps--shared-hosting)),
+  [guide → SFTP disk](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#sftp-disk-vps--shared-hosting)),
   and point Laravel at it with `FLUXFILES_ENDPOINT`. Then mint tokens with the
   `sftp` disk:
 
@@ -200,7 +200,7 @@ The language routes (`lang`, `lang/{locale}`) need neither.
     mode="picker"
     width="100%"
     height="600px"
-    @select="handleFileSelect"
+    on-select="handleFileSelect"
 />
 ```
 
@@ -292,15 +292,10 @@ $token = FluxFiles::token(auth()->id(), [
 
 Always derive `prefix` from the **authenticated** tenant server-side — never from
 client input. For full isolation, give each tenant their **own bucket** with BYOB
-(`byob_disks`). See the root README's
+(`FluxFiles::tokenWithByob()`). See the guide's
 [Multi-tenant](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#multi-tenant) section for the
 full claim list, and [Permissions & Deployment](#permissions--deployment) for the
 storage each tenant's `_fluxfiles/` index needs.
-
-> The `ai_auto_tag`, `rate_read` / `rate_write` and `variants` overrides are
-> enforced by **core ≥ 0.2.8** — on an older core they're simply ignored (the
-> adapter still issues a valid token, it just won't crash). Run
-> `composer update fluxfiles/fluxfiles` to pick them up.
 
 ### Blade Directives
 
@@ -321,6 +316,7 @@ FluxFiles.open({
 use FluxFiles\Laravel\FluxFilesFacade as FluxFiles;
 
 FluxFiles::token($user, $overrides);   // Generate JWT token (no resolver)
+FluxFiles::tokenWithByob($user, $byobDisks, $overrides); // Same, plus encrypted BYOB disks
 FluxFiles::tokenForUser($overrides);   // Token for auth user (resolver + overrides; throws without a resolver)
 FluxFiles::tokenForUserOrNull($overrides); // Same, but null (+ log) instead of throwing
 FluxFiles::tokenForResolvedUser($user, $overrides); // Same, for a given user
@@ -362,7 +358,7 @@ use Illuminate\Support\Facades\Schedule;
 Schedule::command('fluxfiles:notify-run --discover')->hourly();
 ```
 
-(On Laravel 10 and older, use `$schedule->command('fluxfiles:notify-run --discover')->hourly();` in
+(On Laravel 10, use `$schedule->command('fluxfiles:notify-run --discover')->hourly();` in
 `app/Console/Kernel.php`.) A scheduler needs the usual `* * * * * php artisan schedule:run`
 cron entry.
 
@@ -402,17 +398,16 @@ works from a non-request context (a scheduled command, a queued job, `php
 artisan tinker`) where there's no authenticated `Claims` object to satisfy
 the HTTP route.
 
-This package does **not** ship a bundled admin-notice UI for license expiry
-the way the WordPress plugin does. WordPress plugins all post into one
-shared `wp-admin` screen, so a FluxFiles-authored notice fits an existing
-convention there. A Laravel app owns its own admin surface — Nova, Filament,
+This package does **not** ship a bundled admin-notice UI for license expiry.
+A Laravel app owns its own admin surface — Nova, Filament,
 a hand-rolled panel, or none — and FluxFiles has no standard place to inject
 UI into, so this is deliberately left to the host app. Two suggested
 patterns:
 
 ```php
-// app/Console/Kernel.php — scheduled check, alert however this app already does
-$schedule->call(function () {
+// routes/console.php (Laravel 11+; on 10 use $schedule->call() in app/Console/Kernel.php):
+// scheduled check, alert however this app already does
+Schedule::call(function () {
     $info = FluxFiles::licenseInfo();
     if ($info['days_left'] !== null && $info['days_left'] <= 14) {
         Log::warning("FluxFiles license expiring in {$info['days_left']} days", $info);
@@ -477,6 +472,7 @@ return [
         'max_upload'  => 10,    // MB
         'allowed_ext' => null,  // null = allow all
         'max_storage' => 0,     // 0 = unlimited
+        'max_files'   => 0,     // 0 = unlimited
         'ttl'         => 3600,  // seconds
     ],
 
@@ -511,7 +507,7 @@ php artisan fluxfiles:doctor --ai            # one tiny vision call (paid)
 php artisan fluxfiles:doctor --ai --cheap    # only look the model up at the provider (free)
 ```
 
-It prints `OK    ai - claude/claude-sonnet-4-5 (812 ms)` or `FAIL  ai - <code> ...` with a
+It prints `OK    ai - claude/claude-sonnet-5-5 (812 ms)` or `FAIL  ai - <code> ...` with a
 `fix:` line, and a failure makes the command exit non-zero. It never prints the key; the
 base URL and its host are replaced by `<base-url>` / `<host>`. To route the call through
 your own HTTP client (or fake it in tests), bind a `FluxFiles\HttpTransportInterface`
@@ -519,7 +515,7 @@ in the container under the key `fluxfiles.ai_transport` (AI calls only; the gene
 not consulted, because core uses it for mail and OIDC too). The base URL is operator config, so there is no SSRF guard here, as in core.
 
 (Abridged — the published file also carries the rate limits — read/write, `/img`,
-`/stream`, URL import (`FLUXFILES_IMPORT_RATE_LIMIT`, default 10/min; a token's
+`/stream`, thumbnails (`rate_limit_thumb`, after laravel-v1.1.1), URL import (`FLUXFILES_IMPORT_RATE_LIMIT`, default 10/min; a token's
 `import_rate_limit` wins) and `/usage` + `/duplicates` (2/min: this proxy recomputes
 usage on every call) — plus `storage_path`, and comments for every key.)
 
@@ -535,8 +531,9 @@ FluxFiles route prefix from CSRF. Use the value of `config('fluxfiles.route_pref
 
 **The file/location differs by Laravel version:**
 
-**Laravel 11 / 12** — there is no `VerifyCsrfToken.php`; configure it in
-`bootstrap/app.php`:
+**Laravel 11 / 12 / 13** — there is no `VerifyCsrfToken.php`; configure it in
+`bootstrap/app.php` (on 13 `validateCsrfTokens()` still works but is deprecated in favour of
+`preventRequestForgery(except: [...])`):
 
 ```php
 ->withMiddleware(function (Middleware $middleware) {
@@ -546,7 +543,7 @@ FluxFiles route prefix from CSRF. Use the value of `config('fluxfiles.route_pref
 })
 ```
 
-**Laravel 9 / 10** — add it to the `$except` array in
+**Laravel 10** — add it to the `$except` array in
 `app/Http/Middleware/VerifyCsrfToken.php`:
 
 ```php
@@ -572,7 +569,7 @@ connection). Two locations must be writable by the user PHP-FPM runs as (usually
 | Path | Holds | Created when |
 | --- | --- | --- |
 | `<local disk root>/_fluxfiles/` | search index, folder index, file locks, audit log, trash manifest, metadata sidecars | first write to that disk (upload / `mkdir` / …) |
-| `config('fluxfiles.storage_path')` (default `storage/fluxfiles/`) | proxy-mode rate-limiter counter (`rate_limit.json`; in `db` mode the counter lives in the `fluxfiles_rate_limits` table instead) | first request |
+| `config('fluxfiles.storage_path')` (default `storage/fluxfiles/`) | proxy-mode rate-limiter state (`rate_limit.json` + `rate_limit.d/`; in `db` mode the counters live in the `fluxfiles_rate_limits` table instead) | first request |
 
 ### `_fluxfiles/`
 
@@ -597,7 +594,9 @@ With `storage_backend = db` most of the above moves into your database, but
 connection's table prefix, and never touches a table of your own called `rate_limits`;
 published by `vendor:publish --tag=fluxfiles-migrations`, so re-publish and
 `php artisan migrate` after upgrading). Until that table exists the adapter logs a
-warning (at most once a minute) and keeps using `rate_limit.json`.
+warning (at most once a minute) and keeps using the file limiter. To move existing JSON
+bookkeeping into the database, run `php artisan fluxfiles:migrate-json-to-db` (`--dry-run`,
+then `--verify`) before you switch `storage_backend`.
 
 ```bash
 # Make the uploads tree writable by the web server user (adjust www-data to your
@@ -607,7 +606,7 @@ sudo chmod -R u+rwX,g+rwX /path/to/public/uploads
 ```
 
 > **Symptom → fix.** A `500` with
-> `fopen(.../_fluxfiles/index.lock): Permission denied` (or, on **core ≥ 0.2.7**,
+> `fopen(.../_fluxfiles/index.lock): Permission denied` (or
 > a clean `storage_not_writable` error naming the path) means the web server user
 > can't write `_fluxfiles/`. Almost always the directory was pre-created by a
 > different user — `chown` it back to the PHP-FPM user (or delete it and let PHP
@@ -670,12 +669,13 @@ stale published `config/fluxfiles.php`.
 > bucket as regular objects, governed by your IAM policy (`s3:PutObject` etc.).
 > Run the **Bucket Doctor** to verify those grants.
 
-### `rate_limit.json`
+### Rate-limit state
 
-In **proxy mode** (with the default `json` storage backend) the rate limiter keeps its counter in a JSON file at
-`config('fluxfiles.storage_path')` — by default `storage/fluxfiles/rate_limit.json`
-(override with `FLUXFILES_STORAGE_PATH`). PHP creates the directory `0755` and the
-file **`0600`** automatically on the first request.
+In **proxy mode** (with the default `json` storage backend) the rate limiter keeps one small JSON file per user and action under `rate_limit.d/` in
+`config('fluxfiles.storage_path')` — by default `storage/fluxfiles/`
+(override with `FLUXFILES_STORAGE_PATH`). `rate_limit.json` next to it is only a marker:
+deleting it resets every limit. PHP creates the directories and the **`0600`** files
+automatically.
 
 - The directory must be **writable by the user PHP-FPM runs as** (usually
   `www-data`). Laravel's `storage/` already requires this, so the standard deploy
@@ -686,17 +686,16 @@ file **`0600`** automatically on the first request.
   sudo chmod -R 775 storage bootstrap/cache
   ```
 
-- **Let PHP create `rate_limit.json` itself.** It's chmod-ed to `0600` (owner
-  only), so it must be **owned by the PHP-FPM user**. If a deploy script or `root`
-  pre-creates it as another user, PHP-FPM can't read it and every request fails
-  with `500 "Rate limiter unavailable"`. Fix:
+- **Let PHP create these files itself.** They are `0600` (owner
+  only), so they must be **owned by the PHP-FPM user**. If a deploy script or `root`
+  creates them as another user, requests fail with `500 storage_not_writable`. Fix:
 
   ```bash
-  sudo chown www-data:www-data storage/fluxfiles/rate_limit.json   # or just delete it; PHP recreates it
+  sudo chown -R www-data:www-data storage/fluxfiles   # or delete rate_limit.json and rate_limit.d/; PHP recreates them
   ```
 
-- **No web-server rule needed.** Unlike the standalone core, this file lives under
-  Laravel's `storage/` (outside the `public/` web root), so it is never served.
+- **No web-server rule needed.** Unlike the standalone core, these files live under
+  Laravel's `storage/` (outside the `public/` web root), so they are never served.
   Keep the `0600` mode — don't loosen it.
 
 - **Read-only / immutable deploys** (e.g. containers): point the path at a writable
@@ -709,8 +708,8 @@ file **`0600`** automatically on the first request.
   sudo install -d -o www-data -g www-data -m 775 /var/lib/fluxfiles
   ```
 
-> Standalone mode (running the core server directly) puts the file at
-> `packages/core/storage/rate_limit.json` instead — there it **is** under the web
+> Standalone mode (running the core server directly) puts them in
+> `packages/core/storage/` instead — there that **is** under the web
 > root, so block it at the web server (see the core's `docs/guides/DEPLOYMENT.md`,
 > which denies the whole `storage/` runtime directory).
 
@@ -819,7 +818,7 @@ See advisory
 Upgrade, and review the files your users could reach in the meantime.
 
 Without a `claims_resolver` the picker fails when its token expires
-(`403 token_refresh_failed`) and session-only requests are refused. Add one:
+(`403 token_refresh_unconfigured`) and session-only requests are refused. Add one:
 
 ```php
 // app/FluxFiles/UserClaims.php

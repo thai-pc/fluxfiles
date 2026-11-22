@@ -326,7 +326,7 @@ KCFinder concepts below are from its
 | KCFinder | FluxFiles |
 |---|---|
 | CKEditor "Browse Server" integration | [`@fluxfiles/ckeditor4`](../../packages/ckeditor4/README.md): a toolbar button, plus a **Browse FluxFiles** button inside CKEditor's own Image Properties dialog |
-| TinyMCE integration | [`@fluxfiles/tinymce`](../../packages/tinymce/README.md) (TinyMCE 4.x/5.x) |
+| TinyMCE integration | [`@fluxfiles/tinymce`](../../packages/tinymce/README.md) (TinyMCE 4–8) |
 | FCKeditor integration | **No plugin.** Use the JS SDK's `onSelect` callback. |
 | Settings passed through the PHP session | A JWT minted by `fluxfiles_token()` |
 | Local upload folder | The `local` disk, with its root set through `FLUXFILES_DISKS_CONFIG` |

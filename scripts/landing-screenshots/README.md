@@ -30,7 +30,7 @@ of their content.
 
 ```bash
 # once: Playwright from the browser suite
-(cd packages/core/tests/browser && npm ci && npx playwright install chromium)
+(cd packages/core/tests/browser && npm install && npx playwright install chromium)
 
 node scripts/landing-screenshots/capture.mjs                     # all shots → scripts/landing-screenshots/out/
 node scripts/landing-screenshots/capture.mjs --only=ocr,backup   # a subset

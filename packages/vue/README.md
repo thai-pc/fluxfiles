@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@fluxfiles/vue?color=42b883)](https://www.npmjs.com/package/@fluxfiles/vue)
 
-Vue 3 components and composables for [FluxFiles](https://github.com/thai-pc/fluxfiles) — a standalone, embeddable file manager with multi-storage support (Local, AWS S3, Cloudflare R2).
+Vue 3 components and composables for [FluxFiles](https://github.com/thai-pc/fluxfiles) — a standalone, embeddable file manager with multi-storage support (Local, AWS S3, Cloudflare R2, SFTP).
 
 ## Requirements
 
@@ -131,7 +131,7 @@ export default defineNuxtConfig({
 
 ## Commands
 
-All components and the composable expose these methods:
+`<FluxFiles>` (through a template ref) and the composable expose these methods; `FluxFilesModal` does not:
 
 | Method | Description |
 |--------|-------------|
@@ -142,6 +142,9 @@ All components and the composable expose these methods:
 | `crossCopy(disk, path?)` | Copy selection to another disk |
 | `crossMove(disk, path?)` | Move selection to another disk |
 | `aiTag()` | AI auto-tag selected image |
+| `crop(x, y, width, height, savePath?)` | Crop the open image |
+| `setLocale(locale)` | Switch the UI language |
+| `updateToken(token)` | Push a fresh JWT to the UI |
 
 ## Props
 
@@ -150,21 +153,28 @@ All components and the composable expose these methods:
 | `endpoint` | `string` | Yes | FluxFiles server URL |
 | `token` | `string` | Yes | JWT token |
 | `disk` | `string` | No | Initial storage disk (`local`) |
+| `disks` | `string[]` | No | Disks shown in the disk switcher (default: just `disk`) |
+| `path` | `string` | No | Folder to open |
+| `theme` | `string` | No | `light`, `dark` or `auto` |
 | `mode` | `string` | No | `picker` or `browser` |
-| `multiple` | `boolean` | No | When true, onSelect receives array of files |
+| `multiple` | `boolean` | No | When true, `@select` receives an array of files |
+| `allowedTypes` | `string[]` | No | Extensions (`.pdf`) or MIME patterns (`image/*`) the picker accepts (UI convenience; the `allowed_ext` claim is the server-side check) |
 | `maxUploadMb` | `number` | No | Max size per uploaded file, in **MB** (deprecated alias: `maxSize` in bytes) |
 | `maxFiles` | `number` | No | Max files per upload batch (0/omit = unlimited; server enforces the prefix total via `max_files`) |
 | `locale` | `string` | No | UI language code |
-| `width` | `string` | No | Iframe width |
-| `height` | `string` | No | Iframe height |
+| `width` | `string \| number` | No | Container width (`FluxFiles` only) |
+| `height` | `string \| number` | No | Container height (`FluxFiles` only) |
+| `onTokenRefresh` | `(ctx) => Promise<string \| null>` | No | Called on a 401; return a fresh JWT (`FluxFiles` and the composable only) |
+| `open` | `boolean` | Yes (`FluxFilesModal`) | Modal visibility, use with `v-model:open` |
 
 ## Events
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `@select` | `FluxFile` | File selected |
+| `@select` | `FluxFile` (`FluxFile[]` with `multiple`) | File selected |
 | `@event` | `FluxEvent` | Action event (upload, delete, move...) |
 | `@close` | — | Modal closed |
+| `@ready` | — | UI loaded |
 
 ## Storage disks & SFTP
 
@@ -174,7 +184,7 @@ renders the token your backend mints — so the available disks and features
 token, not from this package. Point `endpoint` at a standalone FluxFiles server
 (or Docker) with an SFTP disk and mint the token with the right claims (e.g. via
 [`@fluxfiles/node`](https://www.npmjs.com/package/@fluxfiles/node)); see the
-[core README](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#sftp-disk-vps--shared-hosting).
+[guide](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#sftp-disk-vps--shared-hosting).
 
 ## TypeScript
 

@@ -46,8 +46,8 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `POST` | `/crop` | `{disk, path, x, y, width, height, save_path?}` | Crop image |
 | `POST` | `/ai-tag` | `{disk, path}` | AI-analyze image (requires AI config). A provider failure is `502` with a classified `error_code`: `ai_auth`, `ai_model_not_found`, `ai_no_vision`, `ai_quota`, `ai_rate_limited`, `ai_unavailable`, `ai_network`, `ai_blocked_host`, `ai_bad_response`, `ai_provider_error` (+ `error_params {provider, model, default_model}`); never 401/403/429 |
 | `POST` | `/ai/test` | `{disk?}` | **AI connection test** — one tiny real vision call; same eligibility as `/ai-tag` (`write`, disk in token, provider configured), 2/min per user. Always `200` with `{ok, code, hint, latency_ms, …}` once the gate passes; `detail` only for an operator-grade token (no prefix, no BYOB disk, not `owner_only`); a non-string or unknown `disk` is `403 disk_denied` before any provider call. Audited as `ai_test` |
-| `POST` | `/import-url` | `{disk, path, url, filename?}` | Server-side fetch a URL into storage (opt-in via `allow_url_import`; SSRF-guarded) |
-| `POST` | `/optimize` | `{disk, path\|paths[], overwrite?}` | Recompress an image to WebP or a PDF via Ghostscript (≥ 10.05.0; else `501 pdf_unavailable`), at rest (**free/core**). Opt-in via `allow_optimize` (needs `write` + `delete`) |
+| `POST` | `/import-url` | `{disk, path, url, filename?, overwrite?}` | Server-side fetch a URL into storage (opt-in via `allow_url_import`; SSRF-guarded) |
+| `POST` | `/optimize` | `{disk, path\|paths[], quality?, dest?, keep_original?, pdf_level?}` | Recompress an image to WebP or a PDF via Ghostscript (≥ 10.05.0; else `501 pdf_unavailable`), at rest (**free/core**). Opt-in via `allow_optimize` (needs `write`; without `delete` the original is kept) |
 
 ## Archives, editor & permissions
 
@@ -59,10 +59,10 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `PUT` | `/content` | `{disk, path, content}` | Overwrite a text/config file (`allow_code_edit`, default **false**; existing files only) |
 | `GET` | `/chmod?disk=&path=` | — | Read an SFTP file's octal mode (SFTP disks only) |
 | `POST` | `/chmod` | `{disk, path, mode}` | Set an SFTP file's mode (write + `allow_chmod`) |
-| `POST` | `/watermark` | `{disk, path, type, text?, logo_data?, x, y, scale, opacity, color?, dest?}` | Burn-in watermark editor (logo/text), permanent (**free/core**). Non-destructive: snapshots the original on first burn so it can be undone |
+| `POST` | `/watermark` | `{disk, path, type, text?, logo_data?, x, y, scale, font_size?, opacity, color?, dest?}` | Burn-in watermark editor (logo/text), permanent (**free/core**). Non-destructive: snapshots the original on first burn so it can be undone |
 | `POST` | `/watermark/remove` | `{disk, path}` | Restore the pre-watermark original (404 if none) |
 
-> **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see [FEATURES.md](FEATURES.md#on-demand-webp--avif)) and `GET /stream?token=` (gated private media, SFTP serving). Proxied by core-standalone, Laravel, and WordPress alike.
+> **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&height=&fit=&dpr=&quality=&format=` (on-demand WebP/AVIF, see [FEATURES.md](FEATURES.md#on-demand-webp--avif)) and `GET /stream?token=` (gated private media, SFTP serving). Rate limits per token `sub`: `thumb` (1200/min) for every `/img` request and for stored thumbnails through `/stream`, `img` (120/min) only when an image is resized or the original sent, `stream` (300/min) for other media ([CONFIG.md §4](../reference/CONFIG.md#4-server-env-vars-server-wide)). Proxied by core-standalone, Laravel, and WordPress alike.
 
 ## Metadata
 
@@ -86,13 +86,13 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/duplicates?disk=&limit=` | — | **Duplicate finder** — byte-identical files under the token's root, grouped `{hash, size, count, wasted, files[{key, modified}]}` (oldest first) + `total_wasted`, `scanned_files`, `truncated`. Size pre-filter, then a streamed SHA-256 of only same-size candidates, capped at 512 MB read per call (`truncated: true` past that). Hidden/reserved paths follow `list()`. `read` perm; shares the 2/min usage-refresh bucket. |
 | `GET` | `/audit?limit=&offset=&action=&from=&to=&path=&actor=` | `limit` default 100 | Activity log, **scoped to the token's prefix**. Requires the `audit` permission (403 otherwise). |
 | `GET` | `/disk/doctor?disk=&origin=` | — | **Bucket Doctor** — diagnose an S3/R2 disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write`. Adds `ai: {configured, provider, model}` when an AI provider is configured (no network call). |
-| `GET` | `/license` | — | Server's commercial edition/status: `{edition, status, modules, limits, expires, days_left}`. Free MIT core → `{edition:'free'}` |
+| `GET` | `/license` | — | Server's commercial edition/status: `{edition, status, enforcement, modules, expires, days_left, updates_allowed}`. Free MIT core → `{edition:'free'}` |
 | `GET` | `/compliance/scorecard` | — | **Compliance Readiness Scorecard** (**free/core**) — read-only checklist across virus scan / C2PA / audit export / SSO / DLP / legal hold; every paid row reports `available: false` on an unlicensed server instead of erroring. Requires the `audit` permission |
 | `GET` | `/hold/status?disk=&path=` | — | **Legal hold status** (**free/core**) — whether a path is currently on hold. Requires `read`; `reason`/`placed_by`/`placed_at` are only included with the `audit` permission |
 
 ## Paid Modules
 
-Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` claim) — absent/unlicensed/not-allowed answers `501`/`402`/`403` respectively. All of these are proxied by the Laravel/WordPress adapters too (see [`CONFIG.md`](../reference/CONFIG.md) for each claim's minimum core version). See [`.claude/api-map.md`](../../.claude/api-map.md) for full behavior.
+Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` claim) — absent/unlicensed/not-allowed answers `501`/`402`/`403` respectively. All of these are proxied by the Laravel/WordPress adapters too (see [`CONFIG.md`](../reference/CONFIG.md) for each claim). See [`.claude/api-map.md`](../../.claude/api-map.md) for full behavior.
 
 | Method | Path | Body / Params | Module | Description |
 |--------|------|---------------|--------|-------------|
@@ -134,8 +134,8 @@ Not gated by a per-token claim (there's no token yet) — a server kill-switch (
 | Method | Path | Params / Body | Description |
 |--------|------|----------------|-------------|
 | `GET` | `/sso/login?redirect=` | — | Signs a short-lived state token, 302s to the IdP's `authorization_endpoint`. `redirect` must be a same-origin relative path. |
-| `GET` | `/sso/callback?code=&state=` | — | Verifies `state`, exchanges `code` at the IdP's token endpoint, verifies the `id_token` via JWKS, resolves the identity's groups to a claims set (`FLUXFILES_SSO_CLAIMS_MAP`, first match in the map's own order), takes the user id from `FLUXFILES_SSO_USER_CLAIM` (default `sub`), mints the real access JWT, and 302s to `/public/index.html#boot=<one-time token>` — a URL **fragment**, never a query string, carrying the JWT sealed with AES-256-GCM. |
-| `POST` | `/sso/exchange` | `{token}` | Trades the one-time boot token (from the `#boot=` fragment) for the real access JWT: `{data: {token, expires_at}, error: null}`. This is the only way the real JWT is ever transmitted. |
+| `GET` | `/sso/callback?code=&state=` | — | Verifies `state`, exchanges `code` at the IdP's token endpoint, verifies the `id_token` via JWKS, resolves the identity's groups to a claims set (`FLUXFILES_SSO_CLAIMS_MAP`, first match in the map's own order), takes the user id from `FLUXFILES_SSO_USER_CLAIM` (default `sub`), mints the real access JWT, and 302s to `/public/index.html#boot=<boot token, valid 60 s>` — a URL **fragment**, never a query string, carrying the JWT sealed with AES-256-GCM. |
+| `POST` | `/sso/exchange` | `{token}` | Trades the short-lived boot token (from the `#boot=` fragment; 60 s, replayable within it) for the real access JWT: `{data: {token, expires_at}, error: null}`. This is the only way the real JWT is ever transmitted. |
 
 ## Resumable upload (tus 1.0 — local / SFTP / any disk)
 

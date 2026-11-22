@@ -14,7 +14,7 @@ conventions and you run the whole relevant suite green before finishing. Its
 - **Core**: `packages/core/tests/{unit,integration}/*.php`. Run all:
   `for f in packages/core/tests/unit/*.php packages/core/tests/integration/*.php; do php "$f"; done`
 - **Guards** (must stay green): `tests/unit/test-i18n.php` (every error_code ×16),
-  `tests/unit/test-config-doc.php` (every claim in `docs/reference/CONFIG.md`), `tests/unit/test-modules.php`
+  `tests/unit/test-config-doc.php` (every claim in `docs/reference/CONFIG.md`), `tests/integration/test-modules.php`
   (the 3-layer gate).
 - **Self-booting HTTP e2e**: `tests/e2e/test-*-http.php` start their own `php -S`, back
   up/restore `packages/core/.env`, need `curl` — mirror them for a new endpoint.

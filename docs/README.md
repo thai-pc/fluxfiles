@@ -10,7 +10,7 @@ every new document to the matching section below.
 - [Configuration reference](reference/CONFIG.md) — every JWT claim and server env var (the single source of truth; CI-guarded against `Claims.php`).
 - [Deployment](guides/DEPLOYMENT.md) — self-hosting, web-server configuration, upload limits.
 - [API reference](guides/API.md) — standalone HTTP routes, incl. tus resumable upload and the paid-module routes.
-- [Feature deep dives](guides/FEATURES.md) — on-demand WebP/AVIF, srcset, watermark, usage dashboard, the BYO terminal embed.
+- [Feature deep dives](guides/FEATURES.md) — on-demand WebP/AVIF, srcset, watermark, usage dashboard, the BYO terminal embed, About dialog and white-label.
 - [Industry presets](guides/INDUSTRY-PRESETS.md) — copy-paste token configs per vertical.
 - [Migrating from an unmaintained file manager](guides/MIGRATING.md) — Responsive FileManager, KCFinder, Roxy Fileman, RichFilemanager, Tiny File Manager, File Browser: concept mapping, before/after snippets (TinyMCE, CKEditor 4/5), keeping existing upload folders and URLs, indexing existing files, FAQ.
 
@@ -37,6 +37,7 @@ modules stay public (`guides/FEATURES.md`, `reference/CONFIG.md`).
 - [ACL role presets](design/ACL-ROLE-PRESETS-DESIGN.md) — implemented in core-v0.2.80.
 - [Companion embed](design/COMPANION-EMBED-DESIGN.md) — **design, not implemented** (deferred 2026-11-08: Google OAuth verification).
 - [Compliance scorecard](design/COMPLIANCE-SCORECARD-DESIGN.md) — implemented in core-v0.2.82.
+- [Connection test (AI + storage)](design/CONNECTION-TEST-DESIGN.md) — implemented in core-v1.6.0.
 - [DB storage backend](design/DB-STORAGE-MIGRATION-DESIGN.md) — implemented in core-v0.2.79/0.2.80.
 - [License-expiry notifications](design/LICENSE-EXPIRY-NOTIFICATIONS-DESIGN.md) — implemented in core-v0.2.84.
 - [Licence key refresh](design/LICENSE-KEY-REFRESH-DESIGN.md) — implemented (server + core client in core-v1.2.0).

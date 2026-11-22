@@ -4,6 +4,8 @@ Status: **Implemented end to end.** Licence server side (`POST /refresh`) first;
 shipped in core-v1.2.0 (`packages/core/api/LicenseRefresh.php`, `LicenseKeyFile.php`,
 `fluxfiles license refresh`, CHANGELOG `[1.0.24]`), and FluxFiles Pro for WordPress runs the same
 refresh daily via wp-cron (`ProRefresh`). The branches this text mentions are merged to master.
+The default file shipped one directory deeper than written below: `<storage>/license/license-refresh.json`
+(`LicenseKeyFile`).
 
 ## 0. Summary
 
