@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.54] — 2026-11-22
+
+> Released: `core-v1.7.1`: the Docker image accepts uploads over 1 MB (up to 100 MB per request) and serves AVIF. A host that reads `payload.version` of `FM_READY` now gets `undefined`.
+
 ### Fixed
 - Docker image: uploads up to 100 MB per request work. The image kept nginx's 1 MB and PHP's 2 MB defaults, so any ordinary photo got a `413`.
 - Docker image: GD has AVIF, so `/img` can serve it.
