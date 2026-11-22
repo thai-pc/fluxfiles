@@ -162,7 +162,7 @@ and [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/AP
 |---|---|---|---|---|
 | `allow_optimize` | bool | — | `false` | Opt-in (it replaces/deletes originals). 403 `optimize_forbidden` without it. |
 | `auto_optimize` | bool | — | `false` | Recompress images → WebP on upload. |
-| `optimize_quality` | int | 40–95 | `0` | WebP quality for `auto_optimize` (lower values are raised to 40). `0` = default (82). `POST /optimize` takes `quality` in its body instead (same range, default 82). |
+| `optimize_quality` | int | 40–95 | `0` | WebP quality for `auto_optimize` and for `POST /optimize` when the request names none (lower values are raised to 40). `0` = default (82). |
 | `optimize_keep_original` | bool | — | `false` | Keep the source (else replaced, needs `delete`). |
 | `optimize_max_mb` | int | MB | `0` | Skip files larger than this. `0` = no limit. |
 | `pdf_level` | enum | — | `ebook` | Ghostscript preset: `screen`/`ebook`/`printer`/`prepress`/`default`. Needs `gs` ≥ 10.05.0 on the server — absent or older → `501 pdf_unavailable`. |

@@ -5,6 +5,12 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- Docker image: uploads up to 100 MB per request work. The image kept nginx's 1 MB and PHP's 2 MB defaults, so any ordinary photo got a `413`.
+- Docker image: GD has AVIF, so `/img` can serve it.
+- The `optimize_quality` claim applies to `POST /optimize` when the request names no quality (it only applied to `auto_optimize`).
+- `FM_READY` no longer carries `version`: it was a hard-coded `0.2.2`, and this one message goes to any embedding origin.
+
 ## [1.0.53] — 2026-11-22
 
 > Released: `mcp-v1.1.2`.

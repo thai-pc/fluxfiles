@@ -12,7 +12,7 @@ Folder-based media & document library with cloud storage (Amazon S3, Cloudflare 
 
 == Description ==
 
-FluxFiles is a folder-based media and document library for WordPress with a modern browser UI. Keep your files in folders on your local disk, Amazon S3 or Cloudflare R2 (and SFTP through a developer-minted token), and insert them into posts: what you pick is registered as a real WordPress attachment whose URL points at your storage, so it is served from your bucket or CDN instead of your web server.
+FluxFiles is a folder-based media and document library for WordPress with a modern browser UI. Keep your files in folders on your local disk, Amazon S3, Cloudflare R2 or your own SFTP server, and insert them into posts: what you pick is registered as a real WordPress attachment whose URL points at your storage, so it is served from your bucket or CDN instead of your web server.
 
 **Features**
 
@@ -277,7 +277,7 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 * The JWT secret and the S3/R2 secret keys are no longer written into the Settings page; leave the field empty to keep the stored value.
 * Fix: two `[fluxfiles]` shortcodes on one page no longer silently replace each other; the second shows a notice (one file manager per page).
 * Fix: file rate-limit counters are removed on uninstall; the block uses block API version 3 and no longer logs a React key warning; Contributors get a message that fits their role instead of "not configured"; Settings and shortcode messages are translatable.
-* FluxFiles is now listed on WordPress.org. The plugin no longer checks for updates itself: WordPress.org delivers them.
+* The plugin no longer checks for updates itself (a WordPress.org guideline).
 * The paid modules (Share, Intake, versioning, webhooks, compliance tools) moved to the separate FluxFiles Pro add-on. This plugin keeps every free feature and provides hooks for the add-on.
 * Share and Intake links now use the site's REST URL (the old `public-link.php` entry point is gone).
 * The code editor uses the CodeMirror bundled with WordPress instead of shipping its own copy.

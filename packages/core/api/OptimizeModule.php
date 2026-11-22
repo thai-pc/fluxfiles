@@ -80,7 +80,7 @@ final class OptimizeModule
             throw new ApiException('Too many files in one request', 413, 'too_many', ['max' => self::MAX_BATCH]);
         }
 
-        $quality = (int) ($body['quality'] ?? self::Q_DEFAULT);
+        $quality = (int) ($body['quality'] ?? ($claims->optimizeQuality > 0 ? $claims->optimizeQuality : self::Q_DEFAULT));
         $quality = max(self::Q_MIN, min(self::Q_MAX, $quality));
         // Request body wins; otherwise fall back to the per-tenant claim defaults so
         // an operator can scope behaviour without the UI having to send every option.
