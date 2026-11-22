@@ -35,8 +35,7 @@ Go through the diff (`git diff`, `git status`) and check each that applies:
   channels (embed / node / laravel / wordpress) *and so are its tuning claims*. Shipping the
   gate alone leaves the module enabled-but-inert — the real bug: Laravel/WP could switch
   Webhooks on with no `webhook_url`, so it POSTed nowhere. If a channel omits a claim on
-  purpose (WP skips the overlay watermark), the omission carries a comment
-  saying why. Adapter smokes must assert the **raw JWT payload**, not `Claims::fromJwtPayload`
+  purpose, the omission carries a comment saying why. Adapter smokes must assert the **raw JWT payload**, not `Claims::fromJwtPayload`
   — forwarding needs no core API, and using one breaks `check-adapter-core-floor.sh`.
 
 **Completeness guards**
@@ -44,7 +43,8 @@ Go through the diff (`git diff`, `git status`) and check each that applies:
   (run `php packages/core/tests/unit/test-i18n.php`).
 - Every new claim is in `docs/reference/CONFIG.md` (run `php packages/core/tests/unit/test-config-doc.php`).
 - New claim forwarded in embed/node(+dist)/laravel/wordpress; a new core route is either
-  proxied by Laravel or whitelisted in `test-laravel-smoke.php` `$intentionallyUnproxied`.
+  proxied by Laravel and WordPress or whitelisted in `$intentionallyUnproxied` of
+  `test-laravel-smoke.php` / `test-wp-smoke.php`.
 
 **Correctness / grain**
 - Stateless: no DB/scheduler/queue snuck in; storage-resident JSON is best-effort + safe.

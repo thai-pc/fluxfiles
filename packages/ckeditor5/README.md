@@ -47,13 +47,13 @@ ClassicEditor.create(document.querySelector('#editor'), {
 1. **Toolbar button** `fluxfiles` (command `fluxfiles`): opens the picker and inserts the
    selection at the caret.
    - Images become image elements with `src`, and `alt` from the file's alt text (file name if
-     none). When the payload carries `img_srcset` (WebP/AVIF responsive images enabled on the
-     token) and the image plugin allows a `srcset` attribute, it is added too.
+     none). `img_srcset` is never inserted: its `/api/fm/img?token=` URLs expire.
    - Other files become links with the metadata title (or file name) as text.
    - With `multiple: true`, every selected file is inserted in order. Folders are skipped.
    - Without the image plugin, images are inserted as links; without the link plugin, as plain text.
 2. **Image insert dropdown**: when `ImageInsert` is loaded, the image toolbar's insert dropdown
-   offers FluxFiles next to "Insert image via URL". Turn it off with `imageInsert: false`.
+   offers FluxFiles next to "Insert image via URL". Turn it off with `imageInsert: false`. If you set
+   your own `image.insert.integrations`, add `'fluxfiles'` to it.
 
 The main JWT is never put in a URL: the SDK hands it to the picker iframe with `postMessage`
 and checks the iframe's origin on every message.
@@ -62,9 +62,6 @@ and checks the iframe's origin on every message.
 > expires, so embedding it in saved content breaks later (the plugin logs a `console.warn`).
 > Use a **public** disk or a `public_url`. A preview-only selection (no embeddable URL, e.g. a
 > watermark overlay with `allow_download=false`) is refused, as in the other editor plugins.
-
-> CKEditor 5's image model has no `sizes` attribute and writes `sizes="100vw"` itself, so
-> `img_sizes` is only used by a custom image plugin that registers one.
 
 ## Configuration (`config.fluxfiles`)
 

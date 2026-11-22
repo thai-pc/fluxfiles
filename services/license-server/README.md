@@ -308,11 +308,12 @@ path deletes customer files or module records — see `LicenseMailer::renderExpi
 Every renewal of a recurring plan (`pro-monthly`, `studio-monthly`,
 `support-monthly`) is a new Polar order with a new `order_id`, so `record()`'s
 `(gateway, order_id)` idempotency mints a fresh row each cycle rather than
-updating one in place. `LicenseIssuer::issue()` calls
-`LicenseStore::supersedeActiveForBuyerPlan()` right after storing that new
-row, which retires any other still-`active` gateway row for the same `(buyer
-email, plan)` — so only the newest one stays eligible for `needingReminder()`.
-It matches on the email, never the display name: two buyers who both call
+updating one in place. `LicenseIssuer::issue()` then retires the earlier
+rows: with a Polar `subscription_id`, the other `active` rows of that subscription
+plus the buyer's legacy rows without an id (see "Key refresh"); without one,
+`LicenseStore::supersedeActiveForBuyerPlan()` retires any other still-`active`
+gateway row for the same `(buyer email, plan)` — so only the newest one stays
+eligible for `needingReminder()`. The fallback matches on the email, never the display name: two buyers who both call
 themselves "John Smith" must not retire each other's licences. Manual
 (`/issue`) rows are never superseded. Without
 this, a customer who just renewed could get an "expired" nag (from the stale
@@ -581,7 +582,7 @@ Phase 2 and Phase 3 are implemented: CSV/export, replay, mail-log screen, custom
 subscription webhooks, public counters, inbox ingest, weekly reports, notices,
 anomalies, viewer permissions and optional Access/Polar actions. See
 [ADMIN-PR.md](ADMIN-PR.md) for the exact ordered server-change checklist, deviations
-and validation. No server configuration or deployment is changed by this branch.
+and validation.
 
 Chromium sends `Origin: null` for native POST navigations under the required
 `Referrer-Policy: no-referrer`. `admin.js` submits forms through same-origin fetch
@@ -800,4 +801,4 @@ that hostname; use `prod.localhost` for production. Ports do not isolate cookies
 
 The dedicated admin CI caches Composer downloads and installs core dependencies
 before testing. Both legacy licence suites exit with failure when dependencies
-are absent and `CI=true`; a CI pass cannot silently omit their 119 and 9 checks.
+are absent and `CI=true`; a CI pass cannot silently omit their checks.

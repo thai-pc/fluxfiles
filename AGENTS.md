@@ -10,7 +10,7 @@ three integration patterns, the publish topology), see [`docs/reference/ARCHITEC
 ## What FluxFiles is
 
 A standalone, embeddable PHP file manager (PHP **≥ 8.1**). The core exposes a PHP
-API + a zero-build (Alpine.js + htmx) frontend that hosts embed by iframe/SDK.
+API + a zero-build (Alpine.js) frontend that hosts embed by iframe/SDK.
 Adapters ship for Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, CKEditor 5, TinyMCE,
 Summernote, plus a vanilla SDK, server-side token SDKs for Node and Python, and an
 MCP server for AI agents.
@@ -33,8 +33,7 @@ query-string token (an `<video>`/`<img>` can't send headers): `/api/fm/stream`
 cached in `_variants/`). Both mint only when a stream secret is wired
 (`FileManager::setStreamSecret`) — the standalone app always does this, and the
 Laravel/WordPress proxy adapters do too, so both routes are fully proxied
-(ported from `index.php`'s inline handlers directly into each adapter's
-controller, since they aren't extracted into a reusable core file). Per-tenant
+(index.php and both adapters hand the request to core's `MediaEndpoint`). Per-tenant
 claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_token_ttl`,
 `webp_enabled`/`webp_max_width`/`webp_default_quality`), forwarded by every token helper.
 
@@ -51,7 +50,7 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
 - `packages/node/` — server-side token SDK (`@fluxfiles/node`), mints JWTs in JS.
 - `packages/mcp/` — MCP server (`@fluxfiles/mcp`, stdio bin `fluxfiles-mcp`): read-only tools by default, write/trash behind env flags; refuses plain `http://` to a non-local host (`FLUXFILES_MCP_ALLOW_HTTP=1` overrides).
 - `packages/python/` — server-side token SDK (`fluxfiles-token` on PyPI), mints JWTs in Python.
-- `packages/{react,vue,ckeditor4,tinymce,summernote}/` — JS/TS wrappers (tsup/esbuild + vitest).
+- `packages/{react,vue,ckeditor4,ckeditor5,tinymce,summernote}/` — JS/TS wrappers (tsup/Vite/esbuild + vitest).
 - `packages/{laravel,wordpress}/` — PHP adapters (each bundles/uses the core).
 - `docs/`, `.github/workflows/test.yml`, `docker/`, `scripts/`.
 
@@ -63,7 +62,7 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
   (local/SFTP) or object metadata (S3/R2); search uses `_fluxfiles/index.json`, folder
   search `dirs.json`, audit `audit.jsonl`. **Exception:** the opt-in
   `FLUXFILES_STORAGE_BACKEND=db` mode (env var, default `json`) moves that
-  bookkeeping — metadata, search/folder index, audit log, trash manifest, quota,
+  bookkeeping — metadata, search/folder index, audit log, trash manifest, legal holds,
   and the rate limiter — into the operator's own self-hosted MySQL/PostgreSQL/SQLite
   instead of JSON files. File bytes stay fully storage-resident either way; it's
   not a JWT claim and not a paid module. See `docs/design/DB-STORAGE-MIGRATION-DESIGN.md`.
@@ -113,8 +112,9 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
   verifier live only in the modules (minimum module versions); an installed pre-interface
   module answers `501 module_update_required`; `public/share.html`/`intake.html` are redirect stubs.
 - **Virus scan is fail-closed.** `allow_virus_scan` wires `FileManager::setVirusScanner()`
-  in `index.php` *and* the Laravel/WP proxies (they build their own `FileManager`). It
-  scans `upload()` / `putContent()` / each `extractZip()` entry **before** writing;
+  in `FileManagerFactory::wire()`, which `index.php` *and* the Laravel/WP proxies call. It
+  scans `upload()` / `putContent()` / each `extractZip()` entry / copy and cross-disk
+  copy/move sources **before** writing;
   anything that stops a scan (module absent, licence, claim, engine down) refuses the
   write instead of storing unscanned, and `/api/fm/chunk/*` plus presigned PUT/POST are
   refused outright because those bytes never reach the server. DLP (`allow_dlp_scan`)
@@ -151,16 +151,16 @@ for f in packages/core/tests/e2e/*-http.php; do php "$f"; done
 # Live S3 + Bucket Doctor (env-gated; CI runs it against LocalStack)
 FXTEST_S3_* ... php packages/core/tests/e2e/test-s3-live.php
 # Wrapper packages
-cd packages/<react|vue|sdk|ckeditor4|tinymce|summernote|node|mcp> && npm install && npm test
+cd packages/<react|vue|sdk|ckeditor4|ckeditor5|tinymce|summernote|node|mcp> && npm install && npm test
 # Adapter smokes (stubbed)
 php packages/wordpress/tests/test-wp-smoke.php
 php packages/laravel/tests/test-laravel-smoke.php
 ```
 
-CI is `.github/workflows/test.yml` (17 jobs: core-php, lockfiles-and-laravel-db,
+CI is `.github/workflows/test.yml` (18 jobs: core-php, lockfiles-and-laravel-db,
 adapter-core-floor, ui-min-fresh, iframe-allow, api-e2e, selfboot-e2e, s3-localstack, db-mysql,
 db-postgres, wrappers, node-sdk (also builds/tests `@fluxfiles/mcp`), python-token,
-browser-e2e, editor-e2e, pack-smoke, docker-build), on a PHP 8.1–8.5 matrix where it
+browser-e2e, editor-e2e, pack-smoke, wp-dist-guard, docker-build), on a PHP 8.1–8.5 matrix where it
 matters. `selfboot-e2e` runs every `tests/e2e/*-http.php` (each boots its own `php -S`)
 plus `test-sftp-live.php` against an `atmoz/sftp` container. `db-mysql`/`db-postgres`
 run the `FLUXFILES_STORAGE_BACKEND=db` suite against real MySQL/PostgreSQL service
@@ -175,13 +175,13 @@ Laravel DB adapter test.
 - `CHANGELOG.md` uses an umbrella `## [X.Y.Z] — date` header per release wave,
   with a `> Released:` line listing the package tags in that wave. Its own counter is
   **not** the core version — read `git tag | grep '^core-v' | sort -V | tail -1`.
-- Release flow: bump the package version (package.json / plugin header /
-  composer) → add/extend the CHANGELOG entry → `chore(release): <pkg> X.Y.Z`
+- Release flow: bump the package version (package.json / pyproject.toml / WP plugin
+  header + readme; core and Laravel are versioned by the tag alone) → add/extend the CHANGELOG entry → `chore(release): <pkg> X.Y.Z`
   commit → annotated tag → push commit + tag.
 - **Push ≤3 release tags per `git push`** — pushing >3 at once silently triggers
   no publish workflows. Batch the tags when releasing several packages together.
-- npm packages publish from their subdir (`npm publish`; scope access is
-  pre-configured). `npm publish` needs the maintainer's 2FA OTP.
+- npm packages are published by `npm-publish.yml` and the Python SDK by `pypi-publish.yml`
+  when their tag is pushed; both refuse a tag that differs from the manifest version.
 - The WordPress plugin ZIP is built fresh from the current core by
   `scripts/build-wordpress.sh`; a `wordpress-v*` tag runs `wordpress-release.yml`,
   which attaches the ZIP (+ sha256 and a catalogue entry carrying `requires_php`) to a

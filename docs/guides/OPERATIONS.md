@@ -71,9 +71,10 @@ only reachable.
 `.github/workflows/wordpress-release.yml`, which attaches the plugin ZIP plus a
 `wordpress-catalogue.json` (version, zip, sha256, `requires_php`) to the GitHub
 release. Merge that entry into `build/modules/catalogue.json` on the update server
-(`pack-modules.php` preserves it) — without it the plugin's update check answers
-`404 unknown module`, and without `requires_php` WordPress can't hold an update back
-from a site whose PHP is too old (the floor is 8.1).
+(`pack-modules.php` preserves it). Only plugins from before 1.1.0 still ask for it: since
+1.1.0 the free plugin has no updater. Without the entry those sites get `404 unknown module`,
+and without `requires_php` WordPress can't hold an update back from a site whose PHP is too
+old (the floor is 8.1).
 
 ---
 
@@ -123,8 +124,7 @@ A module declares the core it needs in its `composer.json`
   assumed to be 1.0.3 and can be offered a build it cannot host) and never offers a release whose floor is above `^1.0.3`; they get
   the newest older build, or `409` when none is compatible. Only a client that reports its
   version can be offered a release with a higher floor.
-- The WordPress plugin updater only updates the plugin itself (no `requires_core`), so it is
-  unchanged.
+- The `wordpress` catalogue entry carries no `requires_core`: the plugin bundles its own core.
 
 Verify without a licence:
 
@@ -164,7 +164,7 @@ Two things worth knowing before the first sale:
 
 - **The default mail transport is `log`.** It writes the message to the error log
   instead of sending, so a half-configured deploy is obvious rather than silently
-  swallowing every licence email. Set `smtp` when you mean it.
+  swallowing every licence email. Set `resend` or `smtp` when you mean it.
 - **A mail failure does not fail the webhook.** Polar disables an endpoint after ten
   consecutive non-2xx replies, and a mail outage fails every order at once — so the
   licence is stored, `mailed_at` stays null, and `POST /redeliver` (admin-authed) sends
@@ -186,12 +186,12 @@ Polar → **Settings → Webhooks → Add Endpoint**:
 |---|---|
 | URL | `https://licences.example.com/webhook/polar` |
 | Format | Raw (JSON) |
-| Events | **`order.paid`** only |
+| Events | **`order.paid`** (issues the licence), `order.refunded` (a full refund marks it refunded) and the `subscription.*` events listed in `services/license-server/README.md` |
 | Secret | generate one, then set `FLUXFILES_POLAR_WEBHOOK_SECRET` |
 
 `order.paid` is the one that means money moved. `order.created` fires first with
 `status: pending`, and issuing there hands a licence to a payment that can still fail.
-The server ignores every other event with a 200 — a non-2xx would make Polar retry
+The server acknowledges every other event with a 200 — a non-2xx would make Polar retry
 something it will never act on, and ten of those disable the endpoint.
 
 **Test it before opening the store.** The Polar CLI tunnels real deliveries to a local
@@ -224,7 +224,7 @@ paste into step 3.
 
 `enterprise` is deliberately not created: it is a custom conversation an instant-buy
 button would undercut. The lifetime deal is prepared but off: the default run creates
-exactly the six products above.
+exactly four products (Pro and Studio, yearly and monthly).
 
 ### Switching on the lifetime deal (limited offer)
 
@@ -266,9 +266,9 @@ what happens to one with no licence behind it: `services/license-server/README.m
    `FLUXFILES_SUBSCRIPTION_PORTAL_URL` (https Polar customer-portal link in the auto-renew paragraph of
    subscription licence mails and reminders; the paragraph is sent without a link when unset).
 
-`support` and `support-monthly` are created like any other plan, but they unlock no
-module (`Plans.php` gives them `modules: []`) — the product is a support relationship,
-sellable standalone to a free-core self-hoster who never buys Pro/Studio/Enterprise.
+`support` and `support-monthly` still exist in `Plans.php` (with `modules: []`) but are no
+longer created: Polar's acceptable-use policy rejects selling support on its own, and the
+production products were archived on 2026-11-14.
 
 ---
 
@@ -279,7 +279,6 @@ In `fluxfiles-landing`, generate production checkout links and set:
 ```bash
 PUBLIC_POLAR_PRO_YEARLY=…      PUBLIC_POLAR_PRO_MONTHLY=…
 PUBLIC_POLAR_STUDIO_YEARLY=…   PUBLIC_POLAR_STUDIO_MONTHLY=…
-PUBLIC_POLAR_SUPPORT_YEARLY=…
 ```
 
 A missing variable degrades to the existing "coming soon" button rather than a dead
@@ -346,10 +345,10 @@ buyer cannot see.
 - **`/claim` stops answering after an hour.** A success URL survives in browser history
   and referrer logs; after the window, email is the way, or look it up with the admin
   token.
-- **A cancelled subscription is not revoked early.** The webhook handles `order.paid`
-  only. With `perpetual` enforcement a key expires on its own term, so a mid-term
-  canceller keeps the year they paid for. Revoking sooner needs a
-  `subscription.canceled` handler.
+- **A cancelled subscription is not revoked early.** `subscription.canceled` only stops the
+  reminders, so a mid-term canceller keeps the period they paid for; a full refund or a
+  `subscription.revoked` event is what ends a licence early (rules:
+  `services/license-server/README.md`).
 - **Module floors are checked by hand.** A module's `composer.json` must require the
   first core release that actually *calls* it — and, since 2026-10-23, PHP `^8.1.0`
   like the core. This cannot be CI-guarded — the packages are gitignored, so CI cannot
@@ -357,7 +356,8 @@ buyer cannot see.
   before `audit-export`/`sso` shipped 2026-08-29 brought the total to eleven, and
   `dlp`/`legal-hold` shipped 2026-09-06 brought it to thirteen).
 - **WordPress cannot run the CLI installer.** Shared hosting has no shell; those
-  customers unpack the module zip by hand — see `ACTIVATE.md`.
+  customers install the FluxFiles Pro add-on, which bundles Share and Intake — see
+  `ACTIVATE.md`.
 
 ---
 

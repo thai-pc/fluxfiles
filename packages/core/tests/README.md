@@ -10,6 +10,8 @@ Layout by test type:
 | `browser/` | Playwright suite against the standalone `/public/` UI (`chmod`, `media-preview`, `import-url`, etc.) — CI job `browser-e2e` | node + Playwright |
 | `manual/` | Browser fixtures for SDK + editor integrations (serve via `router.php`, open `http://localhost:8080/tests/manual/*.html` — not `file://`) | manual |
 | `apps/` | Real-adapter e2e: React/Vue/Laravel host apps + the WordPress plugin driving the core iframe (see `apps/README.md`) | node / composer / Docker |
+| `editors/` | Playwright against the real CKEditor 4/5, TinyMCE and Summernote (see `editors/README.md`) — CI job `editor-e2e` | node / PHP / Playwright |
+| `modules-live/` | The paid modules live in Docker, standalone and through Laravel/WordPress (see `modules-live/README.md`) — local only, not CI | Docker + the private modules |
 | `generate-token.php` | Helper to mint test JWTs | PHP |
 
 ## Run
@@ -41,4 +43,4 @@ php tests/e2e/test-s3-live.php
 
 Tests load `FLUXFILES_SECRET` from `.env` (repo root or `packages/core/`). It must be ≥ 32 bytes — firebase/php-jwt v7 rejects shorter HS256 keys.
 
-CI (`.github/workflows/test.yml`) runs `unit/` + `integration/` on PHP 8.2–8.4 (`core-php`), `e2e/test-api.sh` per version (`api-e2e`), every `e2e/*-http.php` plus `test-sftp-live.php` against an `atmoz/sftp` container (`selfboot-e2e`), `e2e/test-s3-live.php` against a LocalStack container (`s3-localstack`), the MySQL/PostgreSQL DB-backend suites (`db-mysql`/`db-postgres`) and the Playwright suite (`browser-e2e`). Port allocation for new self-booting tests is listed in `.claude/development.md`.
+CI (`.github/workflows/test.yml`) runs `unit/` + `integration/` on PHP 8.1–8.5 (`core-php`), `e2e/test-api.sh` per version (`api-e2e`), every `e2e/*-http.php` plus `test-sftp-live.php` against an `atmoz/sftp` container (`selfboot-e2e`), `e2e/test-s3-live.php` and the other `e2e/test-s3-*-live.php` tests against a LocalStack container (`s3-localstack`), the MySQL/PostgreSQL DB-backend suites (`db-mysql`/`db-postgres`) and the Playwright suite (`browser-e2e`). Port allocation for new self-booting tests is listed in `.claude/development.md`.

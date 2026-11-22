@@ -1,7 +1,7 @@
 # FluxFiles extension API (`FLUXFILES_EXT_API = 1`)
 
 The free plugin ships no paid modules, licence, updater or engine settings. An add-on plugin
-(the future FluxFiles Pro) plugs in through the hooks below. `FLUXFILES_EXT_API` is bumped only
+(FluxFiles Pro) plugs in through the hooks below. `FLUXFILES_EXT_API` is bumped only
 when a hook changes incompatibly; an add-on should refuse to boot when it is lower than the
 level it was written for. `FLUXFILES_CORE_VERSION` (string, stamped at build) is the bundled core
 release, or `'unknown'` in a dev checkout. Design: `fluxfiles-private-docs: design/WPORG-SPLIT-DESIGN.md` section 2.3.
@@ -42,9 +42,10 @@ capability interface a route needs answers `501 module_update_required`.
 
 Deleting the plugin always removes its settings, usage transients and the rate-limit
 table. Everything that belongs to the stored files (metadata, directories, trash, audit
-log + chain head and legal-hold tables, the `fluxfiles_secret` that keys the audit chain,
-and the files) is **kept** unless "Delete all FluxFiles data when the plugin is deleted"
-is on. With it on, the files plugin wrote under its own storage folder go too (only our
-`.htaccess` / `index.php`, never a folder that contains ABSPATH, wp-content, uploads or the
-plugins dir, and nothing at all at a `FLUXFILES_STORAGE_DIR` / `fluxfiles_storage_base`
-filter location).
+log + chain head and legal-hold tables, and the `fluxfiles_secret` that keys the audit chain)
+is **kept** unless "Delete all FluxFiles data when the plugin is deleted"
+is on. With it on, the bookkeeping inside its own storage folder goes too (`_fluxfiles/`,
+`_variants/`, and our `.htaccess` / `index.php` once nothing else is left; never in a folder
+that contains ABSPATH, wp-content, uploads or the plugins dir, and only the rate-limit
+counters at a `FLUXFILES_STORAGE_DIR` / `fluxfiles_storage_base` filter location). The stored
+files themselves are never deleted.

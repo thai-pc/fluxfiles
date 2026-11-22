@@ -4,7 +4,7 @@ Core PHP engine for FluxFiles — a standalone, embeddable file manager with mul
 
 This package provides:
 - API router (`api/index.php`)
-- Core classes (`api/*.php`, plus `api/Db/` for the optional database backend)
+- Core classes (`api/*.php`, plus `api/Db/` for the optional database backend and `api/Mail/` for e-mail notices)
 - UI assets (`assets/`, `public/`)
 - Translations (`lang/`)
 - Helper functions (`embed.php`)

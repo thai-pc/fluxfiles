@@ -4,7 +4,7 @@ Vanilla JavaScript SDK for embedding FluxFiles in any web app (no framework requ
 
 ## Requirements
 
-- A running **FluxFiles core service** — the backend that serves the UI and performs the storage operations (the PHP app in `packages/core`, e.g. via the Docker image). This SDK is a thin client: it loads `fluxfiles.js` from it and talks to its API at `endpoint`.
+- A running **FluxFiles core service** — the backend that serves the UI and performs the storage operations (the PHP app in `packages/core`, e.g. via the Docker image). This SDK is a thin client: it loads the file-manager UI from it in an iframe, and that UI talks to its API at `endpoint`.
 - A user **token**, minted server-side. Your own backend can be anything: use [`@fluxfiles/node`](https://www.npmjs.com/package/@fluxfiles/node) to issue tokens from Node (**no PHP needed**), or the Laravel / WordPress adapters.
 
 ## Install (npm)
@@ -30,7 +30,7 @@ FluxFiles.open({
 
 ### Minified build
 
-The package also ships a minified `fluxfiles.min.js` (~5 KB, half the size) for
+The package also ships a minified `fluxfiles.min.js` (~6 KB, less than half the size) for
 production. Same global API:
 
 ```html

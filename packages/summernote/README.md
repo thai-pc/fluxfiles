@@ -5,7 +5,7 @@ Adds a **FluxFiles** toolbar button to [Summernote](https://summernote.org/) for
 ## Requirements
 
 - jQuery + Summernote loaded **before** this plugin.
-- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This plugin is only the editor button — it loads the FluxFiles SDK (`fluxfiles.js`) from that server and the `endpoint` option must point at it.
+- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This plugin is only the editor button: your page must load the FluxFiles SDK (`fluxfiles.js`, served by that server at `/fluxfiles.js`), and the `endpoint` option must point at that server.
 
 ## Installation
 
@@ -100,8 +100,9 @@ The plugin reads a single `fluxfiles` options object:
 | `theme` | string | `null` | Picker theme: `light` / `dark` / `auto` |
 | `multiple` | boolean | `false` | Allow multi-file selection |
 | `allowedTypes` | string[] | `null` | Extensions (`.pdf` or `pdf`) or MIME types / patterns (`image/*`, `application/pdf`). Shown only in picker mode: non-matching files are hidden and cannot be selected. UI convenience, not a security boundary (the token's `allowed_ext` claim is the server-side check) |
-| `maxUploadMb` | number | `null` | Per-file upload limit hint |
-| `maxFiles` | number | `null` | Max files hint |
+| `path` | string | `''` | Folder the picker opens in |
+| `maxUploadMb` | number | `null` | Max size per uploaded file, MB |
+| `maxFiles` | number | `null` | Max files per upload batch |
 
 ## License
 

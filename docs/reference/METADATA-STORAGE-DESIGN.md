@@ -46,13 +46,11 @@ concept of arbitrary key-value object metadata).
 | **Audit**        | `_fluxfiles/audit.jsonl` | Appended on every event                                |
 | **Audit archive** | `_fluxfiles/audit/archive/audit-<ts>-<hex>.jsonl` | Rotated-out audit tail, kept (not deleted) — see Audit retention below |
 
-**One SFTP-specific wrinkle:** the index-write lock (`flock`) is only taken
-for the `local` driver, whose index file lives on *this* server's own
-filesystem. For SFTP (and S3/R2), the disk's `root` is on a remote host, so a
-local `flock` would either hit the wrong filesystem or silently no-op —
-index/metadata writes still go through Flysystem exactly as described above,
-just without the local advisory lock (best-effort under concurrency, same as
-S3/R2).
+**Write locks:** on a `local` disk the bookkeeping writes are ordered by an `flock`
+inside the disk's own `_fluxfiles/`. SFTP and S3/R2 storage is remote, so there the
+lock is a file on the app server (`FLUXFILES_LOCK_PATH`, since core-v1.6.7). It orders
+the PHP workers of one server only; see
+[`DEPLOYMENT.md`](../guides/DEPLOYMENT.md#s3-r2-and-sftp-with-several-app-servers).
 
 ---
 
@@ -67,7 +65,7 @@ S3/R2).
 ### List files
 
 1. `ListObjects` from storage
-2. For S3: `HeadObject` per file to read Metadata (or use the index)
+2. For S3: metadata from the index; a file that is not in the index costs a `HeadObject` (sent 16 at a time)
 3. For Local/SFTP: read the `_fluxfiles/meta/{key}.json` sidecar if present (with a legacy `{key}.meta.json` fallback)
 4. Listing/search skip everything under `_fluxfiles/` (trashed items are moved there, so they drop out of both automatically)
 
@@ -93,7 +91,7 @@ tracked by a `_fluxfiles/trash.json` manifest, with its own endpoints:
 
 - **Permission:** every trash operation (soft-delete, restore, purge, empty)
   requires the **`delete`** permission — none of them are reachable with a
-  `write`-only token.
+  `write`-only token. Restore also requires **`write`**.
 - **Scope:** each operation is checked against the caller's `pathPrefix` and,
   when `owner_only` is set, against `deleted_by === userId` — a caller can
   never see, restore, or purge another tenant's/owner's trash entry even on a
@@ -112,7 +110,7 @@ tracked by a `_fluxfiles/trash.json` manifest, with its own endpoints:
 
 ### Audit retention (archive-before-truncate)
 
-`_fluxfiles/audit.jsonl` rotates once it exceeds 5MB or 5000 lines. Rotation
+`_fluxfiles/audit.jsonl` rotates once it exceeds 5MB, keeping the newest 5000 lines. Rotation
 is **not** destructive: the dropped tail is written first to
 `_fluxfiles/audit/archive/audit-<timestamp>-<random-hex>.jsonl` under the same
 lock, then trimmed from the live file — so historical entries are archived,
@@ -142,9 +140,9 @@ Hidden internal folder used for indexes and logs (one per disk root, or per tena
 - **`_fluxfiles/audit.jsonl`**: Append-only, HMAC-chained audit log (JSON Lines). When it grows too large the oldest lines are moved to **`_fluxfiles/audit/archive/`** (never silently dropped).
 - **`_fluxfiles/trash.json`** + **`_fluxfiles/trash/`**: soft-deleted files and their manifest.
 - **`_fluxfiles/originals/`**: pre-watermark originals (so a burn-in can be undone).
-- **`_fluxfiles/usage.json`**: cached usage-dashboard breakdown.
+- **`_fluxfiles/usage.json`**, **`quota.json`**: cached usage-dashboard breakdown and storage-meter figure. **`optimize.json`**: bytes saved by Optimize.
 - Paid-module state, when used: `shares.json`, `intakes.json`, `versions/`, `holds.json`, `fixity.json`.
-- **`_fluxfiles/index.lock`** (local disks only): Lock file for safely updating indexes on local filesystem. Not used for S3/R2.
+- **`_fluxfiles/index.lock`** (local disks only): Lock file for safely updating indexes on local filesystem. S3/R2/SFTP use lock files under `storage/locks/` instead (see below).
 
 If you delete `_fluxfiles/`, FluxFiles will generally recreate it as needed, but you may temporarily lose search results / audit history until indexes are rebuilt by new operations (or by the `bin/fluxfiles index` CLI) — and you lose trash, version history and legal holds outright.
 
@@ -163,14 +161,16 @@ sharded one small file per user + action under **`storage/rate_limit.d/`**;
 - In production, **do not expose `rate_limit.json` or `rate_limit.d/` publicly**
   (deny access at your web server).
 
-`storage/tus/` holds partial resumable uploads (swept after 24 h) — server-local runtime
-state that must never be served.
+`storage/tus/` holds partial resumable uploads (swept after 24 h), `storage/locks/` the
+write locks of S3/R2/SFTP disks (`FLUXFILES_LOCK_PATH`) and `storage/license/` a refreshed
+licence key — server-local runtime state that must never be served.
 
 > Everything above describes the **default `FLUXFILES_STORAGE_BACKEND=json`** mode. Set
 > `FLUXFILES_STORAGE_BACKEND=db` to move metadata, search/folder index, audit log, trash
-> manifest, legal holds, quota, and the rate limiter into your own self-hosted
-> MySQL/PostgreSQL/SQLite instead — none of those `_fluxfiles/*.json` files,
-> `rate_limit.json` or `rate_limit.d/` are created or used in that mode. File bytes always stay on your
+> manifest, legal holds and the rate limiter into your own self-hosted
+> MySQL/PostgreSQL/SQLite instead — their `_fluxfiles/*.json` files,
+> `rate_limit.json` and `rate_limit.d/` are not used in that mode (the usage/quota/optimize
+> caches and module records above still are). File bytes always stay on your
 > configured disk either way. See
 > [`DB-STORAGE-MIGRATION-DESIGN.md`](../design/DB-STORAGE-MIGRATION-DESIGN.md).
 

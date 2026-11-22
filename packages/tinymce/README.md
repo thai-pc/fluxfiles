@@ -20,7 +20,7 @@ the plugin folder into your TinyMCE `plugins/` directory:
 ```
 tinymce/plugins/fluxfiles/
 ├── plugin.js        # readable source
-├── plugin.min.js    # minified (~1.8 KB) — use in production
+├── plugin.min.js    # minified (~5.4 KB) — use in production
 └── README.md
 ```
 
@@ -34,8 +34,8 @@ resolve to it); regenerate with `npm run build` (esbuild).
 ```js
 tinymce.init({
     selector: '#editor',
-    plugins: 'fluxfiles',
-    toolbar: 'undo redo | formatselect | bold italic | fluxfiles | link image',
+    plugins: 'fluxfiles link image',
+    toolbar: 'undo redo | bold italic | fluxfiles | link image',
     fluxfiles_endpoint: 'https://your-fluxfiles-host',
     fluxfiles_token: 'JWT_TOKEN',
     fluxfiles_disk: 'local',
@@ -80,6 +80,9 @@ The modal closes automatically after selection.
 | `fluxfiles_theme` | string | `null` | Picker theme: `light` / `dark` / `auto` |
 | `fluxfiles_multiple` | boolean | `false` | Allow multi-file selection |
 | `fluxfiles_allowed_types` | string[] | `null` | Extensions (`.pdf` or `pdf`) or MIME types / patterns (`image/*`, `application/pdf`). Shown only in picker mode: non-matching files are hidden and cannot be selected. UI convenience, not a security boundary (the token's `allowed_ext` claim is the server-side check) |
+| `fluxfiles_path` | string | `null` | Folder the picker opens in |
+| `fluxfiles_max_upload_mb` | number | `null` | Max size per uploaded file, MB |
+| `fluxfiles_max_files` | number | `null` | Max files per upload batch |
 | `fluxfiles_image_dialog` | boolean | `true` | Wire `file_picker_callback` into the native image/link/media dialogs |
 
 **Files with no permanent URL.** Two cases:

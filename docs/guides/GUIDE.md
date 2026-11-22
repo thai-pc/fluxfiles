@@ -78,7 +78,7 @@ separate, gitignored modules gated by license — see [`docs/guides/ACTIVATE.md`
 | **Insights** | Storage usage dashboard (quota + by type/folder) + **duplicate finder** | Show tenants their consumption, reclaim wasted space |
 | **Safety** | Dedup (SHA-256), rate limiting, tamper-evident (HMAC-chained) audit log, quota, origin/CSRF, dangerous-ext block, SSRF + zip guards | Production hardening, baked in |
 | | 🔒 Paid: **Audit export/verify/purge** + **integrity (fixity) check**, **DLP**, **Legal hold** + **retention rules**, **Virus scan**, **C2PA** | Compliance and content-authenticity requirements |
-| **Storage backend** | Bookkeeping (metadata/index/audit/trash/quota/rate-limit) in JSON files (default) or your own MySQL/PostgreSQL/SQLite | See [`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`](../design/DB-STORAGE-MIGRATION-DESIGN.md) |
+| **Storage backend** | Bookkeeping (metadata/index/audit/trash/legal holds/rate limits) in JSON files (default) or your own MySQL/PostgreSQL/SQLite | See [`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`](../design/DB-STORAGE-MIGRATION-DESIGN.md) |
 | **UI** | Dark mode (auto/manual), 16 languages + RTL, responsive | Global, white-label, mobile |
 | **Adapters** | Laravel · WordPress · React · Vue/Nuxt · CKEditor 4 · CKEditor 5 · TinyMCE · Summernote · `@fluxfiles/node` · `fluxfiles-token` (Python) · `@fluxfiles/mcp` (AI agents) | Drop into your stack, skip the plumbing |
 | | 🔒 Paid: **Webhooks** | Event-driven integrations (at-most-once delivery) |
@@ -139,11 +139,13 @@ the `/app/packages/core/storage` volume, so:
 - A `.env` you mount yourself (`-v "$PWD/fluxfiles.env:/app/packages/core/.env:ro"`)
   is never overwritten.
 
-Core loads config through `EnvBootstrap`, where a real env var that PHP can see
-wins over the same key in `.env` (the entrypoint's note relies on this). The image
-leaves php-fpm's own pool settings (`clear_env`) at their defaults, so don't count
-on a container env var reaching the web workers of a running container: to change
-a setting, recreate the container or update the mounted `.env`. Back up the entire
+Core loads config through `EnvBootstrap`, where a real env var wins over the same key
+in `.env`, and the image passes the container's env vars on to the web workers
+(php-fpm `clear_env = no`). So a variable given with `-e` can only be changed by
+recreating the container; editing `.env` changes only keys the container env does not
+set. The image also keeps nginx's and PHP's default body limits (1 MB / 2 MB): a single
+upload request over 1 MB gets a `413` until you raise them (see
+[Upload size limits](#upload-size-limits-three-layers)). Back up the entire
 `storage` volume, including hidden `_fluxfiles/` bookkeeping. The production image includes
 the extensions needed by the JSON and SQLite/MySQL/PostgreSQL DB backends; use
 [`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`](../design/DB-STORAGE-MIGRATION-DESIGN.md) for
@@ -237,6 +239,8 @@ When opening FluxFiles directly via `/public/index.html`, configure it with URL 
 | `lang` | No | `en` | Alias for `locale` |
 | `theme` | No | auto | `light`, `dark`, or auto-detect |
 | `multiple` | No | `false` | `1` or `true` to enable multi-select |
+| `maxUploadMb` | No | — | Client-side max size per file (MB) |
+| `maxFiles` | No | — | Max files per upload batch |
 
 > **Security — `?token=` is for dev/standalone only.** In production, embed via the
 > SDK / React / Vue so the token travels over `postMessage`, never in a URL. Why, and
@@ -296,17 +300,8 @@ server/PHP config and must be **≥** your largest `max_upload`, or files are
 rejected *before* reaching the app (often as a confusing `413` or
 `400 No file uploaded` instead of FluxFiles' own `413 upload_too_large`).
 
-| Layer | Setting | Where | Note |
-|-------|---------|-------|------|
-| Web server | `client_max_body_size` (nginx) / `LimitRequestBody` (Apache) | nginx `server`/`http` block | Rejects the request body if too big. |
-| PHP | `upload_max_filesize` **and** `post_max_size` | `php.ini` (or php-fpm pool) | `post_max_size` must be ≥ `upload_max_filesize`; both ≥ your `max_upload`. |
-| FluxFiles | `max_upload` (JWT claim, **MB, per file**) | issued in your token | Returns `413 upload_too_large` when exceeded. |
-
-```ini
-; php.ini — example for a 100 MB per-file limit
-upload_max_filesize = 100M
-post_max_size       = 110M     ; a little above upload_max_filesize
-```
+The settings per layer, with a `php.ini` example:
+[`DEPLOYMENT.md`](DEPLOYMENT.md#upload-size-limits-three-layers).
 
 > **Large uploads (chunk / tus thresholds).** Files **larger than 10 MB on S3/R2 disks** use chunked (multipart) upload, which
 > sends 5 MB parts directly to the bucket — so those bypass `post_max_size`. On
@@ -389,7 +384,8 @@ The select payload carries two URLs:
 
 - **`url`** — ready to display immediately. On a **private** disk it's a
   short-lived **presigned** URL — it **expires after `url_ttl` seconds (default
-  1 hour**, configurable per disk via `AWS_URL_TTL` / `R2_URL_TTL`, max 24h).
+  1 hour**, configurable per disk via `AWS_URL_TTL` / `R2_URL_TTL`, max 24h); an image URL from
+  a listing up to 15 minutes (at most a quarter of the TTL) earlier.
   Media files use the longer `preview_url_ttl` claim instead (default 2h). Fine
   for previewing right after selection; **do not save it** into content.
 - **`permanent_url`** — a stable, non-expiring URL for **embedding in saved
@@ -525,7 +521,7 @@ with a one-click "move extra copies to trash").
   `_variants/` are excluded. `status` is `ok` / `warning` (≥70%) / `critical` (≥90%),
   configurable via the `usage_*` claims.
 - **Cache**: the result is cached per prefix in `_fluxfiles/usage.json` for
-  `usage_cache_ttl` seconds (default 15 min; `0` disables it). `?refresh=true`
+  `usage_cache_ttl` seconds (default 15 min). `?refresh=true`
   recomputes (rate-limited to 2/min, shared with the duplicate finder) — the UI's
   Refresh button is debounced 60s.
 - **`quota_limit` lives in the JWT** ("token is the config"), so changing a
@@ -736,7 +732,7 @@ How it differs from S3 (by design):
 - **File permissions (chmod)**: SFTP has native Unix permissions (S3 doesn't), so
   the UI offers a cPanel-style permissions dialog (Owner/Group/World × rwx) on
   SFTP files. `GET /api/fm/chmod?disk=&path=` reads the octal mode; `POST` with
-  `{disk, path, mode}` sets it (gated by the `allow_chmod` claim, default true).
+  `{disk, path, mode}` sets it (gated by the `allow_chmod` claim, default true, or false under `owner_only`).
 - **SSRF-guarded**: the SFTP host must resolve to a public address, unless you
   list it in `FLUXFILES_SSRF_ALLOW_HOSTS` (legit when the box is on your own
   private network / a VPN'd VPS).
@@ -1145,7 +1141,7 @@ A token minted by `fluxfiles_token()` looks like this:
 
 That is what `fluxfiles_token()` always emits; optional claims (`owner_only`,
 `allow_*`, …) are added only when set. `byob_disks` (encrypted credentials) appears
-only in tokens from `fluxfiles_byob_token()`.
+only in tokens from `fluxfiles_byob_token()` and `fluxfiles_mixed_token()`.
 
 The full claim list (100+, with types/defaults/units) and every `fluxfiles_token()`
 parameter live in [`docs/reference/CONFIG.md`](../reference/CONFIG.md) — kept as the single copy so it
@@ -1159,7 +1155,7 @@ can't drift from what the code actually reads. The handful used in every app:
 |-----------|--------|
 | `read` | List files, view metadata, search, download (presign), get quota |
 | `write` | Upload, rename, copy, move, mkdir, save metadata, crop, AI-tag |
-| `delete` | Delete files and directories (incl. trash, purge, restore) |
+| `delete` | Delete files and directories (incl. trash, purge; restore also needs `write`) |
 | `audit` | Activity log, compliance scorecard, and — with the matching paid module — audit export/verify, integrity check, legal hold, retention runs |
 
 ---
@@ -1295,7 +1291,7 @@ Two routes take a **per-file token in the query string** instead of a Bearer
 header, because an `<img>`/`<video>`/`<audio>` element can't send an
 `Authorization` header:
 
-- `GET /img?token=&width=&quality=&format=` — on-demand WebP/AVIF (the `img_base` /
+- `GET /img?token=&width=&height=&fit=&dpr=&quality=&format=` — on-demand WebP/AVIF (the `img_base` /
   `img_srcset` URLs; see [On-demand WebP & AVIF](#on-demand-webp--avif)).
 - `GET /stream?token=` — gated private local media and SFTP-disk serving.
 
@@ -1318,12 +1314,12 @@ install + the gist; follow the package link for details.
 | **Python** (token SDK) | `pip install fluxfiles-token` | Mint JWTs (+ encrypted BYOB) from any Python backend (Django, FastAPI, Flask) — byte-compatible with the PHP core | [`packages/python`](../../packages/python) |
 | **MCP server** | `npx -y @fluxfiles/mcp` | Let an AI agent (Claude Desktop/Code, any MCP client) list, search and read files through a scoped JWT; write/trash tools only behind env flags | [`packages/mcp`](../../packages/mcp) |
 | **Laravel** | `composer require fluxfiles/laravel` | `<x-fluxfiles>` Blade component + `FluxFiles::token()` facade + publishable config + route proxy | [`packages/laravel`](../../packages/laravel) |
-| **WordPress** | release ZIP (bundles `vendor/`) | Plugin: Settings page, `[fluxfiles]` shortcode, Classic-editor media button, REST API at `/wp-json/fluxfiles/v1/` | [`packages/wordpress`](../../packages/wordpress) |
+| **WordPress** | release ZIP (bundles `vendor/`) | Plugin: Media page, Settings page, `[fluxfiles]` shortcode, block, Classic-editor media button, REST API at `/wp-json/fluxfiles/v1/` | [`packages/wordpress`](../../packages/wordpress) |
 | **React** | `npm i @fluxfiles/react` | `<FluxFiles>` / `<FluxFilesModal>` + `useFluxFiles()` hook (TypeScript) | [`packages/react`](../../packages/react) |
 | **Vue 3 / Nuxt 3** | `npm i @fluxfiles/vue` | `<FluxFiles>` / `<FluxFilesModal>` + composable; Nuxt auto-import plugin | [`packages/vue`](../../packages/vue) |
 | **CKEditor 4** | `npm i @fluxfiles/ckeditor4` | Toolbar button + native Image-Properties "Browse" | [`packages/ckeditor4`](../../packages/ckeditor4) |
 | **CKEditor 5** | `npm i @fluxfiles/ckeditor5` | Toolbar button (`fluxfiles`) + entry in the image insert dropdown; TypeScript, ESM, CKEditor 5 ≥ 42 | [`packages/ckeditor5`](../../packages/ckeditor5) |
-| **TinyMCE 4/5** | `npm i @fluxfiles/tinymce` | Toolbar button + native image-dialog file picker | [`packages/tinymce`](../../packages/tinymce) |
+| **TinyMCE 4–8** | `npm i @fluxfiles/tinymce` | Toolbar button + native image-dialog file picker | [`packages/tinymce`](../../packages/tinymce) |
 | **Summernote** | `npm i @fluxfiles/summernote` | Toolbar button (inserts `<img>`/`<a>` at the cursor) | [`packages/summernote`](../../packages/summernote) |
 
 The **token-minting** adapters (Node, Python, Laravel, WordPress) emit the **same JWT** as
@@ -1424,7 +1420,7 @@ FLUXFILES_LOCALE=vi
 | **BYOB local blocked** | BYOB tokens cannot use the `local` driver — only S3-compatible storage or SFTP |
 | **BYOB SSRF guard** | BYOB endpoints must be http(s) and are rejected if they resolve to loopback, link-local, private/reserved ranges, or the cloud metadata IP (`169.254.169.254`); the validated IP is pinned to the connection |
 | **External tools** | Ghostscript, ffmpeg, tesseract, c2patool and ClamAV run with a minimal environment — they never inherit `FLUXFILES_SECRET` or cloud keys; Ghostscript < 10.05.0 is refused |
-| **Rate limiting** | Token bucket per user, file-locked (or DB-backed), configurable (default: 60 read, 10 write/min) with dedicated buckets for import, tus, `/img`, `/stream` and public share/intake links |
+| **Rate limiting** | Sliding window per user and action, file-locked (or DB-backed), configurable (default: 60 read, 10 write/min) with dedicated buckets for import, tus, `/img`, `/stream`, thumbnails and public share/intake links |
 | **Quota enforcement** | Per-user storage limits checked before upload and cross-disk copy |
 | **Duplicate detection** | SHA-256 hash; `dedupe_uploads` refuses byte-identical re-uploads |
 | **Audit trail** | Every write (and every authenticated 403) logged with user ID, action, IP, user agent; entries are HMAC-chained so edits/deletions are detectable; rotated entries are archived, not dropped |
@@ -1465,7 +1461,8 @@ Mitigations regardless of delivery:
 > file** with a short TTL (`stream_token_ttl`, default 1h), so a leak exposes only
 > that one file, briefly. Lower `stream_token_ttl` for a tighter window, serve over
 > HTTPS, and avoid logging full URLs. Its rate bucket (`FLUXFILES_STREAM_RATE_LIMIT`,
-> 300/min per token) is deliberately generous, because HTTP Range seeking fires many
+> 300/min per user; stored thumbnails count against `FLUXFILES_THUMB_RATE_LIMIT`, 1200/min,
+> instead) is deliberately generous, because HTTP Range seeking fires many
 > requests per playback — the single-file scope + short TTL is the real control.
 
 ### Production Checklist
@@ -1501,7 +1498,7 @@ for f in packages/core/tests/e2e/*-http.php; do php "$f"; done
 cd packages/core/tests/browser && npm install && npx playwright install chromium && npm test
 
 # Framework wrappers — vitest for JS adapters, stubbed-PHP smokes for PHP adapters
-cd packages/react && npm install && npm test        # (and sdk / vue / ckeditor4 / tinymce / summernote / node / mcp)
+cd packages/react && npm install && npm test        # (and sdk / vue / ckeditor4 / ckeditor5 / tinymce / summernote / node / mcp)
 php packages/laravel/tests/test-laravel-smoke.php   # (and wordpress)
 bash scripts/pack-smoke.sh all                       # verifies the published dist/types
 
@@ -1519,12 +1516,13 @@ For the CI map, the adapter↔core floor guard, and the tag→registry release f
 
 ## Environment Variables
 
-Only two are required — everything else has a working default:
+Only the secret is required. `FLUXFILES_ALLOWED_ORIGINS` is needed as soon as another
+origin embeds the UI (empty = same-origin only); everything else has a working default:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `FLUXFILES_SECRET` | **Yes** | — | JWT signing secret (min 32 chars) |
-| `FLUXFILES_ALLOWED_ORIGINS` | **Yes** | — | Comma-separated CORS origins |
+| `FLUXFILES_ALLOWED_ORIGINS` | For embedding | — | Comma-separated CORS origins |
 
 Storage-disk variables (`AWS_*`, `R2_*`, `SFTP_*`, `FLUXFILES_LOCAL_PRIVATE`) are
 listed with their defaults in
@@ -1548,7 +1546,7 @@ FluxFiles/
 │   │   ├── config/                    # disk definitions
 │   │   ├── db/                        # migrations for the opt-in DB backend
 │   │   ├── lang/                      # 16 translations
-│   │   ├── public/                    # iframe entrypoint + share/intake pages
+│   │   ├── public/                    # iframe entrypoint + share/intake redirect stubs
 │   │   ├── storage/                   # local uploads + runtime files (gitignored)
 │   │   └── tests/                     # test suite
 │   ├── laravel/                      # Composer package: fluxfiles/laravel
@@ -1557,7 +1555,7 @@ FluxFiles/
 │   ├── vue/                          # npm: @fluxfiles/vue (TypeScript)
 │   ├── ckeditor4/                    # CKEditor 4 plugin
 │   ├── ckeditor5/                    # npm: @fluxfiles/ckeditor5 (CKEditor 5 plugin, TypeScript)
-│   ├── tinymce/                      # TinyMCE 4/5 plugin
+│   ├── tinymce/                      # TinyMCE 4–8 plugin
 │   ├── summernote/                   # Summernote plugin
 │   ├── node/                         # npm: @fluxfiles/node (JWT minting from Node)
 │   ├── mcp/                          # npm: @fluxfiles/mcp (MCP server for AI agents)
@@ -1612,7 +1610,7 @@ of it may be web-served. What each file is, and what deleting it costs:
 | `402` on a paid-module endpoint | Module is installed but the license didn't validate — check [`docs/guides/ACTIVATE.md`](ACTIVATE.md) and your license server config. |
 | Every upload fails after enabling `allow_virus_scan` / `allow_dlp_scan` | Both are **fail-closed**: a missing module, licence or unreachable scanner refuses the write. Configure the engine or drop the claim. |
 | Uploaded/renamed files "disappear" or don't show up where expected | Check `prefix`/`disks` claims scoping the token, and whether you're looking at the composer-install vs monorepo storage root — see [`packages/core/README.md`](../../packages/core/README.md#where-the-files-land--git-clone-vs-composer-require). |
-| Search or folder search returns stale/missing results after manually touching files on disk | You edited storage outside the API. Delete `_fluxfiles/index.json` / `dirs.json` to force a rebuild — see [Storage Internals](#storage-internals-_fluxfiles-rate_limitjson), or re-run the [indexer](#import-existing-files). |
+| Search or folder search returns stale/missing results after manually touching files on disk | You edited storage outside the API. Re-run the [indexer](#import-existing-files) (with `--overwrite` for files already indexed). Don't delete `_fluxfiles/index.json` / `dirs.json`: nothing rebuilds them by itself — see [Storage Internals](#storage-internals-_fluxfiles-rate_limitjson). |
 | Rate-limit errors under normal use | Tune `FLUXFILES_RATE_LIMIT_READ` / `FLUXFILES_RATE_LIMIT_WRITE` in `.env`, or switch to `FLUXFILES_STORAGE_BACKEND=db` for DB-backed limits at scale. |
 | Large uploads stall or 404 on `/api/fm/tus` behind a load balancer | Partial tus uploads live on one node's disk — share `storage/tus/` between nodes or use sticky sessions. |
 | Token works standalone but not embedded via iframe/SDK | Never pass the JWT in a URL query string — adapters send it over `postMessage`; check `FLUXFILES_ALLOWED_ORIGINS` and browser console for `postMessage` origin mismatches. See [Security](#security). |

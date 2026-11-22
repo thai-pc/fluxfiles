@@ -72,7 +72,7 @@ sharing the quota/dedup/variants pipeline). Server-wide defaults come from
 
 When the token targets a FluxFiles server that has an **SFTP disk** configured
 (`SFTP_*` env on that server — see the
-[core README](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#sftp-disk-vps--shared-hosting)),
+[guide](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#sftp-disk-vps--shared-hosting)),
 you can hand a token the SFTP file-manager tools. `chmod` is on by default for SFTP:
 
 ```ts
@@ -84,9 +84,9 @@ const token = createToken({
 });
 ```
 
-The standalone core / Docker image serves these, and so do the Laravel and WordPress
-proxy adapters (`/chmod` is proxied) whenever the
-token reaches an SFTP disk there.
+The standalone core / Docker image serves these, and so does the Laravel proxy adapter
+(`/chmod` is proxied) whenever the token reaches an SFTP disk there. The WordPress
+plugin refuses `chmod`.
 
 ### BYOB — encrypt a user's own bucket credentials
 

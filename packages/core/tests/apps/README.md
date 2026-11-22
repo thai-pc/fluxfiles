@@ -23,8 +23,12 @@ npm run e2e
 
 # WordPress (Docker; separate because wp-env is a long-lived stack)
 npm run setup:wp                  # once per machine — builds the plugin + starts wp-env
-npm run e2e:wp
+npm run e2e:wp                    # wp-cloud-public.spec.ts skips unless a LocalStack bucket is up (see the spec)
 # teardown: npx @wordpress/env stop   (or `destroy` to wipe)
+
+# WordPress multisite (its own wp-env on port 8890)
+bash wordpress-e2e/multisite/setup.sh
+npx playwright test --config wordpress-e2e/playwright.multisite.config.ts
 ```
 
 ## Layout
@@ -34,4 +38,6 @@ npm run e2e:wp
   `global-setup/teardown.ts` write/restore the core `.env`).
 - `laravel-e2e/` — committed source for the Laravel app (`setup.sh` + `files/`);
   the generated `laravel-app/` is gitignored.
-- `wordpress-e2e/` — `.wp-env.json`, `setup.sh`, `playwright.config.ts`, `wp.spec.ts`.
+- `wordpress-e2e/` — `.wp-env.json`, `setup.sh`, `playwright.config.ts`, `wp.spec.ts`,
+  `wp-roles.spec.ts`, `wp-cloud-public.spec.ts`; multisite: `multisite/`,
+  `playwright.multisite.config.ts`, `wp-multisite.spec.ts`.

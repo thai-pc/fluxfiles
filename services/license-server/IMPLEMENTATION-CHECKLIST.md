@@ -1,5 +1,8 @@
 # Licence admin: implementation and review checklist
 
+> Historical record (PRs #245 and #246): merged, and deployed to production and sandbox on
+> 2026-11-09 (CHANGELOG `[1.0.28]`). Test counts and "no merge/deployment" notes describe the PR.
+
 Scope: all phases in `docs/design/LICENSE-ADMIN-UI-DESIGN.md`, per the owner's
 expanded request. Same branch and PR #245; no merge, tag, deployment, provider
 configuration or real mail/Telegram send is authorized by this implementation.

@@ -21,9 +21,9 @@
   - Pre-auth byte-serving routes (authenticated by a per-file query-string token, not the main JWT, because `<video>`/`<img>` can't send headers): `/api/fm/stream` (gated local + SFTP media, Range) and `/api/fm/img` (on-demand WebP/AVIF). Both reject a missing/placeholder secret and are dispatched before the main auth block.
   - Other pre-auth routes: the Share/Intake recipient routes (`share/info|unlock|file`, `intake/info|upload`, dispatched by `PublicRoutes`, handled inside the modules, gated installed + licensed) and the SSO bridge (`sso/login|callback|exchange`, gated by `FLUXFILES_SSO_ENABLED` + installed + licensed).
   - Authenticated routes: all other `/api/fm/*` routes, including `/api/fm/tus` (handled by `TusServer` outside the JSON envelope).
-  - Loads `.env` from package root or monorepo root.
+  - Loads config through `EnvBootstrap::load()` (real env vars win; `.env` from package root or monorepo root).
   - Applies CORS and origin checks for mutating requests.
-  - Builds `Claims`, `DiskManager`, the metadata repository, `FileManager`, `QuotaManager`, the rate limiter (`RateLimiterFactory` → file or DB storage), `AuditLogStorage`, `ChunkUploader`, optional `AiTagger`, and wires the paid-module hooks (virus/DLP scanner, versioning, webhooks) only when the matching claim is on.
+  - Builds `Claims`, `DiskManager`, the metadata repository, `FileManager`, `QuotaManager`, the rate limiter (`RateLimiterFactory` → file or DB storage), `AuditLogStorage`, `ChunkUploader`, optional `AiTagger`. `FileManagerFactory::wire()` (shared with both proxies) adds the paid-module hooks (virus/DLP scanner, version keeper, webhooks) only when the matching claim is on.
 
 - `api/Claims.php`
   - Decodes the product-specific JWT payload into typed-ish public properties.
@@ -33,7 +33,7 @@
   - `isPathInScope()` checks already-scoped keys.
 
 - `api/FileManager.php`
-  - Main service for list, upload, delete/trash, rename, move, copy, cross-disk operations, mkdir, crop, watermark, AI tag, presign (GET/PUT/POST), zip/extract, content editor, chmod, file metadata, duplicate finder, retention runs, fixity checks and on-demand virus scans.
+  - Main service for list, upload, delete/trash, rename, move, copy, cross-disk operations, mkdir, crop, watermark, AI tag, presign (GET/PUT/POST), zip/extract, content editor, chmod, file metadata, duplicate finder and on-demand virus scans, plus the seams (`filesystemFor()`, `removeKeys()`, …) the retention and fixity modules run their sweeps through.
   - Enforces permissions and disk access through claims, plus legal-hold enforcement (`assertNoActiveHold()`, license-independent).
   - Uses scoped paths before touching storage.
   - Hides internal `_fluxfiles` and `_variants` from listings (case-insensitively); legacy `{file}.meta.json` sidecars are hidden only when their base file still exists (genuine user `*.meta.json` uploads are shown). Refuses writes into `.git/` on SFTP disks.
@@ -43,7 +43,7 @@
 - `api/DiskManager.php`
   - Builds Flysystem local, S3-compatible, and **SFTP** disks.
   - R2/MinIO-style endpoints are treated as S3 with path-style endpoint and `retain_visibility` disabled.
-  - **SFTP** (`SFTP_*` env, or BYOB): a 3rd driver for VPS/hosting. Connect/disconnect per request (no pool, no DB); password OR private key; host is `SsrfGuard::assertHostSafe`-checked (allowlist via `FLUXFILES_SSRF_ALLOW_HOSTS`); optional host-key pinning / strict algorithms. SFTP has no static/presigned URL, so `fileUrl()` returns a tokened `/api/fm/stream` link and `MediaEndpoint::stream()` reads it via Flysystem (no Range). Chunk upload + presign reject SFTP (S3-only); large SFTP uploads use tus instead. Serving is proxied by the Laravel/WordPress adapters too (they port `/stream`).
+  - **SFTP** (`SFTP_*` env, or BYOB): a 3rd driver for VPS/hosting. Connect/disconnect per request (no pool, no DB); password OR private key; host is `SsrfGuard::assertHostSafe`-checked (allowlist via `FLUXFILES_SSRF_ALLOW_HOSTS`); optional host-key pinning / strict algorithms. SFTP has no static/presigned URL, so `fileUrl()` returns a tokened `/api/fm/stream` link and `MediaEndpoint::stream()` reads it via Flysystem (no Range). Chunk upload + presign reject SFTP (S3-only); large SFTP uploads use tus instead. Serving is proxied by the Laravel/WordPress adapters too (same `MediaEndpoint`).
   - BYOB disks can be registered at runtime (s3 or sftp), but local BYOB disks are rejected.
 
 - `api/StorageMetadataHandler.php`
@@ -95,7 +95,7 @@
 
 ## Frontend And Embedding
 
-- `packages/core/public/index.html` and `packages/core/assets/fm.js` implement the standalone UI; `public/share.html` and `public/intake.html` are the Share/Intake recipient pages.
+- `packages/core/public/index.html` and `packages/core/assets/fm.js` implement the standalone UI; `public/share.html` and `public/intake.html` are redirect stubs to the recipient pages the Share/Intake modules serve.
 - `packages/sdk/fluxfiles.js` is the plain browser SDK. It creates/removes the iframe modal, sends `FM_CONFIG`, listens for `FM_SELECT`, token refresh requests, events, and close messages.
 - `packages/react/src/useFluxFiles.ts` and `packages/vue/src/useFluxFiles.ts` mirror the SDK postMessage protocol for framework users.
 - `packages/react/src/FluxFiles.tsx` and `packages/vue/src/FluxFiles.vue` are thin iframe components with imperative control APIs.
@@ -109,7 +109,7 @@
 
 - WordPress:
   - `fluxfiles.php` boots the plugin (and refuses to load below PHP 8.1 with an admin notice).
-  - `includes/FluxFilesPlugin.php` wires activation, admin, REST API, media button, shortcode, and storage protection (`.htaccess` for `wp-content/fluxfiles/`).
+  - `includes/FluxFilesPlugin.php` wires activation, admin, REST API, media button, shortcode, and storage protection (`.htaccess` in the storage base: `uploads/` for a fresh install, an existing `wp-content/fluxfiles/` is kept).
   - `includes/FluxFilesApi.php` registers the REST proxy routes under `/wp-json/fluxfiles/v1/`.
   - `FluxFilesPlugin::diskConfigs()` maps WordPress options to core disk configs.
   - Token generation mirrors Laravel/core helpers; WP capabilities map to the `role` presets.

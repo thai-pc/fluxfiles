@@ -1,7 +1,7 @@
 # Feature Deep Dives
 
 Internals and advanced usage for a few features that are more than a
-one-liner in the root README. Each section below is linked from the README
+one-liner in the [guide](GUIDE.md). Each section below is linked from the guide
 next to its short intro/example — read this when you need the mechanics, not
 just the happy path.
 
@@ -11,11 +11,11 @@ FluxFiles generates three **fixed WebP variants** on upload (`thumb` 150 /
 `medium` 768 / `large` 1920 px) — use `file.variants.<size>.url` and you're
 already serving WebP. For **arbitrary sizes on demand** (responsive images,
 exact widths), each image entry also carries an **`img_base`** URL (see the
-root README's *On-demand WebP & AVIF* section for the request example).
+guide's [On-demand WebP & AVIF](GUIDE.md#on-demand-webp--avif) section for the request example).
 
 - **AVIF or WebP, negotiated for free.** With the default `format=auto`, the
   endpoint reads the browser's `Accept` header and serves **AVIF** when accepted
-  (smallest, on builds with GD AVIF support), else **WebP**, else the original
+  (smallest, on builds with GD AVIF support; the Docker image's GD has none), else **WebP**, else the original
   untouched for ancient clients. AVIF and WebP cache as separate files and the
   response sends `Vary: Accept`. Force one with `&format=avif` / `&format=webp`.
   _(This is core/free — there is no paid "AVIF" tier.)_
@@ -43,11 +43,11 @@ root README's *On-demand WebP & AVIF* section for the request example).
 
 On top of `img_base`, every image entry also gets a ready-to-use **`img_srcset`**
 string, so the host can drop a responsive image straight from `list()` (see the
-root README for the markup example).
+[guide](GUIDE.md#responsive-srcset) for the markup example).
 
 - The candidate widths come from the token's **`srcset_widths`** ladder (default
   `[320, 640, 768, 1024, 1366, 1920]`, snapped to 100px and clamped to
-  `webp_max_width`). Each is a cached WebP from the same `/api/fm/img` endpoint.
+  `webp_max_width`). Each is a cached WebP/AVIF from the same `/api/fm/img` endpoint.
 - Widths are **capped at the image's natural width** (read from the stored
   dimensions — no extra I/O), and the source width itself is always offered, so a
   browser never requests an upscale. Images narrower than 100px get no `img_srcset`.
@@ -126,16 +126,9 @@ $token = fluxfiles_token([
 - **Logo watermark:** upload a transparent PNG as a normal file and set
   `watermark_type => 'logo'` + `watermark_logo_path`. A missing/unsafe path falls
   back to text (never a clean image). Watermarked WebPs are cached in `_variants/`.
-- **Adapters:** `/api/fm/img` itself is now proxied by both Laravel and WordPress
-  (gated-local media streaming and on-demand WebP work through the proxy — see the
-  sections above), but the overlay **compositing** was intentionally not ported
-  there. So `watermark_enabled` is still forwarded only by token minters that
-  target a standalone core — `embed.php`, `@fluxfiles/node`, and the **Laravel
-  adapter in `standalone` mode**. The **WordPress** plugin and **Laravel proxy
-  mode** drop the claim: forwarding it would mint a preview-only token (overlay
-  forces `allow_download` off) whose `/img` request the proxy's handler would
-  serve unwatermarked — worse than not forwarding it. Use the **burn-in** route
-  there instead, which is proxied.
+- **Adapters:** works through the Laravel and WordPress proxies too: their
+  `/api/fm/img` is core's own `MediaEndpoint`, and their token builders forward the
+  `watermark_*` claims.
 
 **How customers actually see the preview** — you don't *embed* it (the `img_base`
 token is short-lived, made for live rendering, not for saving into content). You
@@ -171,7 +164,7 @@ watermarked images and hide download.
 
 ## Usage dashboard
 
-`GET /api/fm/usage` (see the root README's *Usage dashboard* section for the
+`GET /api/fm/usage` (see the guide's [Usage dashboard](GUIDE.md#usage-dashboard) section for the
 response shape) computes a per-prefix storage breakdown — quota status,
 size/count by type, and the largest folders — with **no database and no
 history**: it's a snapshot recomputed from the current tree, not a trend line.
@@ -183,8 +176,8 @@ history**: it's a snapshot recomputed from the current tree, not a trend line.
 - **Cached per prefix, inside the tenant's own tree.** The result is written to
   `_fluxfiles/usage.json` under the caller's `pathPrefix` (not a shared/global
   cache file), so concurrent tenants on the same disk never contend on the same
-  file. TTL is the `usage_cache_ttl` claim (default `900`s; `0` disables caching
-  and recomputes every request).
+  file. TTL is the `usage_cache_ttl` claim (default `900`s; `0`
+  means the default).
 - **`?refresh=true`** bypasses the cache but is rate-limited upstream (2/min); the
   UI's own Refresh button self-debounces to 60s on top of that, so a user mashing
   it can't force a full recursive listing on every click.
@@ -208,7 +201,7 @@ history**: it's a snapshot recomputed from the current tree, not a trend line.
 
 FluxFiles has no built-in shell. If you want a terminal next to your files, run
 your own **ttyd / gotty / wetty** and set the `terminal_pty_url` claim: the toolbar
-then shows a terminal button that embeds that URL in a modal (an `https://` URL
+then shows a terminal button that embeds that URL in a modal (an `http(s)` URL
 only; nothing else is accepted). The claim alone enables it; leave it empty and
 there is no terminal entry.
 
@@ -230,7 +223,7 @@ adjust it:
 | --- | --- |
 | `about` | `false` hides the About entry entirely (default `true`). |
 | `brand_name` | Replaces "FluxFiles" in the page title, header, sign-in screen and About. Plain text, ≤ 60 chars; tags are stripped and it is rendered with `textContent`. The About dialog then adds a muted "Built on FluxFiles" line. |
-| `brand_logo_url` | `http(s)` image shown instead of the header icon (and in About). |
+| `brand_logo_url` | `https` image shown instead of the header icon (and in About). |
 | `accent_color` | `#RGB` / `#RRGGBB`; becomes the UI's `--ff-primary` custom property. |
 
 ```php

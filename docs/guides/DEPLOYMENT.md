@@ -186,8 +186,8 @@ Options -ExecCGI -Includes -Indexes
 
 ## Compression
 
-`fm.js` is ~236 KB raw (~57 KB gzipped) and the UI HTML ~219 KB (~34 KB). The
-bundled [`docker/nginx.conf`](../../docker/nginx.conf) enables gzip; on your own
+The page loads the minified `fm.min.js`, ~107 KB raw (~30 KB gzipped); the UI HTML
+is ~227 KB (~36 KB). The bundled [`docker/nginx.conf`](../../docker/nginx.conf) enables gzip; on your own
 server turn it on too.
 
 nginx (inside `server { }`; `text/html` is compressed by default):
@@ -208,8 +208,8 @@ Apache (`mod_deflate`):
 </IfModule>
 ```
 
-Also cache `/assets/` for a year with `Cache-Control: public, max-age=31536000,
-immutable`: every asset URL carries a `?v=` content hash, and the lazily loaded
+You can cache `/assets/` for a year instead of the 30 days above, with
+`Cache-Control: public, max-age=31536000, immutable`: every asset URL carries a `?v=` content hash, and the lazily loaded
 vendor files (CodeMirror) reuse fm.js's hash. The HTML itself is sent
 with `no-cache` plus an `ETag` and answers `304` on revalidation (not in demo
 mode, whose page embeds a per-visitor token).
@@ -221,7 +221,8 @@ mode, whose page embeds a per-visitor token).
 
 ```bash
 # Set ownership
-chown -R www-data:www-data /var/www/fluxfiles/storage/
+cd /var/www/fluxfiles/packages/core   # the `root` of the nginx block above
+chown -R www-data:www-data storage/
 
 # Writable directories
 chmod -R 755 storage/
@@ -300,8 +301,9 @@ being opened. Measured on a local disk (PHP 8.2, one list page of 200 items):
 
 On S3/R2 add the transfer of the whole file on each request. Past roughly
 20,000 files (or a `memory_limit` under 256 MB), use the database backend:
-set `FLUXFILES_STORAGE_BACKEND=db` with `FLUXFILES_DB_DSN`, then run
-`php scripts/migrate-json-to-db.php` once to import the existing bookkeeping.
+set `FLUXFILES_DB_DSN`, create the tables with `php scripts/fluxfiles-migrate.php`,
+import the existing bookkeeping once with `php scripts/migrate-json-to-db.php --disk=<name>`
+(check it with `--verify`), then set `FLUXFILES_STORAGE_BACKEND=db`.
 The database backend reads and writes only the rows a request needs instead of
 one file covering the whole disk. File bytes stay in your storage either way. See
 `docs/design/DB-STORAGE-MIGRATION-DESIGN.md`.

@@ -52,8 +52,9 @@ modules switch on. Until it is installed, paid routes answer `501 module_not_ins
 
 ## 2. Give the key to your server
 
-The key is verified **offline**. Nothing is sent to us at any point, so an air-gapped
-server works exactly like a connected one.
+The key is verified **offline**, so an air-gapped server works exactly like a connected
+one. Only `fluxfiles update` and `fluxfiles license refresh` send it to us (see
+[Updates](#updates)).
 
 | Platform | Where the key goes |
 |---|---|
@@ -114,8 +115,9 @@ per token with the `fluxfiles_token_overrides` filter (individual `allow_*` clai
 `edition` once an add-on registers editions). Engine settings (`FLUXFILES_AIVISION_*`,
 `FLUXFILES_DLP_*`, `FLUXFILES_C2PA_MANIFEST`, `FLUXFILES_VIRUSTOTAL_*`,
 `FLUXFILES_CLAMSCAN_TIMEOUT`, `FLUXFILES_OCR_MAX_MEGAPIXELS`, `FLUXFILES_WEBHOOK_ALLOW_INTERNAL`,
-`FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`) are set as real environment variables or `wp-config.php`
-constants on WordPress; Pro v1 has no settings screen for them.
+`FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`) are set as real environment variables on
+WordPress (they are not read from `wp-config.php` constants); Pro has no settings screen
+for them.
 
 The claim names are in [`CONFIG.md`](../reference/CONFIG.md) — one row per claim, with defaults.
 
@@ -222,8 +224,9 @@ or a plan change that would shorten the term: paste the key from your e-mail).
 Refresh never runs inside a web request, and `FLUXFILES_LICENSE_REFRESH=false` stops the
 automatic call in `fluxfiles update` for air-gapped servers.
 
-The free WordPress plugin has no updater of its own (updates come from WordPress.org);
-paid-module updates will come with the FluxFiles Pro add-on.
+The free WordPress plugin has no updater of its own: install a newer ZIP from the
+[releases page](https://github.com/thai-pc/fluxfiles/releases?q=wordpress-v). The FluxFiles
+Pro add-on updates itself and the paid modules it bundles.
 
 Updates are gated by the support window on your key, not by whether the software runs.
 Annual/perpetual terms keep every installed module running indefinitely when the term

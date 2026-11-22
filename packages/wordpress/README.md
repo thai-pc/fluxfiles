@@ -2,7 +2,7 @@
 
 WordPress plugin that embeds [FluxFiles](https://github.com/thai-pc/fluxfiles) — a
 multi-storage file manager (Local, AWS S3, Cloudflare R2, SFTP) — directly in your site
-via a shortcode, an editor media button, and a JWT-bridged REST proxy.
+via a **Media → FluxFiles** page, a shortcode, an editor media button, and a JWT-bridged REST proxy.
 
 Unlike the JS/framework wrappers, this plugin **bundles the FluxFiles core**, so it
 runs entirely inside your WordPress install — no separate backend to host.
@@ -16,7 +16,7 @@ runs entirely inside your WordPress install — no separate backend to host.
 
 ## Installation
 
-1. Download a release ZIP that includes `vendor/` (WordPress.org or GitHub Releases).
+1. Download the release ZIP (`fluxfiles-<version>.zip`, it includes `vendor/`) from GitHub Releases.
 2. **Plugins → Add New → Upload Plugin**, choose the ZIP, install, and activate —
    or unzip into `wp-content/plugins/fluxfiles/` and activate from **Plugins**.
 3. Go to **Settings → FluxFiles** to set your JWT secret and storage options.
@@ -60,7 +60,7 @@ block to the block editor. Both open the picker and insert the chosen file(s).
 
 With **Media offload** enabled (Settings → FluxFiles, on by default), a picked file is
 registered as a real **WordPress attachment** whose URL points at your FluxFiles storage
-(S3 / R2 / SFTP / local) — the file is *not* copied into `wp-content/uploads`.
+(public S3 / R2 or public local) — the file is *not* copied into `wp-content/uploads`.
 `wp_get_attachment_url()` / `wp_get_attachment_image_src()` are filtered to serve from
 your bucket, so the file shows in the **Media Library** and works in posts, themes and
 blocks exactly like a native attachment — but offloaded to your storage.
@@ -210,6 +210,20 @@ location ^~ /wp-content/uploads/fluxfiles/ {
 }
 ```
 
+…or enable **private local storage** in the settings: the file manager stops handing
+out plain URLs (files stream through the signed REST route) and, on Apache, the folder is
+denied by its `.htaccess`. nginx ignores `.htaccess`, so the rule `location ^~ <storage root>/ { deny all; }`
+is still needed there (the admin notice shows it, also while private storage is on). Files written
+before you switched it on keep their old permissions.
+
+On nginx the plugins screen and Settings → FluxFiles show an admin notice with
+these rules (rooted at your real content path) while the local disk is public.
+Once the rules are in place, hide it with
+`add_filter('fluxfiles_nginx_storage_notice', '__return_false');`.
+
+On multisite the setting is per site, so the deny rule shown with private storage on names only
+that site's folder (`<storage root>/sites/<blog id>/`); add one rule per private site.
+
 ### Uninstall
 
 Deleting the plugin always removes its settings and rate-limit counters. The stored files,
@@ -299,20 +313,6 @@ Follow these steps in order, from `wp-content/`:
    skipped, so the legacy index is kept and only missing files are added), then
    `wp maintenance-mode deactivate`.
 
-…or enable **private local storage** in the settings: the file manager stops handing
-out plain URLs (files stream through the signed REST route) and, on Apache, the folder is
-denied by its `.htaccess`. nginx ignores `.htaccess`, so the rule `location ^~ <storage root>/ { deny all; }`
-is still needed there (the admin notice shows it, also while private storage is on). Files written
-before you switched it on keep their old permissions.
-
-On nginx the plugins screen and Settings → FluxFiles show an admin notice with
-these rules (rooted at your real content path) while the local disk is public.
-Once the rules are in place, hide it with
-`add_filter('fluxfiles_nginx_storage_notice', '__return_false');`.
-
-On multisite the setting is per site, so the deny rule shown with private storage on names only
-that site's folder (`<storage root>/sites/<blog id>/`); add one rule per private site.
-
 Network activation sets up the existing sites in the activation request itself, within a budget
 (a large network skips this and every site is then set up on its first request). Tune it with
 `add_filter('fluxfiles_activation_max_sites', fn () => 500);` (default 200) and
@@ -343,9 +343,11 @@ FluxFiles JWT server-side; the signing secret never reaches the browser.
   `watermark_enabled` (plus `watermark_type`/`_text`/`_logo_path`/`_position`/
   `_opacity`/`_font_size`) and `/img` composites the mark; a preview-only token is
   never handed the clean original. Their per-sub rate limits default to core's
-  (stream 300/min, img 120/min for images that must be resized, thumb 1200/min for cached images
-  and stored thumbnails; `FLUXFILES_STREAM_RATE_LIMIT` / `FLUXFILES_IMG_RATE_LIMIT` /
-  `FLUXFILES_THUMB_RATE_LIMIT`, or the `fluxfiles_rate_limit_{stream,img,thumb}` filters; `0` disables).
+  (stream 300/min, img 120/min; `FLUXFILES_STREAM_RATE_LIMIT` / `FLUXFILES_IMG_RATE_LIMIT`,
+  or the `fluxfiles_rate_limit_{stream,img}` filters; `0` disables). Not in 1.3.3, which bundles
+  core 1.6.6: from core 1.7.0 `img` counts only images that must be resized, and cached images
+  and stored thumbnails use their own bucket (1200/min, `FLUXFILES_THUMB_RATE_LIMIT` or the
+  `fluxfiles_rate_limit_thumb` filter).
 - **The UI page** (`/public/index.html`) sends `Referrer-Policy: no-referrer` and
   `Content-Security-Policy: frame-ancestors 'self' <site origins>`. A headless
   front-end on another origin widens it with
@@ -354,8 +356,8 @@ FluxFiles JWT server-side; the signing secret never reaches the browser.
 
 ## Updates and add-ons
 
-The plugin updates through WordPress.org like any other. It has no licence key, update
-server or module-engine settings of its own: those belong to the separate FluxFiles Pro
+Updates are new release ZIPs from GitHub Releases (the plugin is submitted to WordPress.org,
+not listed there yet). It has no updater, licence key or module-engine settings of its own: those belong to the separate FluxFiles Pro
 plugin, which plugs in through the hooks documented in [HOOKS.md](HOOKS.md)
 (`fluxfiles_license`, `fluxfiles_module_paths`, `fluxfiles_admin_sections`, ...).
 Without it, paid-module routes answer `501 module_not_installed`.
@@ -378,8 +380,8 @@ add_filter('fluxfiles_token_overrides', function (array $overrides, int $userId)
 
 Once enabled, the proxy accepts `POST /wp-json/fluxfiles/v1/api/fm/import-url`
 (`{ "url": "…", "path": "…" }`) — SSRF-guarded, sharing the quota/dedup/variants
-pipeline. Server-wide defaults come from `FLUXFILES_IMPORT_*` env vars on the
-core service.
+pipeline. Server-wide defaults come from the `FLUXFILES_IMPORT_*` env vars of the site's
+PHP process, except the rate limit: that is the `fluxfiles_import_rate_limit` filter.
 
 ## Indexing an existing upload directory
 
@@ -405,7 +407,7 @@ creates metadata per file (title from the filename) and tracks folders in
 `_fluxfiles/dirs.json`. No WP-CLI? Re-upload through the UI — new uploads register
 metadata automatically.
 
-## SFTP disk & PTY terminal
+## SFTP disk
 
 The settings page (**Settings → FluxFiles → Cloud**) has an **SFTP** section: host,
 port, username, password or a PEM private key (+ passphrase), root folder, and the host
@@ -422,15 +424,14 @@ list it in `define('FLUXFILES_SSRF_ALLOW_HOSTS', 'sftp.internal.example');` in
 short-lived per-file link that carries the disk config encrypted, capped at 30 minutes.
 
 For the standalone server (or the Docker image) see the
-[core README → SFTP disk](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#sftp-disk-vps--shared-hosting).
+[guide → SFTP disk](https://github.com/thai-pc/fluxfiles/blob/master/docs/guides/GUIDE.md#sftp-disk-vps--shared-hosting).
 
-If you run your own [ttyd / gotty / wetty](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md),
-pass its URL as the `terminal_pty_url` token override and the UI embeds it.
+The plugin has no terminal: `terminal_pty_url` is removed from every token it mints.
 (The **burn-in watermark** works in WordPress too.)
 
 ## Features
 
-- Multi-storage — Local disk, AWS S3, Cloudflare R2; SFTP through BYOB tokens (cursor-based pagination)
+- Multi-storage — Local disk, AWS S3, Cloudflare R2, SFTP (cursor-based pagination)
 - Image optimization — automatic WebP variants (thumb / medium / large)
 - AI tagging — bring your own key (Anthropic, OpenAI, Gemini, OpenRouter, Groq, Mistral, xAI, Ollama or any OpenAI-compatible endpoint) under Settings → FluxFiles → AI; free, no licence
 - Full-text search across file names + metadata; folder search

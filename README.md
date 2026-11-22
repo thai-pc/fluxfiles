@@ -104,7 +104,7 @@ All SDK options, events, commands and token refresh are covered in the [embeddin
 | A different folder and rights per user, without a user table in the file manager | Every request carries a signed token with the user's disks, folder, permissions, quota and file types. Change what a user may do by issuing a different token. |
 | Files on S3, R2 or an SFTP server, not on the web server | Local, S3, R2, any S3-compatible store and SFTP, with cross-disk copy and move. A tenant can even bring their own bucket (BYOB), with its credentials encrypted inside the token. |
 | One picker across your stack | The same UI and token in the JS SDK, React, Vue, Laravel, WordPress and four rich-text editors. |
-| A maintained replacement for an old picker | Responsive FileManager is archived on GitHub and RichFilemanager has had no commits since 2023. FluxFiles runs on PHP 8.1–8.5, with CI on every release. |
+| A maintained replacement for an old picker | Responsive FileManager is archived on GitHub and RichFilemanager has had no commits since 2019. FluxFiles runs on PHP 8.1–8.5, with CI on every release. |
 | An uploader *and* a manager | Unlike an upload widget (Uppy, FilePond), it also browses, renames, moves, trashes, searches and previews what is already stored. |
 
 ## Features
