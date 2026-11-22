@@ -938,7 +938,7 @@
              @mouseenter="lightboxWarm = detailFile ? detailFile.key : ''"
              @click="detailFile && isPreviewable(detailFile, 'image') && displayUrl(detailFile) && (resetZoom(), previewFullscreen = true)">
             <template x-if="detailFile && isPreviewable(detailFile, 'image') && displayUrl(detailFile)">
-                <img :src="displayUrl(detailFile)" :srcset="viewSrcset(detailFile)"
+                <img :src="displayUrl(detailFile)" :srcset="viewSrcset(detailFile)" @error="viewFailed(detailFile, $el)"
                      :sizes="detailFile.img_srcset ? (detailFile.img_sizes || '(max-width: 640px) 92vw, 380px') : null"
                      :alt="detailFile.name">
             </template>
@@ -1240,7 +1240,7 @@
 
             <!-- Drag canvas: image with a draggable, resizable watermark overlay -->
             <div class="ff-wm-stage" x-ref="wmStage" @mousemove="wmDragMove($event)" @mouseup="wmDragEnd()" @mouseleave="wmDragEnd()">
-                <img :src="activeTab === 'watermark' ? detailFile?.url : null" :alt="detailFile?.name" draggable="false" style="width:100%;display:block;user-select:none;">
+                <img :src="activeTab === 'watermark' ? detailFile?.url : null" @load="wmLoaded++" :alt="detailFile?.name" draggable="false" style="width:100%;display:block;user-select:none;">
                 <!-- logo overlay (left/top clamped by width so it mirrors the server's
                      in-canvas clamp and never overflows the clipped stage) -->
                 <div class="ff-wm-mark" x-show="wm.type === 'logo' && wm.logo"
@@ -1326,7 +1326,7 @@
         <!-- Always-visible close: a zoomed image can't be dismissed by a backdrop
              click (that pans), so this is the reliable way out at any zoom level. -->
         <button class="ff-preview-close" @click.stop="closePreview()" :title="t('common.close')" :aria-label="t('common.close')">&times;</button>
-        <img :src="displayUrl(lightboxFile()) || null" :srcset="viewSrcset(lightboxFile())"
+        <img :src="displayUrl(lightboxFile()) || null" :srcset="viewSrcset(lightboxFile())" @error="viewFailed(lightboxFile(), $el)"
              :sizes="lightboxFile()?.img_srcset ? (detailFile?.img_sizes || '100vw') : null"
              :alt="detailFile?.name" draggable="false"
              class="ff-preview-img" :class="{ zoomed: zoom.scale > 1, dragging: zoom.dragging }"
