@@ -339,6 +339,14 @@ test('ImageToken: wrong secret / expired → 403', function () use ($imgSecret) 
     catch (ApiException $e) { assertEqual('img_token_invalid', $e->getErrorCode()); }
 });
 
+test('avifQuality: monotonic, below WebP\'s number, fixed ends', function () {
+    assertEqual([0, 45, 56, 60, 85, 100], array_map([ImageOptimizer::class, 'avifQuality'], [0, 60, 75, 80, 90, 100]));
+    assertEqual([0, 100], [ImageOptimizer::avifQuality(-5), ImageOptimizer::avifQuality(500)]);
+    for ($q = 1; $q <= 100; $q++) {
+        assertEqual(true, ImageOptimizer::avifQuality($q) >= ImageOptimizer::avifQuality($q - 1), "q $q");
+    }
+});
+
 test('ImageToken: a versioned token is stable within its window, never outlives the TTL, and follows the version', function () use ($imgSecret) {
     $mint = fn (int $ttl, ?string $v) => ImageToken::mint('local', 'a.jpg', 'u', $ttl, $imgSecret, 1600, 80, null, true, null, $v);
     foreach ([[3600, 900], [1800, 450], [60, 15], [86400, 900]] as [$ttl, $window]) {

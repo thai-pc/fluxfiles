@@ -45,6 +45,9 @@ test('expand opens a full-window viewer with full screen, new tab, download and 
   expect(box!.height).toBeGreaterThanOrEqual(vp.height - 1);
   await expect(viewer.locator('embed.ff-pdf-viewer-doc')).toHaveAttribute('src', new RegExp(name.replace('.', '\\.')));
 
+  // The panel's copy is gone meanwhile, so the file is not downloading twice.
+  await expect(page.locator('.ff-pdf-thumb embed')).toHaveCount(0);
+
   // Full screen targets the viewer itself, not the whole app.
   await viewer.getByRole('button', { name: 'Full screen' }).click();
   expect(await page.evaluate(() => (window as any).__pdf.fs)).toBe(1);

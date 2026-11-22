@@ -190,9 +190,11 @@ return [
     // main JWT, so they get their own per-`sub` buckets instead of the read
     // budget above. Generous by design: a gallery page fires dozens of /img
     // requests, and a seeking <video> one /stream Range request per seek. Set
-    // either to 0 to disable that bucket.
+    // either to 0 to disable that bucket. `img` counts images that have to be
+    // resized; cached ones and stored thumbnails count against `thumb`.
     'rate_limit_img'    => (int) env('FLUXFILES_IMG_RATE_LIMIT', 120),
     'rate_limit_stream' => (int) env('FLUXFILES_STREAM_RATE_LIMIT', 300),
+    'rate_limit_thumb'  => (int) env('FLUXFILES_THUMB_RATE_LIMIT', 1200),
 
     // Dedicated buckets, matching core. URL import makes an outbound request per
     // call (a token's `import_rate_limit` claim overrides this); /usage and

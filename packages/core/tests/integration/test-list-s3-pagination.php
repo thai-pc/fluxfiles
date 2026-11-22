@@ -111,7 +111,8 @@ function s3Env(array $keys, string $prefix = '', bool $showHidden = false): arra
     // count them so a test can tell "signed the page" from "signed the folder".
     $stats->presigns = 0;
     $dm->s3Client('s3')->getHandlerList()->appendInit(\Aws\Middleware::tap(function ($cmd) use ($stats) {
-        if ($cmd->getName() === 'GetObject') {
+        // (reads of the bookkeeping files are real GETs, not presigns)
+        if ($cmd->getName() === 'GetObject' && strpos((string) $cmd['Key'], '_fluxfiles/') !== 0) {
             $stats->presigns++;
         }
     }), 'test.count');
