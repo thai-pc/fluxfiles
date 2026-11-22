@@ -155,7 +155,7 @@ and [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/AP
 | `media_preview` | bool | — | `true` | Inline video/audio preview (else download link). |
 | `preview_url_ttl` | int | s | `7200` | Presigned TTL for media (longer, so long videos don't 403). Cap 24h. |
 | `max_preview_mb` | int | MB | `500` | Max media size eligible for inline preview. |
-| `stream_token_ttl` | int | s | `3600` | TTL of the per-file stream token (gated local media, `FLUXFILES_LOCAL_PRIVATE`). Proxied by the Laravel/WordPress adapters too. |
+| `stream_token_ttl` | int | s | `3600` | TTL of the per-file stream token (gated local media, `FLUXFILES_LOCAL_PRIVATE`) and of the `/img` token in a listing's `img_base`. An `/img` token expires up to a quarter of the TTL (at most 15 min) early, never late: its start is rounded down so re-listing a folder returns the same URL. Proxied by the Laravel/WordPress adapters too. |
 
 ### 2.8 Optimization (free/core; `POST /api/fm/optimize`)
 | Claim | Type | Unit | Default | Notes |

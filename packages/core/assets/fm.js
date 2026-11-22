@@ -214,6 +214,7 @@ function fluxFilesApp() {
 
         // Preview lightbox
         previewFullscreen: false,
+        lightboxWarm: '', // key of the image whose lightbox may load before it is opened
         pdfViewer: false,
 
         // Upload state
@@ -1566,10 +1567,32 @@ function fluxFilesApp() {
                     return file.variants.thumb.url;
                 }
             }
-            if (file.url) return file.url;
+            // No stored variant (files that did not come through our upload, e.g. FTP or an
+            // existing bucket): a resized /img thumbnail, not the multi-MB original.
+            if (file.url) return preferred === 'thumb' && this.thumbViaImg(file) ? this.imgAt(file, 400) : file.url;
             // Preview-only (watermark overlay): fall back to the watermarked WebP so
             // the card/preview still renders instead of showing a broken image.
             return this.imgAt(file, preferred === 'thumb' ? 400 : 0);
+        },
+
+        // Worth resizing for the grid: big enough to matter, and not a GIF (an animated one
+        // comes back from /img as the untouched original, uncached).
+        thumbViaImg(file) {
+            return !!(file.img_base && !file._thumbOrig && file.size > 204800 && !/\.gif$/i.test(file.name || ''));
+        },
+        // A grid thumbnail failed: /img can refuse (rate limit, undecodable), the original can't.
+        thumbFailed(file, el) {
+            if (this._isImgUrlOf(file, el) && file.url && !file._thumbOrig) { file._thumbOrig = true; return; }
+            el.classList.add('is-loaded', 'is-error');
+        },
+        // The lightbox <img> exists while hidden; only load it once opened or hovered.
+        lightboxFile() {
+            var f = this.detailFile;
+            return f && (this.previewFullscreen || this.lightboxWarm === f.key) ? f : null;
+        },
+        _isImgUrlOf(file, el) {
+            var t = file && file.img_base ? file.img_base.split('token=')[1] : '';
+            return !!t && (el.currentSrc || el.src || '').indexOf(t) !== -1;
         },
 
         // Select a specific variant (thumb/medium/large) or 'original'

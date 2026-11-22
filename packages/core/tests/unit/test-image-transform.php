@@ -339,6 +339,26 @@ test('ImageToken: wrong secret / expired → 403', function () use ($imgSecret) 
     catch (ApiException $e) { assertEqual('img_token_invalid', $e->getErrorCode()); }
 });
 
+test('ImageToken: a versioned token is stable within its window, never outlives the TTL, and follows the version', function () use ($imgSecret) {
+    $mint = fn (int $ttl, ?string $v) => ImageToken::mint('local', 'a.jpg', 'u', $ttl, $imgSecret, 1600, 80, null, true, null, $v);
+    foreach ([[3600, 900], [1800, 450], [60, 15], [86400, 900]] as [$ttl, $window]) {
+        $before = time();
+        $p = \FluxFiles\JwtCompat::decode($mint($ttl, '1700000000-10'), $imgSecret);
+        assertEqual(0, $p->iat % $window, "ttl $ttl starts on a $window s boundary");
+        assertEqual($ttl, $p->exp - $p->iat, 'exp is start + ttl');
+        assertEqual(true, $p->exp <= time() + $ttl, 'never later than an unversioned token');
+        assertEqual(true, $p->exp > $before + $ttl - $window, 'at most one window early');
+    }
+    // Same inputs, same URL: retry once in case a window boundary fell between the two mints.
+    $same = $mint(3600, '1-10') === $mint(3600, '1-10') || $mint(3600, '1-10') === $mint(3600, '1-10');
+    assertEqual(true, $same, 'stable');
+    assertEqual(false, $mint(3600, '1-10') === $mint(3600, '2-10'), 'a changed source gets a new URL');
+    // No version: minted from now, as before.
+    $p = \FluxFiles\JwtCompat::decode($mint(3600, null), $imgSecret);
+    assertEqual(true, $p->iat >= time() - 2 && !isset($p->v), 'unversioned unchanged');
+    assertEqual('a.jpg', ImageToken::verify($mint(3600, '1-10'), $imgSecret)['path'], 'still verifies');
+});
+
 test('ImageToken: allow_download round-trips, and an old token without it stays allowed', function () use ($imgSecret) {
     // Default and explicit-true: nothing stamped, decodes as allowed.
     assertEqual(true, ImageToken::verify(ImageToken::mint('local', 'a.jpg', 'u', 3600, $imgSecret, 1600), $imgSecret)['allowDownload'], 'default → allowed');
