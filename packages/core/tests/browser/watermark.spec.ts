@@ -90,3 +90,18 @@ test('resize handle increases the logo scale', async ({ page }) => {
   const after = await page.evaluate(() => (window as any).Alpine.$data(document.querySelector('.ff-app')).wm.scale);
   expect(after).toBeGreaterThan(before);
 });
+
+test('the text preview is scaled to the image once it has loaded', async ({ page }) => {
+  await openManager(page, mintToken());
+  const name = `wmscale-${Date.now()}.png`;
+  await uploadFile(page, imageFile(name, 2400, 1500));
+  await expect(cardByName(page, name)).toBeVisible({ timeout: 15_000 });
+  await cardByName(page, name).click();
+  await page.getByRole('button', { name: 'Watermark' }).first().click();
+  const stage = page.locator('.ff-wm-stage > img');
+  await expect.poll(() => stage.evaluate((e: HTMLImageElement) => e.naturalWidth)).toBe(2400);
+  await page.locator('.ff-wm-panel').getByRole('button', { name: 'Text' }).click();
+  const scale = await stage.evaluate((e: HTMLImageElement) => e.clientWidth / e.naturalWidth);
+  const size = () => page.locator('.ff-wm-mark').last().evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+  await expect.poll(size).toBeCloseTo(Math.max(6, 24 * scale), 0);
+});

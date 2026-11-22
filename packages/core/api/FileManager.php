@@ -3924,7 +3924,6 @@ class FileManager
                 $variants[$size] = [
                     'url' => $this->fileUrl($disk, $vk, $known[dirname($vk)][$vk] ?? null),
                     'key' => $vk,
-                    'width' => $this->imageOptimizer->variantWidth($size),
                 ];
             }
         }
@@ -4124,8 +4123,9 @@ class FileManager
             $this->claims->allowDownload,
             $this->mediaTokenByob($disk),
             // A watermark logo can change without the source file changing, and the version
-            // only tracks the source: those URLs stay unique per listing.
-            empty($this->claims->watermark['enabled']) ? $version : null
+            // only tracks the source: those URLs stay unique per listing. A BYOB token is
+            // unique anyway (random blob), so it keeps its full lifetime.
+            empty($this->claims->watermark['enabled']) && !$this->claims->isByobDisk($disk) ? $version : null
         );
         return $this->mediaRouteUrl('/img', $token);
     }

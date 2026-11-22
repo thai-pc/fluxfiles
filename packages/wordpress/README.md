@@ -343,8 +343,9 @@ FluxFiles JWT server-side; the signing secret never reaches the browser.
   `watermark_enabled` (plus `watermark_type`/`_text`/`_logo_path`/`_position`/
   `_opacity`/`_font_size`) and `/img` composites the mark; a preview-only token is
   never handed the clean original. Their per-sub rate limits default to core's
-  (stream 300/min, img 120/min; `FLUXFILES_STREAM_RATE_LIMIT` / `FLUXFILES_IMG_RATE_LIMIT`,
-  or the `fluxfiles_rate_limit_stream` / `fluxfiles_rate_limit_img` filters; `0` disables).
+  (stream 300/min, img 120/min for images that must be resized, thumb 1200/min for cached images
+  and stored thumbnails; `FLUXFILES_STREAM_RATE_LIMIT` / `FLUXFILES_IMG_RATE_LIMIT` /
+  `FLUXFILES_THUMB_RATE_LIMIT`, or the `fluxfiles_rate_limit_{stream,img,thumb}` filters; `0` disables).
 - **The UI page** (`/public/index.html`) sends `Referrer-Policy: no-referrer` and
   `Content-Security-Policy: frame-ancestors 'self' <site origins>`. A headless
   front-end on another origin widens it with

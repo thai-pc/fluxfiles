@@ -76,12 +76,6 @@ class ImageOptimizer
         return (int) round($y0 + ($q - $x0) * ($y1 - $y0) / ($x1 - $x0));
     }
 
-    /** Configured width of a stored variant (thumb|medium|large); one stored under an older setting may differ. */
-    public function variantWidth(string $name): int
-    {
-        return $this->variants[$name] ?? 0;
-    }
-
     public function isImage(string $filename): bool
     {
         $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));

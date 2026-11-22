@@ -237,6 +237,7 @@ function fluxFilesApp() {
         seoSectionExpanded: true, // accordion: collapse SEO fields to save space
 
         // Watermark editor state (drag-and-drop, free)
+        wmLoaded: 0,
         wm: { type: 'logo', logo: '', text: '', x: 0.7, y: 0.85, scale: 0.25, opacity: 0.6, font_size: 24, color: '#ffffff' },
         wmSaving: false,
         _wmDrag: null, // { resize, ox, oy, startScale, startX }
@@ -1585,22 +1586,12 @@ function fluxFilesApp() {
             if (this._isImgUrlOf(file, el) && file.url && !file._thumbOrig) { file._thumbOrig = true; return; }
             el.classList.add('is-loaded', 'is-error');
         },
-        // srcset for the detail panel and lightbox: the stored variants first (plain files),
-        // then only the /img candidates larger than those, which cost a resize each.
-        viewSrcset(file) {
-            if (!file || !file.img_srcset) return null;
-            var out = [], top = 0, v = file.variants || {};
-            ['medium', 'large'].forEach(function (name) {
-                var x = v[name];
-                // A space or comma would end the URL inside a srcset.
-                if (x && x.url && x.width > top) {
-                    out.push(x.url.replace(/ /g, '%20').replace(/,/g, '%2C') + ' ' + x.width + 'w');
-                    top = x.width;
-                }
-            });
-            if (!top) return file.img_srcset;
-            file.img_srcset.split(', ').forEach(function (c) { if (parseInt(c.split(' ')[1], 10) > top) out.push(c); });
-            return out.join(', ');
+        // srcset for the detail panel and lightbox. Never the stored variants: one can be
+        // older than the file (an in-place crop, a file replaced outside FluxFiles), while
+        // /img is keyed on the source. If /img refuses (rate limit), the original takes over.
+        viewSrcset(file) { return (file && !file._viewOrig && file.img_srcset) || null; },
+        viewFailed(file, el) {
+            if (file && file.url && !file._viewOrig && this._isImgUrlOf(file, el)) file._viewOrig = true;
         },
         // The lightbox <img> exists while hidden; only load it once opened or hovered.
         lightboxFile() {
@@ -2766,7 +2757,8 @@ function fluxFilesApp() {
         // Display font-size (px) on the scaled preview, derived from the on-image size.
         get wmTextPx() {
             const img = this.$refs.wmStage && this.$refs.wmStage.querySelector('img');
-            if (!img || !img.naturalWidth) return this.wm.font_size;
+            // wmLoaded is read only to run again when the image has loaded (its size is not reactive).
+            if (!this.wmLoaded || !img || !img.naturalWidth) return this.wm.font_size;
             return Math.max(6, this.wm.font_size * (img.clientWidth / img.naturalWidth));
         },
         wmLoadLogo(e) {
