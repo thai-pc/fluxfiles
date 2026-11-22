@@ -344,10 +344,9 @@ FluxFiles JWT server-side; the signing secret never reaches the browser.
   `_opacity`/`_font_size`) and `/img` composites the mark; a preview-only token is
   never handed the clean original. Their per-sub rate limits default to core's
   (stream 300/min, img 120/min; `FLUXFILES_STREAM_RATE_LIMIT` / `FLUXFILES_IMG_RATE_LIMIT`,
-  or the `fluxfiles_rate_limit_{stream,img}` filters; `0` disables). Not in 1.3.3, which bundles
-  core 1.6.6: from core 1.7.0 `img` counts only images that must be resized, and cached images
-  and stored thumbnails use their own bucket (1200/min, `FLUXFILES_THUMB_RATE_LIMIT` or the
-  `fluxfiles_rate_limit_thumb` filter).
+  or the `fluxfiles_rate_limit_{stream,img}` filters; `0` disables). Since 1.3.4 `img` counts only
+  images that must be resized; cached images and stored thumbnails use their own bucket (1200/min,
+  `FLUXFILES_THUMB_RATE_LIMIT` or the `fluxfiles_rate_limit_thumb` filter).
 - **The UI page** (`/public/index.html`) sends `Referrer-Policy: no-referrer` and
   `Content-Security-Policy: frame-ancestors 'self' <site origins>`. A headless
   front-end on another origin widens it with

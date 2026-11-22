@@ -2171,6 +2171,22 @@ test('A-M2: /duplicates and /usage?refresh=true use the dedicated 2/min bucket; 
     });
 });
 
+test('the storage meter counts trashed files, as the quota check does', function () use ($ffAsUser) {
+    $ffAsUser(7863, ['prefix' => 'q-' . uniqid(), 'dedupe_uploads' => false], function () {
+        $api = new FluxFilesApi();
+        $tmp = tempnam(sys_get_temp_dir(), 'ffq');
+        file_put_contents($tmp, str_repeat('x', 50000));
+        $r = $api->handleUpload(new FfUploadRequest(['disk' => 'local', 'path' => ''], ['file' => ['name' => 'q.txt', 'type' => 'text/plain', 'tmp_name' => $tmp, 'error' => 0, 'size' => 50000]]));
+        assertEqual(200, $r->get_status(), json_encode($r->get_data()));
+        $t = $api->handleTrash(new WP_REST_Request(['disk' => 'local', 'path' => 'q.txt']));
+        assertEqual(200, $t->get_status(), json_encode($t->get_data()));
+        // First meter read of this prefix, so nothing is cached (120 s) from before the trashing.
+        $d = (new FluxFilesApi())->handleQuota(new WP_REST_Request([], ['disk' => 'local']))->get_data()['data'];
+        assertEqual(false, $d['cached'] ?? null, 'fresh figure');
+        assertTrue($d['used_bytes'] >= 50000, 'used_bytes after trashing: ' . $d['used_bytes']);
+    });
+});
+
 test('A-N4: force_upload="false" is false (FILTER_VALIDATE_BOOLEAN), so it does not bypass dedupe', function () use ($ffAsUser) {
     // (bool) "false" === true: the multipart field used to force EVERY upload that
     // sent it, skipping the dedupe (and, on older cores, the collision policy).

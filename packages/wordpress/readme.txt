@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.3.3
+Stable tag: 1.3.4
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -180,6 +180,16 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.3.4 =
+* Faster browsing: large images without a stored thumbnail are shown as small resized images in the grid instead of full originals, and selecting an image no longer downloads the original in the background.
+* Faster cloud folders: listing files on S3 or R2 that FluxFiles has not indexed yet takes less time, and thumbnails already loaded are reused when you open a folder again.
+* Opening a PDF full screen no longer downloads the file twice at once.
+* AVIF images are smaller. Thumbnails have their own, higher rate limit, so opening a large folder twice no longer leaves broken thumbnails.
+* Fix: files in the trash count toward the storage limit, also in the storage meter.
+* Fix: the bookkeeping on S3, R2 and SFTP storage is written under a lock, so simultaneous changes are not lost.
+* Corrects two statements in this readme (SFTP setup and the 1.1.0 notes).
+* Updates the bundled FluxFiles core to 1.7.1.
+
 = 1.3.3 =
 * Security: a user limited to their own folder can no longer rename that folder itself (doing so used to move all their files into a neighbouring folder).
 * Security: a folder setting that contains ".." (for example "users/..") is refused instead of opening a higher folder.
@@ -329,6 +339,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.3.4 =
+Faster image and cloud browsing. Trashed files now count toward a storage limit, so a user close to the limit may need to empty the trash. No change to your files or settings.
 
 = 1.3.3 =
 Security update: fixes four issues found in a security audit (folder rename, folder settings, watermark logo size, SFTP keys). Recommended for all sites. No change to your files or settings.
