@@ -975,7 +975,8 @@ class FileManager
                         // no poster
                     }
                 }
-                $imgBase = $this->imgBaseUrl($disk, $item['key']);
+                $imgBase = $this->imgBaseUrl($disk, $item['key'],
+                    isset($item['modified']) ? $item['modified'] . '-' . ($item['size'] ?? '') : null);
                 if ($imgBase !== null) {
                     $item['img_base'] = $imgBase;
                     $natural = isset($item['width']) ? (int) $item['width'] : 0;
@@ -4100,7 +4101,7 @@ class FileManager
      * the feature is off (claim disabled, no stream secret, or not an image). The
      * host appends `&width=…&quality=…`. Reuses the stream secret (= FLUXFILES_SECRET).
      */
-    private function imgBaseUrl(string $disk, string $path): ?string
+    private function imgBaseUrl(string $disk, string $path, ?string $version = null): ?string
     {
         if (!$this->claims->webpEnabled || $this->streamSecret === ''
             || !$this->imageOptimizer->isImage($path)) {
@@ -4120,7 +4121,10 @@ class FileManager
             // A preview-only token must not get the clean original out of /img's
             // fall-through paths either — presign/getContent/zip all refuse it.
             $this->claims->allowDownload,
-            $this->mediaTokenByob($disk)
+            $this->mediaTokenByob($disk),
+            // A watermark logo can change without the source file changing, and the version
+            // only tracks the source: those URLs stay unique per listing.
+            empty($this->claims->watermark['enabled']) ? $version : null
         );
         return $this->mediaRouteUrl('/img', $token);
     }

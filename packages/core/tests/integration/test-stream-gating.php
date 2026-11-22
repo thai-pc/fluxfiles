@@ -113,7 +113,7 @@ function makeImgFM(bool $webpEnabled, bool $withSecret): array
     $claims->webpMaxWidth = 1600;
     $fm = new FileManager($dm, $claims, new StorageMetadataHandler($dm));
     if ($withSecret) { $fm->setStreamSecret($SECRET); }
-    return [$fm];
+    return [$fm, $root, $claims];
 }
 /** Return the named entry from list('local','pics'). */
 function picEntry(FileManager $fm, string $name): array
@@ -134,6 +134,20 @@ test('webp on + secret → image gets img_base; token scopes the file + maxWidth
     assertEqual('local', $scope['disk']);
     assertEqual('pics/a.jpg', $scope['path']);
     assertEqual(1600, $scope['maxWidth'], 'maxWidth embedded from claim');
+});
+
+test('img_base is the same URL on a re-listing (browser cache hits) and changes when the file does', function () use ($SECRET) {
+    [$fm, $root, $claims] = makeImgFM(true, true);
+    $base = fn () => picEntry($fm, 'a.jpg')['img_base'];
+    $relist = function () use ($base) { $x = $base(); sleep(1); clearstatcache(); return $x === $base(); };
+    // Retry once: a window boundary (every 15 min) may fall between the two listings.
+    assertTrue($relist() || $relist(), 'same URL one second later');
+    $old = $base();
+    touch($root . '/pics/a.jpg', time() + 5); clearstatcache();
+    assertTrue($base() !== $old, 'replaced file -> new URL, so the immutable copy is not reused');
+    // A watermark logo can change on its own, so those URLs are never reused.
+    $claims->watermark = ['enabled' => true, 'type' => 'text', 'text' => 'x'];
+    assertTrue(!$relist(), 'watermarked -> unique per listing');
 });
 
 test('non-image never gets img_base', function () {

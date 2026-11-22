@@ -51,10 +51,19 @@ final class ImageToken
         int $defaultQuality = 0,
         ?array $watermark = null,
         bool $allowDownload = true,
-        ?string $byob = null
+        ?string $byob = null,
+        ?string $version = null
     ): string {
         $ttl = max(1, min($ttl, self::MAX_TTL));
         $now = time();
+        // A versioned token starts on a window boundary, so re-listing a folder mints the
+        // SAME URL and the browser's copy (the answer is `immutable`) is reused. The start
+        // only ever moves back: the token expires up to a quarter of its TTL early, never
+        // late. $version must change with the source bytes, or a stale image would be reused.
+        if ($version !== null && $version !== '') {
+            $window = min(900, intdiv($ttl, 4));
+            $now -= $window > 1 ? $now % $window : 0;
+        }
         $payload = [
             't'    => self::TYPE,
             'disk' => $disk,
@@ -76,6 +85,9 @@ final class ImageToken
         }
         if ($byob !== null && $byob !== '') {
             $payload['bd'] = $byob;
+        }
+        if ($version !== null && $version !== '') {
+            $payload['v'] = $version;
         }
         return JwtCompat::encode($payload, $secret);
     }

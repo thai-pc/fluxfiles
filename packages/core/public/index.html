@@ -803,7 +803,7 @@
                                             <div class="thumb thumb-img">
                                                 <img :src="previewUrl(file, 'thumb')" :alt="file.name" loading="lazy" decoding="async"
                                                      x-init="$nextTick(() => { if ($el.complete) $el.classList.add('is-loaded') })"
-                                                     @load="$el.classList.add('is-loaded')" @error="$el.classList.add('is-loaded', 'is-error')">
+                                                     @load="$el.classList.add('is-loaded')" @error="thumbFailed(file, $el)">
                                             </div>
                                         </template>
                                         <!-- Poster for a PDF / video (page 1 / a frame), when the server rendered one. -->
@@ -935,6 +935,7 @@
         <!-- Preview thumbnail (click image to view full) -->
         <div class="detail-thumb" x-show="detailFile"
              :class="{ 'detail-thumb-clickable': detailFile && isPreviewable(detailFile, 'image') && displayUrl(detailFile) }"
+             @mouseenter="lightboxWarm = detailFile ? detailFile.key : ''"
              @click="detailFile && isPreviewable(detailFile, 'image') && displayUrl(detailFile) && (resetZoom(), previewFullscreen = true)">
             <template x-if="detailFile && isPreviewable(detailFile, 'image') && displayUrl(detailFile)">
                 <img :src="displayUrl(detailFile)" :srcset="detailFile.img_srcset"
@@ -1203,7 +1204,7 @@
                  @mousemove="cropMouseMove($event)"
                  @mouseup="cropMouseUp()"
                  @mouseleave="cropMouseUp()">
-                <img x-ref="cropImage" :src="detailFile?.url" :alt="detailFile?.name" draggable="false" style="width:100%;display:block;user-select:none;">
+                <img x-ref="cropImage" :src="activeTab === 'crop' ? detailFile?.url : null" :alt="detailFile?.name" draggable="false" style="width:100%;display:block;user-select:none;">
                 <div class="ff-crop-overlay" x-show="cropData.w > 0 && cropData.h > 0"></div>
                 <div class="ff-crop-selection" x-show="cropData.w > 0 && cropData.h > 0" :style="cropStyle">
                     <div class="ff-crop-handle tl"></div><div class="ff-crop-handle tr"></div>
@@ -1238,7 +1239,7 @@
 
             <!-- Drag canvas: image with a draggable, resizable watermark overlay -->
             <div class="ff-wm-stage" x-ref="wmStage" @mousemove="wmDragMove($event)" @mouseup="wmDragEnd()" @mouseleave="wmDragEnd()">
-                <img :src="detailFile?.url" :alt="detailFile?.name" draggable="false" style="width:100%;display:block;user-select:none;">
+                <img :src="activeTab === 'watermark' ? detailFile?.url : null" :alt="detailFile?.name" draggable="false" style="width:100%;display:block;user-select:none;">
                 <!-- logo overlay (left/top clamped by width so it mirrors the server's
                      in-canvas clamp and never overflows the clipped stage) -->
                 <div class="ff-wm-mark" x-show="wm.type === 'logo' && wm.logo"
@@ -1324,8 +1325,8 @@
         <!-- Always-visible close: a zoomed image can't be dismissed by a backdrop
              click (that pans), so this is the reliable way out at any zoom level. -->
         <button class="ff-preview-close" @click.stop="closePreview()" :title="t('common.close')" :aria-label="t('common.close')">&times;</button>
-        <img :src="detailFile ? displayUrl(detailFile) : ''" :srcset="detailFile?.img_srcset"
-             :sizes="detailFile?.img_srcset ? (detailFile?.img_sizes || '100vw') : null"
+        <img :src="displayUrl(lightboxFile()) || null" :srcset="lightboxFile()?.img_srcset"
+             :sizes="lightboxFile()?.img_srcset ? (detailFile?.img_sizes || '100vw') : null"
              :alt="detailFile?.name" draggable="false"
              class="ff-preview-img" :class="{ zoomed: zoom.scale > 1, dragging: zoom.dragging }"
              :style="'transform: translate(' + zoom.x + 'px,' + zoom.y + 'px) scale(' + zoom.scale + ')'"

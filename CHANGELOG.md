@@ -5,6 +5,11 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Performance
+- Grid: an image over 200 KB with no stored thumbnail (copied in over FTP, an existing bucket, …) is shown through `/img` at 400px instead of as the original. It falls back to the original when `/img` refuses.
+- Selecting an image no longer downloads the original for the hidden crop and watermark tabs, nor the lightbox image before the lightbox is opened or hovered.
+- `/img` URLs in a listing stay the same while the file does, so the browser reuses the thumbnails it already has when a folder is opened again. The token expires up to 15 minutes (at most a quarter of `stream_token_ttl`) early, never late.
+
 ## [1.0.51] — 2026-11-21
 
 > Released: `core-v1.6.7`, `node-v1.2.1` and `python-v1.2.1`: the audit's next-patch fixes (quota counts trash, rate-limit windows, an S3/R2/SFTP write lock, stricter `verifyToken`). The Share module v1.5.2 and the Intake module v1.8.1 ship alongside: a share link is bound to its file, and link payloads are sealed.
