@@ -203,7 +203,7 @@ AES-256-GCM). Always mint tokens **on the server** — never ship
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](https://github.com/thai-pc/fluxfiles/blob/master/packages/python/LICENSE) for details.
 
 ## Links
 
