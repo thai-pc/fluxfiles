@@ -5,6 +5,16 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.55] — 2026-11-22
+
+> Released: `wordpress-v1.3.4` (bundles core 1.7.1 instead of 1.6.6; needs core `^1.7.1`).
+
+### Changed
+- WordPress: the storage meter counts trashed files of a path-scoped user, as the quota check does. Core floor `^1.7.1`.
+
+### Docs
+- WordPress readme: no "now listed on WordPress.org", and SFTP is set up in Settings.
+
 ## [1.0.54] — 2026-11-22
 
 > Released: `core-v1.7.1`: the Docker image accepts uploads over 1 MB (up to 100 MB per request) and serves AVIF. A host that reads `payload.version` of `FM_READY` now gets `undefined`.

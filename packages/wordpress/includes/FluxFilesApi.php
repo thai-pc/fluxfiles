@@ -2383,7 +2383,7 @@ class FluxFilesApi
             // here — same gate order as handleSearch().
             $claims->requireDisk($disk);
             $claims->requirePerm('read');
-            $quotaManager = new QuotaManager($this->diskManager);
+            $quotaManager = (new QuotaManager($this->diskManager))->setMetadata($this->metaRepo); // as core wires it: the meter counts trash
             $top = $claims->usageTopFoldersCount > 0 ? $claims->usageTopFoldersCount : 10;
             $depth = $claims->usageFolderDepth > 0 ? $claims->usageFolderDepth : 1;
 
@@ -3017,7 +3017,7 @@ class FluxFilesApi
             // here — same gate order as handleSearch().
             $claims->requireDisk($disk);
             $claims->requirePerm('read');
-            $quotaManager = new QuotaManager($this->diskManager);
+            $quotaManager = (new QuotaManager($this->diskManager))->setMetadata($this->metaRepo); // as core wires it: the meter counts trash
 
             return $this->ok($quotaManager->getQuotaInfo(
                 $disk,
