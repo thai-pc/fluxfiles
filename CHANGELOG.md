@@ -5,6 +5,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.56] — 2026-11-22
+
+> Released: `python-v1.2.2`. Documentation only, no code change.
+
+### Docs
+- `fluxfiles-token` (PyPI): the SFTP and LICENSE links work, and the page no longer says the WordPress plugin serves `chmod` (it answers 403).
+
 ## [1.0.55] — 2026-11-22
 
 > Released: `wordpress-v1.3.4` (bundles core 1.7.1 instead of 1.6.6; needs core `^1.7.1`).
