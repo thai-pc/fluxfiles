@@ -748,4 +748,9 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/public/index.html)" = "200"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/api/fm/lang)" = "200"
           test "$(curl -s -o /dev/null -w '%{http_code}' 'http://localhost:8081/api/fm/list?disk=local')" = "401"
+          # An ordinary photo must fit (nginx's default body limit is 1 MB), and AVIF must work.
+          TOKEN=$(docker exec ff php -r 'require "/app/packages/core/embed.php"; echo fluxfiles_token(userId: "ci", perms: ["read","write"], disks: ["local"], maxUploadMb: 200);')
+          head -c 20000000 /dev/urandom > /tmp/big.bin
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -F disk=local -F path= -F 'file=@/tmp/big.bin;filename=big.bin' http://localhost:8081/api/fm/upload)" = "200"
+          docker exec ff php -r 'exit(function_exists("imageavif") && imageavif(imagecreatetruecolor(8, 8), "/tmp/t.avif") ? 0 : 1);'
           docker rm -f ff

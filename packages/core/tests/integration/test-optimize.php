@@ -147,6 +147,26 @@ test('quality is clamped to 40–95', function () {
     assertEqual(false, $r['skipped']);
 });
 
+test('optimize_quality claim is the default; the request body wins', function () {
+    [$mod, $fm, $dm, $opt, $root, $claims] = setup();
+    mt_srand(1);
+    makeJpeg($root . '/src.jpg');
+    $size = function (array $body) use ($mod, $fm, $dm, $opt, $root, $claims): int {
+        copy($root . '/src.jpg', $root . '/c.jpg');
+        $mod->run($fm, $dm, $opt, $claims, $body + ['disk' => 'local', 'path' => 'c.jpg']);
+        clearstatcache();
+        $n = filesize($root . '/c.webp');
+        unlink($root . '/c.webp');
+        return $n;
+    };
+    $default = $size([]);
+    $q45 = $size(['quality' => 45]);
+    assertTrue($q45 < $default, 'the sample separates the two qualities');
+    $claims->optimizeQuality = 45;
+    assertEqual($q45, $size([]), 'claim used when the body names no quality');
+    assertEqual($default, $size(['quality' => 82]), 'body wins over the claim');
+});
+
 test('non-image → 415 not_image; missing → 404; missing path → 400', function () {
     [$mod, $fm, $dm, $opt, $root, $claims] = setup();
     file_put_contents("$root/notes.txt", 'hi');

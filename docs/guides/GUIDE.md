@@ -143,9 +143,9 @@ Core loads config through `EnvBootstrap`, where a real env var wins over the sam
 in `.env`, and the image passes the container's env vars on to the web workers
 (php-fpm `clear_env = no`). So a variable given with `-e` can only be changed by
 recreating the container; editing `.env` changes only keys the container env does not
-set. The image also keeps nginx's and PHP's default body limits (1 MB / 2 MB): a single
-upload request over 1 MB gets a `413` until you raise them (see
-[Upload size limits](#upload-size-limits-three-layers)). Back up the entire
+set. The image accepts files up to 100 MB per upload request (larger local files go
+through resumable upload; see [Upload size limits](#upload-size-limits-three-layers)).
+Images up to 1.7.0 refuse anything over 1 MB with a `413`. Back up the entire
 `storage` volume, including hidden `_fluxfiles/` bookkeeping. The production image includes
 the extensions needed by the JSON and SQLite/MySQL/PostgreSQL DB backends; use
 [`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`](../design/DB-STORAGE-MIGRATION-DESIGN.md) for
@@ -445,55 +445,17 @@ image's natural width. Details: [`docs/guides/FEATURES.md#responsive-srcset`](FE
 
 ### Watermark
 
-FluxFiles watermarks images the way the rest of the industry does — two modes for
-two jobs. **For almost everyone it's the first one (burn-in).** The second is an
-advanced mode only for selling images. Full walkthrough of both, including the
-overlay claims and adapter support matrix: [`docs/guides/FEATURES.md#watermark`](FEATURES.md#watermark).
+Two modes, both described in [`FEATURES.md`](FEATURES.md#watermark):
 
-#### Watermark editor (burn-in) — the normal way
+- **Burn-in editor (the normal way, free):** the **Watermark** tab of an image's detail panel, or
+  `POST /api/fm/watermark`. The mark is written into the file, so every consumer carries it; the
+  original is kept and **Remove watermark** restores it.
+- **Overlay (for selling images):** the `watermark_*` claims. `/api/fm/img` composites the mark, the
+  source is never modified, and the token becomes preview-only.
+  Preview-only is only as private as the storage: keep originals on a **private** bucket or a
+  local root that is not web-served, or the clean file stays reachable at its public URL.
 
-Open an image → the **Watermark** tab in the detail panel (free) → drag a logo or
-text to any position, resize the logo by its handle, set opacity → **Apply**
-(replace the file) or **Save as copy**. It **burns the watermark into the image**
-(`POST /api/fm/watermark`), exactly like a Photoshop export or a WordPress
-watermark plugin. The file now *is* a watermarked image, so **every consumer
-carries it** — the picker, a download, an `<img>` you insert into TinyMCE /
-CKEditor / Summernote. **Non-destructive** — the true original is snapshotted to
-`_fluxfiles/originals/` and a **Remove watermark** button restores it byte-for-byte.
-
-> ✅ **Want a watermarked image in your content / blog / CMS? This is it.** Pick it
-> in the editor and the inserted `<img>` shows the watermark. Nothing else to set.
-
-#### Advanced: preview protection for selling images (overlay)
-
-Only if you're building a **stock-photo / photographer store** (Shutterstock,
-Getty, Pixieset…): show watermarked **previews** but never hand out the clean file
-until purchase — applied on the fly when serving (`/api/fm/img`), source never
-modified. Enable with token claims (off by default; forces the token preview-only).
-Preview-only is only as private as the storage: keep originals on a **private** bucket or a
-local root that is not web-served, or the clean file stays reachable at its public URL:
-
-```php
-$token = fluxfiles_token([
-    'user' => 'user-42', 'perms' => ['read'], 'disks' => ['local'], 'prefix' => 'users/42',
-    'claims' => [
-        'webp_enabled' => true, 'watermark_enabled' => true,
-        'watermark_type' => 'text', 'watermark_text' => '© Acme Corp',
-        'watermark_position' => 'bottom-right', 'watermark_opacity' => 0.6,
-    ],
-]);
-```
-
-| | Burn-in editor (normal) | Overlay (advanced, selling) |
-|---|---|---|
-| Where | Written into the file bytes | Applied at serve time via `/api/fm/img` |
-| Clean original | Replaced (or saved as a copy) | Kept, but never served (preview-only) |
-| Insert into an editor / download | **Yes** | **No** — show it live in your gallery instead |
-| Best for | Branding, putting marked images in content | A stock-photo / photo-seller store |
-
-> The two are **mutually exclusive per token** — see
-> [`docs/guides/FEATURES.md#watermark`](FEATURES.md#watermark) for why, plus the
-> adapter support matrix and how to render live previews on a gallery page.
+The two are mutually exclusive per token.
 
 ### Usage dashboard
 
@@ -561,7 +523,6 @@ FluxFiles.updateToken('eyJ...');          // Push new token (e.g. background ref
 
 ```js
 FluxFiles.on('FM_READY', (payload) => {
-    console.log('Version:', payload.version);
     console.log('Capabilities:', payload.capabilities);
 });
 
