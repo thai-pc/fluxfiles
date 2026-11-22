@@ -1585,6 +1585,23 @@ function fluxFilesApp() {
             if (this._isImgUrlOf(file, el) && file.url && !file._thumbOrig) { file._thumbOrig = true; return; }
             el.classList.add('is-loaded', 'is-error');
         },
+        // srcset for the detail panel and lightbox: the stored variants first (plain files),
+        // then only the /img candidates larger than those, which cost a resize each.
+        viewSrcset(file) {
+            if (!file || !file.img_srcset) return null;
+            var out = [], top = 0, v = file.variants || {};
+            ['medium', 'large'].forEach(function (name) {
+                var x = v[name];
+                // A space or comma would end the URL inside a srcset.
+                if (x && x.url && x.width > top) {
+                    out.push(x.url.replace(/ /g, '%20').replace(/,/g, '%2C') + ' ' + x.width + 'w');
+                    top = x.width;
+                }
+            });
+            if (!top) return file.img_srcset;
+            file.img_srcset.split(', ').forEach(function (c) { if (parseInt(c.split(' ')[1], 10) > top) out.push(c); });
+            return out.join(', ');
+        },
         // The lightbox <img> exists while hidden; only load it once opened or hovered.
         lightboxFile() {
             var f = this.detailFile;

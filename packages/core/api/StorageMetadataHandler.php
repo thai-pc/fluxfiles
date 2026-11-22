@@ -294,19 +294,100 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     public function getBulk(string $disk, array $keys): array
     {
         $result = [];
+        $missing = [];
         $index = $this->loadIndex($disk);
         foreach ($keys as $key) {
             $meta = $index[$key] ?? null;
             if ($meta !== null) {
                 unset($meta['file_hash']);
-                $result[$key] = $meta;
             } else {
-                // Fallback: fetch from S3/Local for files not in index
-                $m = $this->get($disk, $key);
-                $result[$key] = $m;
+                $missing[] = $key;
             }
+            $result[$key] = $meta;
+        }
+        // Fallback for files not in the index (an existing bucket, uploads from outside).
+        if ($missing !== [] && $this->isS3Compatible($disk)) {
+            return array_replace($result, $this->getManyFromS3($disk, $missing));
+        }
+        foreach ($missing as $key) {
+            $result[$key] = $this->get($disk, $key);
         }
         return $result;
+    }
+
+    /** Null when the disk is declared `s3` but served by an injected filesystem (no SDK client). */
+    private function s3ClientOrNull(string $disk): ?\Aws\S3\S3Client
+    {
+        try {
+            return $this->diskManager->s3Client($disk);
+        } catch (ApiException $e) {
+            return null;
+        }
+    }
+
+    /** Parallel HeadObject requests for one page of files. */
+    private const S3_HEAD_CONCURRENCY = 16;
+
+    /**
+     * getFromS3() for many keys: a HEAD each, but not one after the other (a page of
+     * unindexed files on R2 took about 0.23 s per file). null where one fails.
+     *
+     * @param string[] $keys
+     * @return array<string,?array>
+     */
+    private function getManyFromS3(string $disk, array $keys): array
+    {
+        $out = array_fill_keys($keys, null);
+        $client = $this->s3ClientOrNull($disk);
+        if ($client === null) {
+            return $out;
+        }
+        $bucket = $this->diskManager->config($disk)['bucket'] ?? '';
+        $commands = array_map(
+            static fn ($key) => $client->getCommand('HeadObject', ['Bucket' => $bucket, 'Key' => (string) $key]),
+            $keys
+        );
+        (new \Aws\CommandPool($client, $commands, [
+            'concurrency' => self::S3_HEAD_CONCURRENCY,
+            'fulfilled'   => function ($head, $i) use (&$out, $keys): void {
+                $out[$keys[$i]] = $this->metaFromS3Headers($head['Metadata'] ?? []);
+            },
+        ]))->promise()->wait();
+        return $out;
+    }
+
+    /**
+     * Contents of one bookkeeping file, or null when it does not exist. On a bucket this
+     * is a single GET (no existence check first), and ONLY a 404 means "absent": any
+     * other failure throws, as the existence check did, so a network error is never taken
+     * for an empty manifest that a later save would write back over the real one.
+     */
+    private function readManifest(string $disk, string $key): ?string
+    {
+        $client = $this->isS3Compatible($disk) ? $this->s3ClientOrNull($disk) : null;
+        if ($client !== null) {
+            try {
+                $res = $client->getObject([
+                    'Bucket' => $this->diskManager->config($disk)['bucket'] ?? '',
+                    'Key'    => $key,
+                ]);
+                return (string) $res['Body'];
+            } catch (\Aws\Exception\AwsException $e) {
+                if ($e->getStatusCode() === 404) {
+                    return null;
+                }
+                throw $e;
+            }
+        }
+        $fs = $this->diskManager->disk($disk);
+        if (!$fs->fileExists($key)) {
+            return null;
+        }
+        try {
+            return $fs->read($key);
+        } catch (\Throwable $e) {
+            return ''; // exists but unreadable: not valid JSON, so each caller applies its own rule
+        }
     }
 
     /**
@@ -1581,12 +1662,12 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      */
     public function allHolds(string $disk): array
     {
-        $fs = $this->diskManager->disk($disk);
         try {
-            if (!$fs->fileExists(self::HOLDS_KEY)) {
+            $json = $this->readManifest($disk, self::HOLDS_KEY);
+            if ($json === null) {
                 return [];
             }
-            $data = json_decode($fs->read(self::HOLDS_KEY), true);
+            $data = json_decode($json, true);
         } catch (\Throwable $e) {
             $data = null;
         }
@@ -1797,28 +1878,23 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function readIndex(string $disk): array
     {
-        $fs = $this->diskManager->disk($disk);
-        if (!$fs->fileExists(self::INDEX_KEY)) {
+        $json = $this->readManifest($disk, self::INDEX_KEY);
+        if ($json === null) {
             return [];
         }
-        try {
-            $json = $fs->read(self::INDEX_KEY);
-            $data = json_decode($json, true);
-            // Note: json_decode() coerces decimal-integer-looking string keys
-            // (e.g. "5", "0", "-3") into real PHP int array keys — this is a
-            // fundamental PHP array behaviour (any canonical-decimal string key
-            // is normalized to int), not something re-keying here can undo; a
-            // rebuilt array with `(string) $k` keys still collapses "5" back to
-            // int(5). Every caller that iterates this index and forwards the key
-            // into a string-typed parameter (isReservedPath()/isHiddenPath() in
-            // search(), strpos() in deleteChildren()/renameChildren(),
-            // str_starts_with() in findByHash()) must therefore cast the loop key
-            // with `(string)` before using it, to avoid a TypeError under
-            // strict_types without silently dropping the entry.
-            return is_array($data) ? $data : [];
-        } catch (\Throwable $e) {
-            return [];
-        }
+        $data = json_decode($json, true);
+        // Note: json_decode() coerces decimal-integer-looking string keys
+        // (e.g. "5", "0", "-3") into real PHP int array keys — this is a
+        // fundamental PHP array behaviour (any canonical-decimal string key
+        // is normalized to int), not something re-keying here can undo; a
+        // rebuilt array with `(string) $k` keys still collapses "5" back to
+        // int(5). Every caller that iterates this index and forwards the key
+        // into a string-typed parameter (isReservedPath()/isHiddenPath() in
+        // search(), strpos() in deleteChildren()/renameChildren(),
+        // str_starts_with() in findByHash()) must therefore cast the loop key
+        // with `(string)` before using it, to avoid a TypeError under
+        // strict_types without silently dropping the entry.
+        return is_array($data) ? $data : [];
     }
 
     private function saveIndex(string $disk, array $index): void
@@ -1952,32 +2028,27 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     /** @return array<string,?int> */
     private function readDirsIndex(string $disk): array
     {
-        $fs = $this->diskManager->disk($disk);
-        if (!$fs->fileExists(self::DIRS_KEY)) {
+        $json = $this->readManifest($disk, self::DIRS_KEY);
+        if ($json === null) {
             return [];
         }
-        try {
-            $json = $fs->read(self::DIRS_KEY);
-            $data = json_decode($json, true);
-            if (!is_array($data)) {
-                return [];
-            }
-            // Two on-disk shapes: legacy list of keys `["a","b"]`, and the current
-            // map `{"a": <created ts|null>}`. Normalize to key => (?int created).
-            $isList = array_is_list($data);
-            $this->dirsLegacyShape[$disk] = $isList;
-            $set = [];
-            foreach ($data as $kk => $vv) {
-                $k = $isList ? $vv : $kk;
-                if (!is_string($k)) continue;
-                $k = trim($k, '/');
-                if ($k === '' || $k === '_fluxfiles' || str_contains($k, '/_fluxfiles')) continue;
-                $set[$k] = $isList ? null : (is_numeric($vv) ? (int) $vv : null);
-            }
-            return $set;
-        } catch (\Throwable $e) {
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
             return [];
         }
+        // Two on-disk shapes: legacy list of keys `["a","b"]`, and the current
+        // map `{"a": <created ts|null>}`. Normalize to key => (?int created).
+        $isList = array_is_list($data);
+        $this->dirsLegacyShape[$disk] = $isList;
+        $set = [];
+        foreach ($data as $kk => $vv) {
+            $k = $isList ? $vv : $kk;
+            if (!is_string($k)) continue;
+            $k = trim($k, '/');
+            if ($k === '' || $k === '_fluxfiles' || str_contains($k, '/_fluxfiles')) continue;
+            $set[$k] = $isList ? null : (is_numeric($vv) ? (int) $vv : null);
+        }
+        return $set;
     }
 
     /**

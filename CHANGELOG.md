@@ -9,6 +9,15 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - Grid: an image over 200 KB with no stored thumbnail (copied in over FTP, an existing bucket, …) is shown through `/img` at 400px instead of as the original. It falls back to the original when `/img` refuses.
 - Selecting an image no longer downloads the original for the hidden crop and watermark tabs, nor the lightbox image before the lightbox is opened or hovered.
 - `/img` URLs in a listing stay the same while the file does, so the browser reuses the thumbnails it already has when a folder is opened again. The token expires up to 15 minutes (at most a quarter of `stream_token_ttl`) early, never late.
+- S3/R2: listing files that are not in the index (an existing bucket) sends its HEAD requests 16 at a time instead of one after the other, and reads the index, folder and hold manifests with one GET each instead of HEAD + GET. A manifest that cannot be read is still an error, never an empty one.
+- S3/R2: presigned image URLs in a listing repeat for up to 15 minutes while the object is unchanged, with `Cache-Control: private, max-age`, so the browser reuses them. They expire up to 15 minutes (a quarter of `url_ttl`) early, never late.
+- Detail panel and lightbox use the stored `medium`/`large` variants before resizing on demand. `variants` entries in a listing now carry `width`.
+- PDF: the panel's copy is removed while the full viewer is open, so the file no longer downloads twice at once.
+- AVIF quality is mapped to the WebP scale (80 -> 60, and so on). At the same number AVIF came out 1.34-1.74x larger than WebP. Images already cached keep their size until the source changes.
+- `/img` makes one existence check on the source instead of two.
+
+### Changed
+- New rate bucket `FLUXFILES_THUMB_RATE_LIMIT` (1200/min): cached `/img` answers and stored thumbnails served through `/stream`. `FLUXFILES_IMG_RATE_LIMIT` (120/min) now covers only requests that resize or send an original, and `FLUXFILES_STREAM_RATE_LIMIT` no longer counts thumbnails. Opening a 200-image private folder twice in a minute used to break 100 thumbnails. An operator who set either to `0` should set the new one to `0` too. Laravel: `rate_limit_thumb`; WordPress filter `fluxfiles_rate_limit_thumb`.
 
 ## [1.0.51] — 2026-11-21
 

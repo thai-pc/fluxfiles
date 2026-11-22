@@ -941,7 +941,8 @@ class FileManager
             }
             if (($item['type'] ?? '') === 'file') {
                 // Preview-only tokens (allow_download=false) get no clean download URL.
-                $url = $this->downloadUrl($disk, $item['key']);
+                $version = isset($item['modified']) ? $item['modified'] . '-' . ($item['size'] ?? '') : null;
+                $url = $this->downloadUrl($disk, $item['key'], $version);
                 if ($url !== null) {
                     $item['url'] = $url;
                 }
@@ -969,14 +970,13 @@ class FileManager
                     $pk = $this->variantKey($item['key'], 'thumb');
                     try {
                         if ($this->variantExists($disk, $pk, $variantSet)) {
-                            $item['poster'] = $this->fileUrl($disk, $pk);
+                            $item['poster'] = $this->fileUrl($disk, $pk, $variantSet[dirname($pk)][$pk] ?? null);
                         }
                     } catch (\Throwable $e) {
                         // no poster
                     }
                 }
-                $imgBase = $this->imgBaseUrl($disk, $item['key'],
-                    isset($item['modified']) ? $item['modified'] . '-' . ($item['size'] ?? '') : null);
+                $imgBase = $this->imgBaseUrl($disk, $item['key'], $version);
                 if ($imgBase !== null) {
                     $item['img_base'] = $imgBase;
                     $natural = isset($item['width']) ? (int) $item['width'] : 0;
@@ -3907,7 +3907,7 @@ class FileManager
      * Look up existing variant files (thumb/medium/large WebP) for an image.
      */
     /**
-     * @param array<string,array<string,true>> $known existingVariants() result; a
+     * @param array<string,array<string,string>> $known existingVariants() result; a
      *        folder missing from it falls back to a per-file fileExists()
      */
     private function getFileVariants(string $disk, string $key, array $known = []): ?array
@@ -3922,8 +3922,9 @@ class FileManager
             $vk = $this->variantKey($key, $size);
             if ($this->variantExists($disk, $vk, $known)) {
                 $variants[$size] = [
-                    'url' => $this->fileUrl($disk, $vk),
+                    'url' => $this->fileUrl($disk, $vk, $known[dirname($vk)][$vk] ?? null),
                     'key' => $vk,
+                    'width' => $this->imageOptimizer->variantWidth($size),
                 ];
             }
         }
@@ -3938,15 +3939,15 @@ class FileManager
      * watermark): a stream token / presigned GET of the un-watermarked file is
      * exactly what presign/getContent/zip refuse such a token.
      */
-    private function downloadUrl(string $disk, string $key): ?string
+    private function downloadUrl(string $disk, string $key, ?string $version = null): ?string
     {
-        return $this->claims->allowDownload ? $this->fileUrl($disk, $key) : null;
+        return $this->claims->allowDownload ? $this->fileUrl($disk, $key, $version) : null;
     }
 
     /**
      * getFileVariants() behind the same allow_download gate as downloadUrl().
      *
-     * @param array<string,array<string,true>> $known see getFileVariants()
+     * @param array<string,array<string,string>> $known see getFileVariants()
      */
     private function downloadVariants(string $disk, string $key, array $known = []): ?array
     {
@@ -3963,7 +3964,7 @@ class FileManager
      * any folder whose listing fails.
      *
      * @param array<int,array<string,mixed>> $items
-     * @return array<string,array<string,true>> variants dir => [variant key => true]
+     * @return array<string,array<string,string>> variants dir => [variant key => version (mtime-size)]
      */
     private function existingVariants(string $disk, array $items): array
     {
@@ -3988,7 +3989,7 @@ class FileManager
                 $set = [];
                 foreach ($fs->listContents((string) $dir, false) as $v) {
                     if ($v->isFile()) {
-                        $set[$v->path()] = true;
+                        $set[$v->path()] = $v->lastModified() . '-' . $v->fileSize();
                     }
                 }
                 $known[(string) $dir] = $set;
@@ -3999,7 +4000,7 @@ class FileManager
         return $known;
     }
 
-    /** @param array<string,array<string,true>> $known */
+    /** @param array<string,array<string,string>> $known */
     private function variantExists(string $disk, string $variantKey, array $known): bool
     {
         $dir = dirname($variantKey);
@@ -4680,7 +4681,8 @@ class FileManager
         return null;
     }
 
-    private function fileUrl(string $disk, string $path): string
+    /** @param ?string $version mtime-size of $path; lets a presigned image URL repeat, see presignGetUrl() */
+    private function fileUrl(string $disk, string $path, ?string $version = null): string
     {
         $config = $this->disks->config($disk);
 
@@ -4713,7 +4715,7 @@ class FileManager
             $ttlOverride = ($this->claims->previewUrlTtl > 0 && Claims::isMediaPath($path))
                 ? $this->claims->previewUrlTtl
                 : null;
-            $signed = $this->presignGetUrl($disk, $path, $config, $ttlOverride);
+            $signed = $this->presignGetUrl($disk, $path, $config, $ttlOverride, $version);
             if ($signed !== null) {
                 return $signed;
             }
@@ -4739,7 +4741,7 @@ class FileManager
      * TTL is taken from the disk's `url_ttl` (default 1 hour), clamped to MAX_PRESIGN_TTL.
      * Returns null if signing is not possible so the caller can fall back.
      */
-    private function presignGetUrl(string $disk, string $path, array $config, ?int $ttlOverride = null): ?string
+    private function presignGetUrl(string $disk, string $path, array $config, ?int $ttlOverride = null, ?string $version = null): ?string
     {
         $ttl = $ttlOverride ?? (int) ($config['url_ttl'] ?? 3600);
         if ($ttl < 1) {
@@ -4751,13 +4753,24 @@ class FileManager
 
         try {
             $client = $this->disks->s3Client($disk);
-            $cmd = $client->getCommand('GetObject', [
+            $params = [
                 'Bucket'                     => $config['bucket'] ?? '',
                 'Key'                        => $path,
                 'ResponseContentDisposition' => $this->presignDisposition($path),
                 'ResponseContentType'        => self::presignContentType($path),
-            ]);
-            $request = $client->createPresignedRequest($cmd, "+{$ttl} seconds");
+            ];
+            $start = time();
+            // Images in a listing: sign from a window boundary, so opening a folder again
+            // returns the same URLs and the browser reuses what it has. Never valid for longer
+            // than $ttl. The version makes the URL change with the object (S3 ignores it in
+            // the header, but it is part of the signed query).
+            $window = min(900, intdiv($ttl, 4));
+            if ($version !== null && $window > 1 && $this->imageOptimizer->isImage($path)) {
+                $start -= $start % $window;
+                $params['ResponseCacheControl'] = 'private, max-age=' . $window . ', ff-v=' . $version;
+            }
+            $cmd = $client->getCommand('GetObject', $params);
+            $request = $client->createPresignedRequest($cmd, $start + $ttl, ['start_time' => $start]);
             return (string) $request->getUri();
         } catch (\Throwable $e) {
             \FluxFiles\Log::warn('FluxFiles: presign GET URL failed — ' . $e->getMessage());

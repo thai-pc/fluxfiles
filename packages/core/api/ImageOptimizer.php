@@ -61,6 +61,27 @@ class ImageOptimizer
         }
     }
 
+    /**
+     * The AVIF encoder setting that looks like WebP at $quality. The two scales differ:
+     * passed through unchanged, AVIF came out 1.34-1.74x LARGER than WebP (median of 16
+     * photos, 400 and 1400px, GD). The points keep AVIF's SSIM at or just above WebP's.
+     */
+    public static function avifQuality(int $quality): int
+    {
+        $points = [[0, 0], [60, 45], [80, 60], [90, 85], [100, 100]];
+        $q = max(0, min(100, $quality));
+        for ($i = 1; $q > $points[$i][0]; $i++);
+        [$x0, $y0] = $points[$i - 1];
+        [$x1, $y1] = $points[$i];
+        return (int) round($y0 + ($q - $x0) * ($y1 - $y0) / ($x1 - $x0));
+    }
+
+    /** Configured width of a stored variant (thumb|medium|large); one stored under an older setting may differ. */
+    public function variantWidth(string $name): int
+    {
+        return $this->variants[$name] ?? 0;
+    }
+
     public function isImage(string $filename): bool
     {
         $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
@@ -262,7 +283,7 @@ class ImageOptimizer
         // AVIF when requested AND supported (intervention v3 + GD with AVIF); else
         // fall back to WebP so a caller never fails just because the build lacks AVIF.
         if ($format === 'avif' && $this->manager->avifSupported()) {
-            $encoded = $this->manager->encodeAvif($image, $quality);
+            $encoded = $this->manager->encodeAvif($image, self::avifQuality($quality));
             $outFormat = 'avif';
         } else {
             $encoded = $this->manager->encodeWebp($image, $quality);

@@ -228,6 +228,9 @@ class MediaEndpoint
         return true;
     }
 
+    /** Requests/min for answers that cost no image work (cached transforms, stored thumbnails). */
+    private const THUMB_RATE = 1200;
+
     private static function unsafePath(string $path): bool
     {
         return $path === '' || strpos($path, "\0") !== false
@@ -280,12 +283,15 @@ class MediaEndpoint
             return;
         }
 
-        if ($this->rateLimited((string) ($scope['sub'] ?? ''), 'stream', 300)) {
-            return;
-        }
-
         $disk = $scope['disk'];
         $path = $scope['path'];
+
+        // A stored thumbnail/poster is a small file and a grid shows up to 200 of them:
+        // not the same budget as seeking through a video.
+        $isVariant = (bool) preg_match('#(^|/)_variants/[^/]+\.webp$#', $path);
+        if ($this->rateLimited((string) ($scope['sub'] ?? ''), $isVariant ? 'thumb' : 'stream', $isVariant ? self::THUMB_RATE : 300)) {
+            return;
+        }
 
         // Reject any traversal in the (signed) path defensively.
         if (self::unsafePath($path)) {
@@ -430,7 +436,8 @@ class MediaEndpoint
             return;
         }
 
-        if ($this->rateLimited((string) ($scope['sub'] ?? ''), 'img', 120)) {
+        $sub = (string) ($scope['sub'] ?? '');
+        if ($this->rateLimited($sub, 'thumb', self::THUMB_RATE)) {
             return;
         }
 
@@ -494,9 +501,15 @@ class MediaEndpoint
             return;
         }
 
-        if (!$fs->fileExists($path)) {
-            $this->fail(404, 'Not found');
-            return;
+        // The modified time also proves the file exists: one round trip on S3/SFTP, not two.
+        try {
+            $ver = (string) $fs->lastModified($path);
+        } catch (\Throwable $e) {
+            if (!$fs->fileExists($path)) {
+                $this->fail(404, 'Not found');
+                return;
+            }
+            $ver = '0';
         }
 
         $origMime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
@@ -519,6 +532,9 @@ class MediaEndpoint
         // default) lands here, so this is a one-request bypass if left open.
         if ($format === '') {
             if (!$noOriginal) {
+                if ($this->rateLimited($sub, 'img', 120)) {
+                    return;
+                }
                 $this->serveBytes((string) $fs->read($path), $origMime);
                 return;
             }
@@ -528,7 +544,6 @@ class MediaEndpoint
         // Cache key is stamped with the source mtime (+ watermark signature, format,
         // height/fit) so a re-upload, config/logo change, or a different output
         // format/size never re-matches a stale image.
-        $ver = (string) (@$fs->lastModified($path) ?: '0');
         $cacheKey = ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, $wmSig, $format, $height, $fit);
         $outMime = 'image/' . $format;
 
@@ -546,6 +561,12 @@ class MediaEndpoint
                 }
             }
             $this->serveBytes((string) $fs->read($cacheKey), $outMime, true, !empty($scope['byob']));
+            return;
+        }
+
+        // Not cached: this request decodes and encodes an image, which is what the `img`
+        // budget bounds. Answers from the cache only count against `thumb`.
+        if ($this->rateLimited($sub, 'img', 120)) {
             return;
         }
 

@@ -80,3 +80,21 @@ test('the grid falls back to the original when /img refuses', async ({ page }) =
     await expect.poll(() => img.evaluate((e: HTMLImageElement) => e.naturalWidth)).toBe(900);
   } finally { rmSync(join(uploads, dir), { recursive: true, force: true }); }
 });
+
+test('the detail panel and lightbox use stored variants before resizing on demand', async ({ page }) => {
+  await openManager(page, mintToken());
+  const name = `variants-${Date.now()}.png`;
+  await uploadFile(page, imageFile(name, 2400, 1500));
+  await expect(cardByName(page, name)).toBeVisible({ timeout: 15_000 });
+  const seen = watchMedia(page, name);
+  await cardByName(page, name).click();
+  const img = page.locator('.detail-thumb img');
+  await expect(img).toBeVisible();
+  const srcset = (await img.getAttribute('srcset'))!;
+  expect(srcset).toMatch(/_medium\.webp\S* 768w, \S+_large\.webp\S* 1920w/);
+  const widths = [...srcset.matchAll(/ (\d+)w/g)].map((m) => Number(m[1]));
+  expect([...widths].sort((a, b) => a - b), 'no smaller on-demand candidates left').toEqual(widths);
+  await page.waitForLoadState('networkidle');
+  expect(seen).not.toContain('img');
+  expect(seen).not.toContain('orig');
+});

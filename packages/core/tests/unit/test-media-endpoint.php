@@ -124,6 +124,36 @@ test('stream: rate-limit callable false -> 429 and nothing else', function () us
     assertEqual(null, $e->streamed);
 });
 
+test('rate buckets: cached images and stored thumbnails use `thumb`, image work uses `img`, media uses `stream`', function () use ($dm, $SECRET, $root, $hasGd) {
+    $log = [];
+    $spy = static function (string $sub, string $bucket, int $default) use (&$log): bool { $log[] = "$bucket:$default"; return true; };
+    @mkdir($root . '/priv/_variants', 0755, true);
+    file_put_contents($root . '/priv/_variants/x.jpg_thumb.webp', 'w');
+    ep($dm, $SECRET, $spy)->stream(st('priv', '_variants/x.jpg_thumb.webp', $SECRET));
+    ep($dm, $SECRET, $spy)->stream(st('priv', 'sub/50% off #1.mp4', $SECRET));
+    assertEqual(['thumb:1200', 'stream:300'], $log);
+    if (!$hasGd) { return; }
+    $log = [];
+    $q = it('priv', 'pic.png', $SECRET) + ['width' => 300];
+    ep($dm, $SECRET, $spy)->image($q, ['accept' => 'image/webp']);
+    assertEqual(['thumb:1200', 'img:120'], $log, 'first request transforms');
+    $log = [];
+    ep($dm, $SECRET, $spy)->image($q, ['accept' => 'image/webp']);
+    assertEqual(['thumb:1200'], $log, 'from the cache: no image budget');
+    $log = [];
+    ep($dm, $SECRET, $spy)->image($q, ['accept' => '*/*']);
+    assertEqual(['thumb:1200', 'img:120'], $log, 'sending the original is not free either');
+
+    // With the image budget spent, cached images still show and new work is refused.
+    $noWork = static fn (string $s, string $bucket, int $d): bool => $bucket !== 'img';
+    $e = ep($dm, $SECRET, $noWork); $e->image($q, ['accept' => 'image/webp']);
+    assertEqual(200, $e->code);
+    $e = ep($dm, $SECRET, $noWork); $e->image(it('priv', 'pic.png', $SECRET) + ['width' => 200, 'quality' => 60], ['accept' => 'image/webp']);
+    assertEqual(429, $e->code);
+    $e = ep($dm, $SECRET, $noWork); $e->image(it('priv', 'gone.png', $SECRET), ['accept' => 'image/webp']);
+    assertEqual(404, $e->code, 'a missing file is still a 404');
+});
+
 test('stream: traversal in the signed path is refused', function () use ($dm, $allow, $SECRET) {
     foreach (['../etc/passwd', 'a/../../b', "a\0b", ''] as $p) {
         $e = ep($dm, $SECRET, $allow);
