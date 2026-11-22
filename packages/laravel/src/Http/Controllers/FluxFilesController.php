@@ -175,9 +175,9 @@ class FluxFilesController
 
     /**
      * The shared core class behind /stream and /img. Its limiter honours the
-     * adapter's `rate_limit_stream` / `rate_limit_img` config (which default to
-     * FLUXFILES_STREAM_RATE_LIMIT=300 / FLUXFILES_IMG_RATE_LIMIT=120, core's
-     * defaults) and the same DB-or-file backend as every other bucket; a limiter
+     * adapter's `rate_limit_stream` / `rate_limit_img` / `rate_limit_thumb` config
+     * (defaults: FLUXFILES_STREAM_RATE_LIMIT=300, FLUXFILES_IMG_RATE_LIMIT=120,
+     * FLUXFILES_THUMB_RATE_LIMIT=1200, core's) and the same DB-or-file backend as every other bucket; a limiter
      * that errors fails open, only a genuine 429 blocks (MediaEndpoint's contract).
      */
     private function mediaEndpoint(): \FluxFiles\MediaEndpoint

@@ -1158,7 +1158,7 @@ class FluxFilesApi
      */
     private function mediaEndpoint(): MediaEndpoint
     {
-        // Core's defaults (stream 300/min, img 120/min, FLUXFILES_<BUCKET>_RATE_LIMIT),
+        // Core's defaults (stream 300/min, img 120/min, thumb 1200/min, FLUXFILES_<BUCKET>_RATE_LIMIT),
         // which the `fluxfiles_rate_limit_{bucket}` filter may still override; <= 0 disables.
         $limitFor = static function (string $bucket, int $default): int {
             $name = 'FLUXFILES_' . strtoupper($bucket) . '_RATE_LIMIT';

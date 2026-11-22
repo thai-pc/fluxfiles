@@ -10,12 +10,12 @@ All notable changes to FluxFiles are documented here. This project adheres to
 > Released: `core-v1.7.0`: faster image and document loading, measured on a local disk, real S3 and R2 buckets, Laravel and WordPress. A folder of 48 large images without thumbnails opens in about 2 s instead of 24 s at 20 Mbps, selecting an image downloads about 0.02 MB instead of 2.3 MB, and an S3/R2 listing of files outside the index takes a third to a half of the time. The first view of a bucket folder without thumbnails is not faster, because the server resizes each image once. Laravel gets it with `composer update`; the WordPress plugin bundles core and follows in its own release.
 
 ### Performance
-- Grid: an image over 200 KB with no stored thumbnail (copied in over FTP, an existing bucket, …) is shown through `/img` at 400px instead of as the original. It falls back to the original when `/img` refuses.
+- Grid: an image over 200 KB with no stored thumbnail (copied in over FTP, an existing bucket, …) is shown through `/img` at 400px instead of as the original. It falls back to the original when `/img` refuses. Browsing such a folder writes the thumbnails to its `_variants/`, which count toward storage.
 - Selecting an image no longer downloads the original for the hidden crop and watermark tabs, nor the lightbox image before the lightbox is opened or hovered.
 - `/img` URLs in a listing stay the same while the file does, so the browser reuses the thumbnails it already has when a folder is opened again. The token expires up to 15 minutes (at most a quarter of `stream_token_ttl`) early, never late.
 - S3/R2: listing files that are not in the index (an existing bucket) sends its HEAD requests 16 at a time instead of one after the other, and reads the index, folder and hold manifests with one GET each instead of HEAD + GET. A manifest that cannot be read is still an error, never an empty one.
 - S3/R2: presigned image URLs in a listing repeat for up to 15 minutes while the object is unchanged, with `Cache-Control: private, max-age`, so the browser reuses them. They expire up to 15 minutes (a quarter of `url_ttl`) early, never late.
-- Detail panel and lightbox use the stored `medium`/`large` variants before resizing on demand. `variants` entries in a listing now carry `width`.
+- Detail panel and lightbox fall back to the original when `/img` refuses (rate limit).
 - PDF: the panel's copy is removed while the full viewer is open, so the file no longer downloads twice at once.
 - AVIF quality is mapped to the WebP scale (80 -> 60, and so on). At the same number AVIF came out 1.34-1.74x larger than WebP. Images already cached keep their size until the source changes.
 - `/img` makes one existence check on the source instead of two.

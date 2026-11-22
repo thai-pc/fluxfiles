@@ -81,20 +81,56 @@ test('the grid falls back to the original when /img refuses', async ({ page }) =
   } finally { rmSync(join(uploads, dir), { recursive: true, force: true }); }
 });
 
-test('the detail panel and lightbox use stored variants before resizing on demand', async ({ page }) => {
-  await openManager(page, mintToken());
-  const name = `variants-${Date.now()}.png`;
-  await uploadFile(page, imageFile(name, 2400, 1500));
+/** Natural width / height of the displayed image, once it has loaded (0 while broken). */
+const ratio = (page: Page, sel: string) => page.locator(sel).evaluate((e: HTMLImageElement) => (e.naturalHeight ? e.naturalWidth / e.naturalHeight : 0));
+
+test('after an in-place crop the panel and lightbox show the cropped image, also on the next visit', async ({ page }) => {
+  const token = mintToken();
+  await openManager(page, token);
+  const name = `crop-${Date.now()}.png`;
+  await uploadFile(page, imageFile(name, 2400, 1500)); // ratio 1.6, stored medium + large
   await expect(cardByName(page, name)).toBeVisible({ timeout: 15_000 });
-  const seen = watchMedia(page, name);
   await cardByName(page, name).click();
-  const img = page.locator('.detail-thumb img');
-  await expect(img).toBeVisible();
-  const srcset = (await img.getAttribute('srcset'))!;
-  expect(srcset).toMatch(/_medium\.webp\S* 768w, \S+_large\.webp\S* 1920w/);
-  const widths = [...srcset.matchAll(/ (\d+)w/g)].map((m) => Number(m[1]));
-  expect([...widths].sort((a, b) => a - b), 'no smaller on-demand candidates left').toEqual(widths);
-  await page.waitForLoadState('networkidle');
-  expect(seen).not.toContain('img');
-  expect(seen).not.toContain('orig');
+  await page.locator('.detail-thumb.detail-thumb-clickable').click();
+  await expect.poll(() => ratio(page, '.ff-preview-img')).toBeCloseTo(1.6, 1); // browser now holds the old picture
+  await page.waitForTimeout(1100);
+  // Smaller than the `large` variant: the server writes no new one and the old one stays.
+  const res = await page.request.post('/api/fm/crop', {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { disk: 'local', path: name, x: 0, y: 0, width: 1150, height: 1000 },
+  });
+  expect(res.ok(), await res.text()).toBe(true);
+  for (let visit = 0; visit < 2; visit++) {
+    await openManager(page, token); // not reload(): the UI strips the token from the URL
+    await expect(cardByName(page, name)).toBeVisible({ timeout: 15_000 });
+    await cardByName(page, name).click();
+    await expect.poll(() => ratio(page, '.detail-thumb img'), { message: 'panel' }).toBeCloseTo(1.15, 1);
+    await page.locator('.detail-thumb.detail-thumb-clickable').click();
+    await expect.poll(() => ratio(page, '.ff-preview-img'), { message: 'lightbox' }).toBeCloseTo(1.15, 1);
+  }
+});
+
+test('panel and lightbox fall back to the original when /img refuses', async ({ page }) => {
+  await page.route('**/api/fm/img*', (r) => r.fulfill({ status: 429, body: 'Too many requests' }));
+  await openManager(page, mintToken());
+  const name = `refused-${Date.now()}.png`;
+  await uploadFile(page, imageFile(name, 1600, 1000));
+  await expect(cardByName(page, name)).toBeVisible({ timeout: 15_000 });
+  await cardByName(page, name).click();
+  await expect.poll(() => ratio(page, '.detail-thumb img'), { message: 'panel' }).toBeCloseTo(1.6, 1);
+  await page.locator('.detail-thumb.detail-thumb-clickable').click();
+  await expect.poll(() => ratio(page, '.ff-preview-img'), { message: 'lightbox' }).toBeCloseTo(1.6, 1);
+});
+
+test('names with # and % show in the panel and lightbox', async ({ page }) => {
+  await openManager(page, mintToken());
+  for (const name of [`a #1 ${Date.now()}.png`, `b 100%25 ${Date.now()}.png`]) {
+    await uploadFile(page, imageFile(name, 2400, 1500));
+    await expect(cardByName(page, name)).toBeVisible({ timeout: 15_000 });
+    await cardByName(page, name).click();
+    await expect.poll(() => ratio(page, '.detail-thumb img'), { message: name }).toBeCloseTo(1.6, 1);
+    await page.locator('.detail-thumb.detail-thumb-clickable').click();
+    await expect.poll(() => ratio(page, '.ff-preview-img'), { message: name }).toBeCloseTo(1.6, 1);
+    await page.locator('.ff-preview-close').click();
+  }
 });

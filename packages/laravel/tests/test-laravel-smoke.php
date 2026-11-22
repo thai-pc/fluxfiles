@@ -1788,6 +1788,7 @@ test('media rate limits use core defaults (stream 300 / img 120) unless the adap
     $cfg = require __DIR__ . '/../config/fluxfiles.php';
     assertEqual(300, $cfg['rate_limit_stream'], 'published config default = core default (stream)');
     assertEqual(120, $cfg['rate_limit_img'], 'published config default = core default (img)');
+    assertEqual(1200, $cfg['rate_limit_thumb'], 'published config default = core default (thumb)');
 
     // A tight override is honoured, 0 disables.
     withConfig(['fluxfiles.rate_limit_img' => 1], function () {
