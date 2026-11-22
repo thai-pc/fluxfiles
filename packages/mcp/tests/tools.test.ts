@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { FluxFilesClient, assertSafeBaseUrl, buildTools, createServer } from '../src/index.js';
+import { FluxFilesClient, assertSafeBaseUrl, buildTools, createServer, VERSION } from '../src/index.js';
 
 type Call = { method: string; url: string; headers: Record<string, string>; body?: unknown; redirect?: RequestRedirect };
 
@@ -176,5 +177,13 @@ describe('transport safety', () => {
     expect(() => assertSafeBaseUrl('http://10.0.0.5', true)).not.toThrow();
     expect(() => assertSafeBaseUrl('file:///etc/passwd')).toThrow(/http\(s\)/);
     expect(() => assertSafeBaseUrl('not a url')).toThrow(/valid URL/);
+  });
+});
+
+describe('version', () => {
+  // VERSION is what the server reports to MCP clients; 1.1.1 shipped still saying 1.1.0.
+  it('matches package.json', () => {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    expect(VERSION).toBe(pkg.version);
   });
 });
