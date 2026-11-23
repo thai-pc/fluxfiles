@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
-// phpcs:disable WordPress.WP.AlternativeFunctions.unlink_unlink -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
+// phpcs:disable WordPress.WP.AlternativeFunctions.unlink_unlink, WordPress.WP.AlternativeFunctions.file_system_operations_fopen, WordPress.WP.AlternativeFunctions.file_system_operations_fclose, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
 // phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- core is a WordPress-independent library; wp_parse_url() does not exist outside WordPress
 // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment/server (not user input); core is a WordPress-independent library
 
@@ -27,6 +27,9 @@ namespace FluxFiles;
 final class UrlImporter
 {
     private const DEFAULT_MAX_MB = 50;
+    /** Imports one user may run at the same time when neither the claim nor the env sets it. */
+    private const DEFAULT_CONCURRENCY = 3;
+    private const MAX_CONCURRENCY = 50;
     private const MAX_REDIRECTS = 3;
 
     /** Always rejected regardless of the upload extension policy. */
@@ -77,17 +80,76 @@ final class UrlImporter
             : (int) ($_ENV['FLUXFILES_IMPORT_MAX_MB'] ?? self::DEFAULT_MAX_MB);
         $maxBytes = $maxMb * 1024 * 1024;
 
-        $tmp = tempnam(sys_get_temp_dir(), 'ffimp_');
-        if ($tmp === false) {
-            throw new ApiException('Could not allocate a temp file', 500, 'server_error');
-        }
-
+        $slot = $this->acquireSlot();
         try {
-            $disposition = $this->fetchToTemp($url, $tmp, $maxBytes);
-            return $this->finishImport($tmp, $disk, $url, $disposition, $opts);
+            $tmp = tempnam(sys_get_temp_dir(), 'ffimp_');
+            if ($tmp === false) {
+                throw new ApiException('Could not allocate a temp file', 500, 'server_error');
+            }
+            try {
+                $disposition = $this->fetchToTemp($url, $tmp, $maxBytes);
+                return $this->finishImport($tmp, $disk, $url, $disposition, $opts);
+            } finally {
+                @unlink($tmp);
+            }
         } finally {
-            @unlink($tmp);
+            if ($slot !== null) {
+                flock($slot, LOCK_UN);
+                fclose($slot);
+            }
         }
+    }
+
+    /**
+     * `import_concurrency`: how many imports one user may run at the same time
+     * (claim, else FLUXFILES_IMPORT_CONCURRENCY, else 3; at most 50). Each running
+     * import holds an exclusive flock on one of N slot files; the OS drops the lock
+     * when the request ends, even on a crash, so a slot can never stay taken. The
+     * count is per server (slot files live in the system temp dir). If no slot file
+     * can be opened at all, the import is not blocked (logged): the per-minute
+     * `import_rate_limit` still applies.
+     *
+     * @return resource|null
+     */
+    private function acquireSlot()
+    {
+        $limit = $this->claims->importConcurrency > 0
+            ? $this->claims->importConcurrency
+            : (int) ($_ENV['FLUXFILES_IMPORT_CONCURRENCY'] ?? self::DEFAULT_CONCURRENCY);
+        $limit = max(1, min(self::MAX_CONCURRENCY, $limit));
+        $opened = false;
+        for ($i = 0; $i < $limit; $i++) {
+            $fp = @fopen(self::slotFile($this->claims->userId, $i), 'c');
+            if ($fp === false) {
+                continue;
+            }
+            $opened = true;
+            if (flock($fp, LOCK_EX | LOCK_NB)) {
+                return $fp;
+            }
+            fclose($fp);
+        }
+        if (!$opened) {
+            Log::warn('[fluxfiles] import_concurrency not enforced: no slot file could be opened in ' . self::slotDir());
+            return null;
+        }
+        throw new ApiException('Too many imports are running at once. Try again when one finishes.', 429, 'rate_limited');
+    }
+
+    /** @internal Slot file $i of $userId (public for tests). Hashed: user ids never reach the file system. */
+    public static function slotFile(string $userId, int $i): string
+    {
+        // __DIR__ keeps two installs on one host (same user ids) from sharing slots.
+        return self::slotDir() . '/' . hash('sha256', __DIR__ . "\0" . $userId) . '.' . $i . '.lock';
+    }
+
+    private static function slotDir(): string
+    {
+        $dir = rtrim(sys_get_temp_dir(), '/\\') . '/fluxfiles-import-slots';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0700, true);
+        }
+        return $dir;
     }
 
     /**

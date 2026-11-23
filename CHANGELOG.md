@@ -5,6 +5,16 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- Core: the `import_concurrency` claim is now enforced. It was read into the token and documented, but nothing used it. A URL import holds one of N per-user slots (an exclusive `flock` on a file in the system temp dir, dropped by the OS when the request ends, even on a crash); one more import while all are busy answers `429 rate_limited`. `0` falls back to `FLUXFILES_IMPORT_CONCURRENCY`, else 3, capped at 50. The limit is per server. Applies to the standalone core and both proxies (they all import through `UrlImporter`).
+
+### Changed
+- Core: `StorageMetadataHandler.php` names `chmod` and `is_writable` in its existing `phpcs:disable` note, so the WordPress build's own annotation step is a no-op from this core on.
+
+### Tests
+- Live rigs: `modules-live/sftp/check.php` expects the WordPress plugin to refuse `/content` and `/chmod` (by design), `modules-live/wordpress/stage.sh` lets the plugin reach LocalStack (`FLUXFILES_SSRF_ALLOW_HOSTS`), and `tests/apps/laravel-e2e/setup.sh` aliases the core checkout to the current core version instead of 0.2.36.
+- `test-sftp-passphrase.php` generates its keys with one bcrypt-pbkdf round (`ssh-keygen -a 1`): 37 s to 4 s, same checks.
+
 ## [1.0.56] — 2026-11-22
 
 > Released: `python-v1.2.2`. Documentation only, no code change.

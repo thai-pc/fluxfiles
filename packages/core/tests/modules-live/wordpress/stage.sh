@@ -41,5 +41,6 @@ FLUXFILES_AIVISION_PROVIDER=http
 FLUXFILES_AIVISION_ENDPOINT=http://ff-ai:8192/
 FLUXFILES_DLP_ENDPOINT=http://ff-presidio:3000
 FLUXFILES_WEBHOOK_ALLOW_INTERNAL=true
+FLUXFILES_SSRF_ALLOW_HOSTS=localstack
 ENV
 echo "staged plugin: $(find "$ST/plugin" -type f | wc -l | tr -d ' ') files"

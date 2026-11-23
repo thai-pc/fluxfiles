@@ -6,6 +6,9 @@ declare(strict_types=1);
 require $autoload;
 use phpseclib3\Net\SFTP;
 $SECRET = getenv($SECRET_ENV);
+// The WordPress plugin refuses /content and /chmod by design (its tokens carry
+// allow_code_edit=false and its /chmod route always answers 403); the other adapters serve them.
+$WP = str_contains($BASE, '/wp-json/');
 $CFG = ['driver'=>'sftp','host'=>'ff-sftp','port'=>22,'username'=>'ff','password'=>'ffpass','root'=>'upload'];
 $pass=0;$fail=0;$allBodies='';
 function t(string $n, callable $f){global $pass,$fail;try{$f();echo "  PASS $n\n";$pass++;}catch(\Throwable $e){echo "  FAIL $n: ".substr($e->getMessage(),0,300)."\n";$fail++;}}
@@ -40,11 +43,16 @@ function abs_url($u){global $BASE;if(str_starts_with($u,'http'))return $u;$p=par
 t('stream: full bytes match',function()use(&$url,$bin){[$s,$b]=req('GET',abs_url($url),null);ok($s===200,"$s");ok(hash('sha256',$b)===hash('sha256',$bin),'sha differs len='.strlen($b));});
 t('stream: Range ignored by design on SFTP (200, whole file)',function()use(&$url,$bin){[$s,$b]=req('GET',abs_url($url),null,null,['Range: bytes=100-199']);ok($s===200&&strlen($b)===strlen($bin),"HTTP $s len=".strlen($b));});
 t('meta',function()use($T,$d){[$s,$b,$j]=req('GET',"/meta?disk=$d&path=docs%2Fnote.txt",$T);ok($s===200,"$s $b");});
+if($WP){
+t('WordPress refuses /content (edit_forbidden)',function()use($T,$d){global $DISK;[$s,$b,$j]=req('GET',"/content?disk=$d&path=docs%2Fnote.txt",$T);ok($s===403&&($j['error_code']??'')==='edit_forbidden',"$s $b");[$s,$b,$j]=req('PUT','/content',$T,['disk'=>$DISK,'path'=>'docs/note.txt','content'=>'x']);ok($s===403,"$s $b");});
+t('WordPress refuses /chmod (chmod_forbidden)',function()use($T,$d){global $DISK;[$s,$b,$j]=req('GET',"/chmod?disk=$d&path=docs%2Fnote.txt",$T);ok($s===403&&($j['error_code']??'')==='chmod_forbidden',"$s $b");[$s,$b]=req('POST','/chmod',$T,['disk'=>$DISK,'path'=>'docs/note.txt','mode'=>'640']);ok($s===403,"$s $b");});
+}else{
 t('content GET + PUT; server reflects edit',function()use($T,$d,$sftp,$R,$txt){global $DISK;[$s,$b,$j]=req('GET',"/content?disk=$d&path=docs%2Fnote.txt",$T);ok($s===200,"$s $b");ok(($j['data']['content']??'')===$txt,'read');
  [$s,$b]=req('PUT','/content',$T,['disk'=>$DISK,'path'=>'docs/note.txt','content'=>"  edited\nline\n\n"]);ok($s===200,"$s $b");$sftp->clearStatCache();$g=$sftp->get("$R/docs/note.txt");ok($g==="  edited\nline\n\n",'server has: '.var_export($g,true).' status '.$sftp->getLastSFTPError());});
 t('chmod GET + POST 640; server stat matches',function()use($T,$d,$sftp,$R){global $DISK;[$s,$b,$j]=req('GET',"/chmod?disk=$d&path=docs%2Fnote.txt",$T);ok($s===200,"$s $b");ok(preg_match('/^[0-7]{3}$/',$j['data']['mode']??'')===1,$b);
  [$s,$b]=req('POST','/chmod',$T,['disk'=>$DISK,'path'=>'docs/note.txt','mode'=>'640']);ok($s===200,"$s $b");$sftp->clearStatCache();ok((($sftp->stat("$R/docs/note.txt")['mode']??0)&0777)===0640,'mode');});
 t('chmod invalid mode → 422',function()use($T){global $DISK;[$s]=req('POST','/chmod',$T,['disk'=>$DISK,'path'=>'docs/note.txt','mode'=>'999']);ok($s===422,"$s");});
+}
 t('chmod refused with allow_chmod=false → 403',function()use($pfx){global $DISK;$t=tok($pfx,['allow_chmod'=>false]);[$s]=req('POST','/chmod',$t,['disk'=>$DISK,'path'=>'docs/note.txt','mode'=>'600']);ok($s===403,"$s");});
 t('metadata PUT + GET; sidecar under _fluxfiles on server',function()use($T,$d,$sftp,$R){global $DISK;[$s,$b]=req('PUT','/metadata',$T,['disk'=>$DISK,'key'=>'docs/note.txt','title'=>'Hi']);ok($s===200,"$s $b");[$s,$b,$j]=req('GET',"/metadata?disk=$d&key=docs%2Fnote.txt",$T);ok($s===200&&($j['data']['title']??'')==='Hi',"$s $b");});
 t('copy, rename, move; server state matches',function()use($T,$sftp,$R){global $DISK;

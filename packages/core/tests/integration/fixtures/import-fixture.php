@@ -31,6 +31,13 @@ function fixturePng(): string
 }
 
 switch ($path) {
+    case '/slow-png':   // import_concurrency test: holds the import open for 2 s
+        sleep(2);
+        header('Content-Type: image/png');
+        header('Content-Disposition: attachment; filename="slow.png"');
+        echo fixturePng();
+        break;
+
     case '/png':
         header('Content-Type: image/png');
         header('Content-Disposition: attachment; filename="sunset.png"');
