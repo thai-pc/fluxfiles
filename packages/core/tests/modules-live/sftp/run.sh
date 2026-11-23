@@ -17,7 +17,7 @@ trap cleanup EXIT
 
 (cd "$LIVE/laravel" && bash stage.sh >/dev/null && echo 'FLUXFILES_SSRF_ALLOW_HOSTS=ff-sftp' >> .stage/laravel.env \
   && "${LC[@]}" up -d --build --no-deps laravel >/dev/null 2>&1) || { echo "laravel rig failed"; exit 2; }
-(cd "$LIVE/wordpress" && bash stage.sh >/dev/null && echo 'FLUXFILES_SSRF_ALLOW_HOSTS=ff-sftp' >> .stage/wp.env \
+(cd "$LIVE/wordpress" && bash stage.sh >/dev/null && echo 'FLUXFILES_SSRF_ALLOW_HOSTS=localstack,ff-sftp' >> .stage/wp.env \
   && "${WC[@]}" up -d --build --no-deps ff-db wp >/dev/null 2>&1) || { echo "wordpress rig failed"; exit 2; }
 docker rm -f "$SFTP" >/dev/null 2>&1
 docker run -d --name "$SFTP" --network ff-live-laravel_default --network-alias ff-sftp atmoz/sftp ff:ffpass:::upload >/dev/null || exit 2

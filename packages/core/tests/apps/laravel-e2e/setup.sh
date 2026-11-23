@@ -29,9 +29,12 @@ composer config prefer-stable true
 composer config repositories.fluxfiles-core path "$CORE"
 composer config repositories.fluxfiles-laravel path "$LARAVEL"
 
-# Resolve the local packages' dev branch to a version the adapter constraint accepts.
+# Resolve the local packages' dev branch to a version the adapter constraint accepts:
+# alias the core checkout to the newest core-v* tag (the adapter requires a 1.x core).
 BRANCH="$(cd "$CORE" && git rev-parse --abbrev-ref HEAD)"
-composer require "fluxfiles/fluxfiles:dev-${BRANCH} as 0.2.36" "fluxfiles/laravel:dev-${BRANCH}" --no-interaction
+CORE_VERSION="$(cd "$CORE" && git tag --list 'core-v*' --sort=-v:refname | head -1 | sed 's/^core-v//')"
+[ -n "$CORE_VERSION" ] || { echo "no core-v* tag in this checkout (git fetch --tags)"; exit 1; }
+composer require "fluxfiles/fluxfiles:dev-${BRANCH} as ${CORE_VERSION}" "fluxfiles/laravel:dev-${BRANCH}" --no-interaction
 
 echo "==> Publishing + patching config (proxy mode, JWT-user middleware)"
 php artisan vendor:publish --tag=fluxfiles-config --force >/dev/null

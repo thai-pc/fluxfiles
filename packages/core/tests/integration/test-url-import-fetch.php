@@ -127,6 +127,40 @@ test('magic-byte beats a lying Content-Type (HTML served as image/png) → conte
     assertCode(fn () => importer()->import('local', "{$base}/html-as-png"), 'content_denied');
 });
 
+echo "{$yellow}► import_concurrency with two real processes{$reset}\n";
+
+test('limit 1: a second import while one is running answers 429; after it ends, the next one runs', function () use ($base, $root, $port) {
+    $user = 'conc-' . bin2hex(random_bytes(4));
+    $child = tempnam(sys_get_temp_dir(), 'ffconc_') . '.php';
+    file_put_contents($child, '<?php require ' . var_export(__DIR__ . '/../../vendor/autoload.php', true) . ';'
+        . '\\FluxFiles\\SsrfGuard::$allowTestHosts = [' . var_export("127.0.0.1:{$port}", true) . '];'
+        . '$dm = new \\FluxFiles\\DiskManager(["local" => ["driver" => "local", "root" => ' . var_export($root, true) . ', "url" => "/storage"]]);'
+        . '$c = new \\FluxFiles\\Claims(' . var_export($user, true) . ', ["read", "write"], ["local"], "", 50, null, 0, false);'
+        . '$c->allowUrlImport = true; $c->importConcurrency = 1;'
+        . '$r = (new \\FluxFiles\\UrlImporter($c, new \\FluxFiles\\FileManager($dm, $c, new \\FluxFiles\\StorageMetadataHandler($dm))))->import("local", ' . var_export("{$base}/slow-png", true) . ', ["path" => "conc"]);'
+        . 'echo "CHILD:" . $r["name"];');
+    $proc = proc_open([PHP_BINARY, $child], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    try {
+        usleep(800000);   // the child holds its slot while the fixture sleeps
+        $claims = new Claims($user, ['read', 'write'], ['local'], '', 50, null, 0, false);
+        $claims->allowUrlImport = true; $claims->importConcurrency = 1;
+        global $dm, $meta;
+        $imp = new UrlImporter($claims, new FileManager($dm, $claims, $meta));
+        $code = '';
+        try { $imp->import('local', "{$base}/png", ['path' => 'conc']); $code = 'no_error'; } catch (ApiException $e) { $code = $e->getErrorCode(); }
+        assertEqual('rate_limited', $code, 'second import while the first runs');
+        $out = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
+        assertEqual(0, proc_close($proc), 'child: ' . $out); $proc = null;
+        assertTrue(str_contains($out, 'CHILD:slow'), 'child imported: ' . $out);
+        $r = $imp->import('local', "{$base}/png", ['path' => 'conc']);
+        assertTrue(str_starts_with($r['name'], 'sunset'), 'slot free again');
+    } finally {
+        if (is_resource($proc)) { proc_terminate($proc); }
+        @unlink($child);
+        if (method_exists(UrlImporter::class, "slotFile")) { @unlink(UrlImporter::slotFile($user, 0)); }
+    }
+});
+
 // ── teardown ────────────────────────────────────────────────────────────────
 SsrfGuard::$allowTestHosts = [];
 proc_terminate($proc);

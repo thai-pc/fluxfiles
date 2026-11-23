@@ -186,7 +186,7 @@ and [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/AP
 | `import_url_allowlist` | string[] | host globs | — | Restrict to these hosts (e.g. `*.unsplash.com`). |
 | `import_path` | string | path | — | Force imports into this path. |
 | `import_rate_limit` | int | /min | `0` | `0` = inherit server default. |
-| `import_concurrency` | int | — | `0` | Max concurrent imports. `0` = default. |
+| `import_concurrency` | int | — | `0` | Imports one user may run at the same time (per server); one more answers `429 rate_limited`. `0` = `FLUXFILES_IMPORT_CONCURRENCY`, else 3; at most 50. |
 
 ### 2.11 Usage dashboard (free; `GET /api/fm/usage`)
 | Claim | Type | Unit | Default | Notes |
@@ -358,7 +358,7 @@ private-local-media requirement.
 | `FLUXFILES_CLAMSCAN_TIMEOUT` | `60` | Local ClamAV (`clamdscan`) subprocess timeout (seconds). An unresponsive engine is killed and the write refused (fail-closed) rather than hanging the request forever. `clamdscan` is called with `--fdpass`; set `AlertExceedsMax yes` and `AlertEncrypted yes` in clamd.conf so oversized/encrypted archives are not reported clean. |
 | `FLUXFILES_OCR_MAX_MEGAPIXELS` | `40` | OCR (paid) refuses images larger than this many megapixels (`413 ocr_too_large`) before tesseract runs. |
 | `FLUXFILES_IMPORT_ALLOW_SVG` | `false` | Allow SVG via URL import. |
-| `FLUXFILES_IMPORT_MAX_MB` / `_RATE_LIMIT` / `_TIMEOUT` | `50` / `10` / `30` | URL-import server defaults: MB per import, imports/min, seconds per fetch. |
+| `FLUXFILES_IMPORT_MAX_MB` / `_RATE_LIMIT` / `_TIMEOUT` / `_CONCURRENCY` | `50` / `10` / `30` / `3` | URL-import server defaults: MB per import, imports/min, seconds per fetch, imports one user may run at the same time. |
 | `FLUXFILES_SSRF_ALLOW_HOSTS` | — | SSRF allow-list (BYOB + import), comma-separated `host` or `host:port`. Read by core and both adapters (WordPress also accepts it as a `wp-config.php` constant). A `host:port` entry matches that port only, and a listed name bypasses the `.local`/`.internal` block for SFTP and BYOB S3 endpoints. Waives the **pre-connect** public-IP requirement for those hosts only — the legit case is an SFTP/S3 endpoint on the operator's own private network. The post-connect DNS-rebinding backstop stays on for every fetch and is scoped to the addresses the allowlisted host actually resolved to, so listing one private host does not disarm SSRF protection for other tenants or other URLs. |
 | `FLUXFILES_WEBHOOK_ALLOW_INTERNAL` | `false` | Opt out of the Webhooks (paid) SSRF policy — allows loopback/RFC1918/cloud-metadata targets, for a self-hosted receiver (e.g. n8n) on the same box. Also skips the post-connect DNS-rebinding re-check. |
 | `FLUXFILES_MAIL_TRANSPORT` | _(off)_ | E-mail notices (Intake + Share modules): `smtp` \| `resend` \| `postmark` \| `mailgun` \| `ses` \| `log` (development: writes to the error log, addresses masked). Unknown value or incomplete settings = off, with one logged warning. When this is unset, WordPress sends through `wp_mail()` (so an SMTP plugin applies; this plugin ships no raw SMTP client, so `smtp` is not available there) and Laravel through the app's own mailer (`Mail::raw`, `config/mail.php`). On WordPress the mail variables may also be `wp-config.php` constants. |

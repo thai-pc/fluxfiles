@@ -115,7 +115,9 @@ test('a real ED25519 + RSA passphrase key decrypts with the right passphrase (wr
         foreach (['ed25519', 'rsa'] as $type) {
             $kf = "{$dir}/id_{$type}";
             $bits = $type === 'rsa' ? '-b 2048' : '';
-            @exec("ssh-keygen -t {$type} {$bits} -N " . escapeshellarg($PASS) . " -f " . escapeshellarg($kf) . " -q -C demo 2>&1", $o, $c);
+            // -a 1: one bcrypt-pbkdf round instead of 16. The test proves the passphrase
+            // path, not KDF strength, and phpseclib's pure-PHP KDF made it take ~37 s.
+            @exec("ssh-keygen -t {$type} {$bits} -a 1 -N " . escapeshellarg($PASS) . " -f " . escapeshellarg($kf) . " -q -C demo 2>&1", $o, $c);
             assertTrue(is_file($kf), "{$type} key generated");
             $pem = (string) file_get_contents($kf);
 

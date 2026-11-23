@@ -100,8 +100,9 @@ rm -f "$PLUGIN_DIR/api/Mail/SmtpTransport.php"
 rm -f "$PLUGIN_DIR/api/CurlTransport.php" "$PLUGIN_DIR/api/CurlUrlFetcher.php"
 
 # Plugin Check: the file's existing phpcs note (a WordPress-independent library cannot use
-# WP_Filesystem) does not name two calls core 1.6.7 added for the write locks. Comment only,
-# done here so a plugin release needs no new core tag; a no-op once core names them itself.
+# WP_Filesystem) did not name two calls core 1.6.7 added for the write locks. Core names them
+# since the release after 1.7.1, so this is a no-op there; it stays for builds that bundle
+# core 1.6.7 - 1.7.1. Comment only.
 python3 - "$PLUGIN_DIR/api/StorageMetadataHandler.php" <<'PY'
 import sys
 path = sys.argv[1]
