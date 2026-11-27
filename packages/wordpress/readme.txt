@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.3.6
+Stable tag: 1.3.7
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -180,6 +180,10 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.3.7 =
+* Fix: on a phone, the Links list (share links and upload portals) shows each link as a card, so the label, dates and the Revoke button are all visible. Before, the table was wider than the screen and its columns were cut off.
+* Updates the bundled FluxFiles core to 1.7.4.
+
 = 1.3.6 =
 * Fix: on a phone, search results are shown. The full-screen search box covered them, so a search never seemed to find anything.
 * Fix: on a phone, the Trash (to restore a deleted file), Storage usage and the other tools from the top bar are in the "More" (⋮) menu. Before, they could not be opened at that screen width.
@@ -349,6 +353,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.3.7 =
+The Links list is readable on phones. No change to your files or settings.
 
 = 1.3.6 =
 Fixes search and the Trash on phones. No change to your files or settings.

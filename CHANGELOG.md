@@ -5,6 +5,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.59] — 2026-11-27
+
+> Released: `core-v1.7.4` and `wordpress-v1.3.7` (bundles core 1.7.4): on a phone, the Links panel shows each share link and upload portal as a card. The WordPress.org review still covers 1.3.4.
+
+### Fixed
+- UI on phones: the Links panel (share links and upload portals) was a 7–8 column table with a 640 px minimum width inside a narrower panel, so it scrolled sideways with no cue and cut off the label, the allowed file types and the Revoke button. Under 640 px each row is now a stacked card of label: value lines with Revoke last; the desktop table is unchanged (PR 345).
+
 ## [1.0.58] — 2026-11-27
 
 > Released: `core-v1.7.3` and `wordpress-v1.3.6` (bundles core 1.7.3): on a phone, search results show and the header tools (Trash, Storage usage, …) are in the More menu. The WordPress.org review still covers 1.3.4.
