@@ -49,8 +49,11 @@ class FluxFilesShortcode
 
         $disk   = esc_attr($atts['disk']);
         $mode   = esc_attr($atts['mode']);
-        $width  = esc_attr($atts['width']);
-        $height = esc_attr($atts['height']);
+        // width/height land inside a style="" attribute; esc_attr() does not stop
+        // `100%;position:fixed;inset:0` (CSS injection by any Contributor), so only
+        // a strict length is accepted and anything else falls back to the default.
+        $width  = esc_attr(self::cssSize((string) $atts['width'], '100%'));
+        $height = esc_attr(self::cssSize((string) $atts['height'], '600px'));
 
         $locale = FluxFilesPlugin::uiLocale();
 
@@ -112,6 +115,24 @@ class FluxFilesShortcode
             $width,
             $height
         );
+    }
+
+    /**
+     * A CSS length for the container's style attribute: a non-negative number with
+     * px|%|vh|vw|em|rem, or calc() of exactly two such lengths joined by + or -.
+     * Anything else returns $default.
+     */
+    public static function cssSize(string $value, string $default): string
+    {
+        $value = trim($value);
+        $len   = '\d{1,4}(?:\.\d{1,3})?(?:px|%|vh|vw|em|rem)';
+        if (preg_match('/\A' . $len . '\z/', $value) === 1) {
+            return $value;
+        }
+        if (preg_match('/\Acalc\(\s*' . $len . '\s+[-+]\s+' . $len . '\s*\)\z/', $value) === 1) {
+            return $value;
+        }
+        return $default;
     }
 
     /**

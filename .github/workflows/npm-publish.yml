@@ -13,85 +13,97 @@ on:
       - "node-v*"
       - "mcp-v*"
 
+# Least privilege by default; the publish job adds only id-token (provenance).
+permissions:
+  contents: read
+
 jobs:
   publish:
-    name: Publish ${{ matrix.pkg }}
+    name: Publish ${{ github.ref_name }}
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - pkg: sdk
-            tag_prefix: "sdk-"
-            build: "false"
-          - pkg: ckeditor4
-            tag_prefix: "ckeditor4-"
-            build: "false"
-          - pkg: ckeditor5
-            tag_prefix: "ckeditor5-"
-            build: "true"   # builds dist/ via tsup (also runs on prepublishOnly)
-          - pkg: tinymce
-            tag_prefix: "tinymce-"
-            build: "false"
-          - pkg: summernote
-            tag_prefix: "summernote-"
-            build: "false"
-          - pkg: react
-            tag_prefix: "react-"
-            build: "true"
-          - pkg: vue
-            tag_prefix: "vue-"
-            build: "true"
-          - pkg: node
-            tag_prefix: "node-"
-            build: "true"   # builds dist/ via tsup (also runs on prepublishOnly)
-          - pkg: mcp
-            tag_prefix: "mcp-"
-            build: "true"   # builds dist/ (incl. the executable dist/cli.js bin) via tsup
+    # A tag maps to exactly one package, so there is no matrix: a matrix of nine
+    # jobs (eight of them no-ops) would also mean nine approvals the day the
+    # `release` environment gets required reviewers. The environment has no
+    # protection rules until the owner adds some, so it never blocks a publish.
+    environment: release
+    permissions:
+      contents: read
+      id-token: write   # npm provenance (sigstore attestation of this build)
 
     steps:
       - uses: actions/checkout@v7
-        if: startsWith(github.ref_name, matrix.tag_prefix)
+        with:
+          fetch-depth: 0              # the master-ancestry guard below needs history
+          persist-credentials: false
+
+      # Release tags must be cut from master. A tag on an unreviewed branch would
+      # otherwise publish with the NPM_TOKEN.
+      - name: Tag must be on master
+        run: |
+          git fetch --no-tags origin master
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/master || { echo "::error::tag ${GITHUB_REF_NAME} (${GITHUB_SHA}) is not on master"; exit 1; }
+
+      - name: Resolve package from tag
+        id: pkg
+        env:
+          MONOREPO_TAG: ${{ github.ref_name }}
+        run: |
+          PKG="${MONOREPO_TAG%%-v*}"
+          case "$PKG" in
+            react|vue|node|mcp|ckeditor5) BUILD=true ;;   # build dist/ via tsup / vite
+            sdk|ckeditor4|tinymce|summernote) BUILD=false ;;   # ship committed artefacts
+            *) echo "::error::Unknown package in tag ${MONOREPO_TAG}"; exit 1 ;;
+          esac
+          echo "name=$PKG" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "dir=packages/$PKG" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v7
-        if: startsWith(github.ref_name, matrix.tag_prefix)
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
       - name: Check tag matches package.json version
-        if: startsWith(github.ref_name, matrix.tag_prefix)
-        working-directory: packages/${{ matrix.pkg }}
+        working-directory: ${{ steps.pkg.outputs.dir }}
         env:
-          TAG_PREFIX: ${{ matrix.tag_prefix }}
+          TAG_PREFIX: ${{ steps.pkg.outputs.name }}-
           MONOREPO_TAG: ${{ github.ref_name }}
         run: |
           PACKAGE_TAG="${MONOREPO_TAG#${TAG_PREFIX}}"
           PACKAGE_VERSION="v$(node -p "require('./package.json').version")"
           if [ "$PACKAGE_TAG" != "$PACKAGE_VERSION" ]; then
-            echo "::error::Tag ${MONOREPO_TAG} does not match packages/${{ matrix.pkg }}/package.json version ${PACKAGE_VERSION}"
+            echo "::error::Tag ${MONOREPO_TAG} does not match ${PWD}/package.json version ${PACKAGE_VERSION}"
             exit 1
           fi
 
-      - name: Install dependencies
-        if: startsWith(github.ref_name, matrix.tag_prefix) && matrix.build == 'true'
-        working-directory: packages/${{ matrix.pkg }}
-        run: npm install
+      # Dependency code (install scripts, bundlers, prepublishOnly hooks) runs in
+      # these two steps, so they run WITHOUT the registry token: it is only put
+      # in the environment of the publish step below.
+      - name: Install dependencies (lockfile, no lifecycle scripts)
+        if: steps.pkg.outputs.build == 'true'
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Build
-        if: startsWith(github.ref_name, matrix.tag_prefix) && matrix.build == 'true'
-        working-directory: packages/${{ matrix.pkg }}
+        if: steps.pkg.outputs.build == 'true'
+        working-directory: ${{ steps.pkg.outputs.dir }}
         run: npm run build
 
       - name: Publish (skip only if this version already exists)
-        if: startsWith(github.ref_name, matrix.tag_prefix)
-        working-directory: packages/${{ matrix.pkg }}
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        # --ignore-scripts: dist/ was built above (prepublishOnly would just rebuild
+        # it with the token in the environment). --provenance works with a classic
+        # token. To drop NPM_TOKEN entirely, configure a trusted publisher for each
+        # package on npmjs.com (repo thai-pc/fluxfiles, workflow npm-publish.yml,
+        # environment release); npm then authenticates this job via OIDC and the
+        # NODE_AUTH_TOKEN env below can be removed.
+        #
         # Re-runs must be idempotent, so swallow an "already published" conflict —
         # but ONLY that. Auth/network/other errors must FAIL the job (a bare
         # `|| echo` once hid an expired-NPM_TOKEN 404 and went green).
         run: |
           set -o pipefail
-          if npm publish --access public 2>&1 | tee /tmp/pub.log; then
+          if npm publish --access public --provenance --ignore-scripts 2>&1 | tee /tmp/pub.log; then
             echo "Published."
           else
             if grep -qiE 'cannot publish over|previously published|EPUBLISHCONFLICT|You cannot publish over the previously published versions' /tmp/pub.log; then
