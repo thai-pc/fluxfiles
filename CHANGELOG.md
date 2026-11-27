@@ -8,6 +8,16 @@ entry's `> Released:` line names the exact tags it shipped.
 
 ## [Unreleased]
 
+## [1.0.61] — 2026-11-28
+
+> Released: `core-v1.8.1`: presigned uploads keep the owner and honour the collision policy, a guard `.htaccess` in the local upload root, no raw storage errors in responses, `nosniff` on every JSON answer.
+
+### Security
+- Presigned uploads (`allow_presign_put`, PR 358): a presigned PUT or POST now carries the uploader as `fm-uploaded-by` (PUT: signed header; POST: form field plus an `eq` policy condition), so the file is no longer ownerless and `owner_only` protects it. An overwrite keeps the existing owner/title/alt/tags, is refused for someone else's file under `owner_only` (403), and is refused while Versioning is active (`409 presign_overwrite_versioned`). `upload_collision` applies when the URL is minted (`reject` → `409 name_conflict`, `rename` → a free name returned as `path`). **API clients that mint presigned PUTs must send the returned `headers` on the PUT and use the returned `path`**; POST clients already receive the new fields in `fields`. The bundled UI, SDKs and the Laravel/WordPress proxies need no change.
+- Local disks: core drops a guard `.htaccess` into the upload root on the first write (nosniff, `CSP: sandbox` and `attachment` for HTML/SVG/XML, PHP names denied), never overwriting an existing one and skipped when the root is a docroot (`index.php`). It is hidden from listings and quota. nginx still needs the `add_header` rules in `docs/guides/DEPLOYMENT.md`.
+- Delete/trash/restore/purge failures log the storage error and answer a generic message with the same error code, instead of echoing paths or adapter details.
+- Every JSON answer sends `X-Content-Type-Options: nosniff`. `/public/index.html` sends `frame-ancestors 'self'` in demo mode or with SSO on when neither `FLUXFILES_FRAME_ANCESTORS` nor `FLUXFILES_ALLOWED_ORIGINS` is set; plain embeds are unchanged.
+
 ## [1.0.60] — 2026-11-28
 
 > Released: `core-v1.8.0` (security fix for the Docker image and `fluxfiles serve`, metadata robustness, faster images and listings) and `laravel-v1.1.2` (thumbnail rate-limit bucket, trash counts toward quota). **Upgrade the Docker image now** if you run `ghcr.io/thai-pc/fluxfiles`. The WordPress plugin is not affected by the security issues; the WordPress.org review still covers 1.3.4.
