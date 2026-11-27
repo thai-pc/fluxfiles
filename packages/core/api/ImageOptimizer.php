@@ -410,25 +410,38 @@ class ImageOptimizer
         $image = $this->manager->read($tmpFile);
         $originalWidth = $image->width();
 
-        $variants = [];
+        // Decode ONCE, then cascade large -> medium -> thumb, each scaled down from
+        // the previous (smaller) result in place. The old code re-decoded the source
+        // for the width and again per variant (4 decodes of a 12 MP JPEG = ~4.4 s).
+        // scaleDown never upsizes, so a skipped size leaves the image untouched.
+        $order = $this->variants;
+        arsort($order);
 
-        foreach ($this->variants as $name => $maxWidth) {
+        $built = [];
+        foreach ($order as $name => $maxWidth) {
             if ($originalWidth <= $maxWidth && $name !== 'thumb') {
                 continue;
             }
 
-            $resized = $this->manager->read($tmpFile);
-            $resized = $this->manager->scaleDown($resized, $maxWidth);
-            $encoded = $this->manager->encodeWebp($resized, 80);
+            $image = $this->manager->scaleDown($image, $maxWidth);
+            $encoded = $this->manager->encodeWebp($image, 80);
             $variantPath = $variantsDir . '/' . $basename . '_' . $name . '.webp';
 
             $fs->write($variantPath, (string) $encoded);
 
-            $variants[$name] = [
+            $built[$name] = [
                 'key'    => $variantPath,
-                'width'  => $resized->width(),
-                'height' => $resized->height(),
+                'width'  => $image->width(),
+                'height' => $image->height(),
             ];
+        }
+
+        // Keep the historical key order (thumb, medium, large) for callers.
+        $variants = [];
+        foreach ($this->variants as $name => $_) {
+            if (isset($built[$name])) {
+                $variants[$name] = $built[$name];
+            }
         }
 
         return $variants;

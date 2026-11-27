@@ -246,8 +246,8 @@ test('defaultRateLimit: limit comes from FLUXFILES_<BUCKET>_RATE_LIMIT, keyed on
 });
 
 test('headersFromServer / snapQuality', function () {
-    assertEqual(['range' => 'bytes=1-', 'accept' => 'image/webp'], MediaEndpoint::headersFromServer(['HTTP_RANGE' => 'bytes=1-', 'HTTP_ACCEPT' => 'image/webp']));
-    assertEqual(['range' => null, 'accept' => ''], MediaEndpoint::headersFromServer([]));
+    assertEqual(['range' => 'bytes=1-', 'accept' => 'image/webp', 'if_none_match' => ''], MediaEndpoint::headersFromServer(['HTTP_RANGE' => 'bytes=1-', 'HTTP_ACCEPT' => 'image/webp']));
+    assertEqual(['range' => null, 'accept' => '', 'if_none_match' => ''], MediaEndpoint::headersFromServer([]));
     assertEqual(80, MediaEndpoint::snapQuality(0));
     assertEqual(60, MediaEndpoint::snapQuality(10));
     assertEqual(90, MediaEndpoint::snapQuality(99));

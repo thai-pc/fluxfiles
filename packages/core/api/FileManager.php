@@ -559,11 +559,12 @@ class FileManager
      *                      folders are always listed. `total` counts what matched.
      */
     public function list(string $disk, string $path, int $limit = 0, string $cursor = '',
-        string $sort = '', string $order = 'asc', string $type = 'all'): array
+        string $sort = '', string $order = 'asc', string $type = 'all', bool $dirsOnly = false, bool $compactSrcset = false): array
     {
         $this->assertDisk($disk);
         $this->assertPerm('read');
         $this->listDirsMemo = null;
+        $this->compactSrcset = $compactSrcset;
         $order = $order === '' ? 'asc' : $order;
         $type = $type === '' ? 'all' : $type;
         if (!in_array($sort, self::LIST_SORTS, true)) {
@@ -590,7 +591,7 @@ class FileManager
         // known from a full listing, so it is null on these pages (the UI keeps
         // the first page's count).
         // Only in key order: StartAfter resumes in the bucket's byte order.
-        if ($limit > 0 && $cursor !== '' && $sort === '' && $order === 'asc') {
+        if (!$dirsOnly && $limit > 0 && $cursor !== '' && $sort === '' && $order === 'asc') {
             $tail = $this->listS3FilesAfter($disk, $fs, $scoped, $this->scopedPath($cursor), $limit, $type);
             if ($tail !== null) {
                 [$page, $hasMore] = $tail;
@@ -606,8 +607,22 @@ class FileManager
 
         $all = [];
 
+        // `dirs_only` (the sidebar tree): folders only, no per-file entries. On S3/R2
+        // a Delimiter listing reads just the CommonPrefixes. Same hidden-name rules,
+        // scope and entry shape as the full listing; null → fall through to it.
+        $prefixes = $dirsOnly ? $this->listS3Prefixes($disk, $scoped) : null;
+        foreach ($prefixes ?? [] as $p) {
+            $name = basename($p);
+            if (!$this->hiddenFromListing($name, false, $p, $fs, $disk)) {
+                $all[] = ['key' => $p, 'name' => $name, 'type' => 'dir'];
+            }
+        }
+
         /** @var StorageAttributes $item */
-        foreach ($fs->listContents($scoped, false) as $item) {
+        foreach ($prefixes === null ? $fs->listContents($scoped, false) : [] as $item) {
+            if ($dirsOnly && $item->isFile()) {
+                continue;
+            }
             $name = basename($item->path());
             if ($this->hiddenFromListing($name, $item->isFile(), $item->path(), $fs, $disk)) {
                 continue;
@@ -687,6 +702,41 @@ class FileManager
         return $this->unscopeItems($all);
     }
 
+    /**
+     * Immediate sub-prefixes of a folder on an S3/R2 disk (ListObjectsV2 with
+     * Delimiter, CommonPrefixes only), as keys without the trailing slash; null when
+     * this isn't an S3 disk or the bucket call failed (the caller then lists normally).
+     *
+     * @return string[]|null
+     */
+    private function listS3Prefixes(string $disk, string $scoped): ?array
+    {
+        $cfg = $this->disks->config($disk);
+        if (($cfg['driver'] ?? '') !== 's3') {
+            return null;
+        }
+        $prefix = trim($scoped, '/') === '' ? '' : trim($scoped, '/') . '/';
+        try {
+            $client = $this->disks->s3Client($disk);
+            $params = ['Bucket' => (string) ($cfg['bucket'] ?? ''), 'Prefix' => $prefix, 'Delimiter' => '/', 'MaxKeys' => 1000];
+            $out = [];
+            do {
+                $res = $client->listObjectsV2($params);
+                foreach ((array) ($res['CommonPrefixes'] ?? []) as $cp) {
+                    $p = rtrim((string) ($cp['Prefix'] ?? ''), '/');
+                    if ($p !== '') {
+                        $out[] = $p;
+                    }
+                }
+                $token = !empty($res['IsTruncated']) ? (string) ($res['NextContinuationToken'] ?? '') : '';
+                $params['ContinuationToken'] = $token;
+            } while ($token !== '');
+            return $out;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     /** image|video|audio|document|other for a file name — fileIcon() in assets/fm.js. */
     private static function listKind(string $name): string
     {
@@ -698,6 +748,9 @@ class FileManager
         }
         return 'other';
     }
+
+    /** list(compact_srcset): rows carry `img_widths` instead of the (token-repeating) `img_srcset`. */
+    private bool $compactSrcset = false;
 
     /** dirs.json as sortListing() read it, for attachMetadata() of the same list() call. */
     private ?array $listDirsMemo = null;
@@ -980,9 +1033,14 @@ class FileManager
                 if ($imgBase !== null) {
                     $item['img_base'] = $imgBase;
                     $natural = isset($item['width']) ? (int) $item['width'] : 0;
-                    $srcset = $this->buildSrcset($imgBase, $natural);
-                    if ($srcset !== '') {
-                        $item['img_srcset'] = $srcset;
+                    $widths = $this->srcsetWidthList($imgBase, $natural);
+                    if ($widths !== []) {
+                        // Widths always; the srcset string repeats the whole token once per
+                        // width (~2.7 KB/image), so a compact listing leaves it to the client.
+                        $item['img_widths'] = $widths;
+                        if (!$this->compactSrcset) {
+                            $item['img_srcset'] = $this->buildSrcset($imgBase, $natural);
+                        }
                         if ($this->claims->srcsetSizes !== '') {
                             $item['img_sizes'] = $this->claims->srcsetSizes;
                         }
@@ -4139,14 +4197,24 @@ class FileManager
      */
     private function buildSrcset(string $imgBase, int $naturalWidth): string
     {
+        $parts = [];
+        foreach ($this->srcsetWidthList($imgBase, $naturalWidth) as $w) {
+            $parts[] = $imgBase . '&width=' . $w . ' ' . $w . 'w';
+        }
+        return implode(', ', $parts);
+    }
+
+    /** The candidate widths buildSrcset() renders (ascending); [] = no responsive set. @return int[] */
+    private function srcsetWidthList(string $imgBase, int $naturalWidth): array
+    {
         // A BYOB disk with key auth makes each URL several KB; one per width would bloat
         // every listing. img_base still works, so the image just isn't responsive.
         if (strlen($imgBase) > 3000) {
-            return '';
+            return [];
         }
         // Too small to bother with responsive variants.
         if ($naturalWidth > 0 && $naturalWidth < 100) {
-            return '';
+            return [];
         }
         $maxWidth = $this->claims->webpMaxWidth > 0 ? $this->claims->webpMaxWidth : 2000;
         // Largest 100px-multiple we can honestly serve (floor → never claim upscale).
@@ -4163,12 +4231,7 @@ class FileManager
         $widths[$ceiling] = true;   // always offer the full-resolution candidate
         $widths = array_keys($widths);
         sort($widths);
-
-        $parts = [];
-        foreach ($widths as $w) {
-            $parts[] = $imgBase . '&width=' . $w . ' ' . $w . 'w';
-        }
-        return implode(', ', $parts);
+        return $widths;
     }
 
     /** Default zip/extract limits (overridable per token via zip_max_mb / zip_max_files). */

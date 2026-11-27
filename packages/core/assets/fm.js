@@ -87,6 +87,7 @@ function fluxFilesApp() {
         _searchTimer: null,
         _searchLastQ: '',
         _searchSeq: 0,
+        _searchAbort: null,
         _activeSearchId: 0,
         _pendingSelectKey: null,
         // Pagination state for /api/fm/list. Pages are small so the first screen
@@ -100,6 +101,13 @@ function fluxFilesApp() {
         _listObserver: null,
         _listSentinel: null,
         autoLoadSupported: typeof IntersectionObserver !== 'undefined',
+        // Incremental grid render: only the first `fileRenderCap` file cards are in the
+        // DOM (2,000 files was ~52k nodes); a sentinel under the grid raises it by
+        // RENDER_CHUNK while it is scrolled into view. Data-level features (select all,
+        // shift-range, counts, drag of the selection) work on filteredFiles, not the DOM.
+        RENDER_CHUNK: 300,
+        fileRenderCap: 300,
+        _renderObserver: null,
         showBackToTop: false,
         _scrollTicking: false,
         // The sort/order/type the loaded rows were fetched with. Every later page
@@ -666,10 +674,11 @@ function fluxFilesApp() {
         },
 
         // API helper — with 401 detection, token refresh queue, and retry
-        async api(method, path, body, _isRetry = false) {
+        async api(method, path, body, _isRetry = false, signal = undefined) {
             const url = this.joinUrl(path);
             const opts = {
                 method: method,
+                signal: signal,
                 headers: {
                     'Authorization': 'Bearer ' + this.token
                 }
@@ -698,7 +707,7 @@ function fluxFilesApp() {
                 const refreshed = await this._handleTokenExpired();
                 if (refreshed) {
                     // Retry the original request with new token
-                    return this.api(method, path, body, true);
+                    return this.api(method, path, body, true, signal);
                 }
                 // Refresh failed — throw so caller's catch handles it
                 throw new Error('Session expired');
@@ -839,7 +848,9 @@ function fluxFilesApp() {
                 '&limit=' + encodeURIComponent(this.listLimit) +
                 '&sort=' + encodeURIComponent(view.sort) +
                 '&order=' + encodeURIComponent(view.order) +
-                '&type=' + encodeURIComponent(view.type);
+                '&type=' + encodeURIComponent(view.type) +
+                // Send img_widths, not a per-width srcset that repeats the token (builds it in _srcsetOf).
+                '&compact_srcset=1';
         },
 
         // Make the rows match the toolbar's sort/filter. Called on every change, when
@@ -878,6 +889,7 @@ function fluxFilesApp() {
             this.listCursor = null;
             if (!keepView) {
                 this.listTotal = 0;
+                this.fileRenderCap = this.RENDER_CHUNK;
             }
             try {
                 const res = await this.api('GET', this._listQuery(view));
@@ -1011,6 +1023,34 @@ function fluxFilesApp() {
 
         // Infinite scroll: watch a sentinel under the grid, inside the scrolling
         // .ff-content, and fetch the next page a screen before it comes into view.
+        get visibleFiles() {
+            const all = this.filteredFiles;
+            return (!this.autoLoadSupported || all.length <= this.fileRenderCap) ? all : all.slice(0, this.fileRenderCap);
+        },
+
+        observeRenderSentinel(el) {
+            if (!this.autoLoadSupported) return;
+            if (this._renderObserver) this._renderObserver.disconnect();
+            this._renderObserver = new IntersectionObserver((entries) => {
+                if (entries.some(e => e.isIntersecting)) this._growRender(el);
+            }, { root: el.closest('.ff-content'), rootMargin: '0px 0px 800px 0px' });
+            this._renderObserver.observe(el);
+        },
+
+        // Render one more chunk; the observer only fires on a change of visibility, so
+        // re-check by hand after the DOM updated (a tall screen can still show the sentinel).
+        _growRender(el) {
+            if (this.fileRenderCap >= this.filteredFiles.length) return;
+            this.fileRenderCap += this.RENDER_CHUNK;
+            this.$nextTick(() => {
+                const root = el.closest('.ff-content');
+                if (root && el.isConnected && el.offsetParent !== null
+                    && el.getBoundingClientRect().top - root.getBoundingClientRect().bottom < 800) {
+                    this._growRender(el);
+                }
+            });
+        },
+
         observeListSentinel(el) {
             this._listSentinel = el;
             if (!this.autoLoadSupported) return;
@@ -1090,6 +1130,7 @@ function fluxFilesApp() {
                 this.searching = false;
                 this._searchLastQ = q;
                 this._activeSearchId = 0;
+                if (this._searchAbort) { this._searchAbort.abort(); this._searchAbort = null; }
                 if (this._searchTimer) {
                     clearTimeout(this._searchTimer);
                     this._searchTimer = null;
@@ -1118,6 +1159,10 @@ function fluxFilesApp() {
             this._activeSearchId = reqId;
             this.searching = true;
             this.searchError = '';
+            // Cancel the superseded query's file + folder requests.
+            if (this._searchAbort) this._searchAbort.abort();
+            const ctl = this._searchAbort = (typeof AbortController === 'function' ? new AbortController() : null);
+            const signal = ctl ? ctl.signal : undefined;
 
             try {
                 const filesUrl =
@@ -1130,8 +1175,8 @@ function fluxFilesApp() {
                     '&limit=' + encodeURIComponent(200);
 
                 const [fileRows, folderRows] = await Promise.all([
-                    this.api('GET', filesUrl),
-                    this.api('GET', foldersUrl),
+                    this.api('GET', filesUrl, undefined, false, signal),
+                    this.api('GET', foldersUrl, undefined, false, signal),
                 ]);
 
                 // Ignore stale responses when user typed a newer query
@@ -1143,6 +1188,7 @@ function fluxFilesApp() {
                     : [];
                 this.searchFolderResults = Array.isArray(folderRows) ? folderRows : [];
             } catch (err) {
+                if (err && err.name === 'AbortError') return; // superseded
                 console.error('FluxFiles: Search failed', err);
 
                 if (this._activeSearchId !== reqId) return;
@@ -1217,7 +1263,7 @@ function fluxFilesApp() {
                 const res = await this.api('GET',
                     '/api/fm/list?disk=' + encodeURIComponent(this.currentDisk) +
                     '&path=' + encodeURIComponent(key) +
-                    '&limit=' + encodeURIComponent(this.listLimit));
+                    '&limit=' + encodeURIComponent(this.listLimit) + '&dirs_only=1');
                 const items = Array.isArray(res) ? res : (res?.items || []);
                 this.dirChildren[key] = items
                     .filter(i => i.type === 'dir')
@@ -1377,6 +1423,14 @@ function fluxFilesApp() {
                 return (r.protocol === 'http:' || r.protocol === 'https:') ? r.href : '';
             } catch (e) { return ''; }
         },
+        // A listing asked with compact_srcset carries img_widths + img_base instead of the
+        // srcset string; build the same "base&width=320 320w, …" here, once per use.
+        _srcsetOf(file) {
+            if (!file) return '';
+            if (file.img_srcset) return file.img_srcset;
+            if (!file.img_base || !Array.isArray(file.img_widths)) return '';
+            return file.img_widths.map(w => file.img_base + '&width=' + w + ' ' + w + 'w').join(', ');
+        },
         // img_srcset is "url 320w, url 640w": absolutize each candidate URL.
         _absSrcset(v) {
             if (typeof v !== 'string' || v === '') return v;
@@ -1494,7 +1548,7 @@ function fluxFilesApp() {
                 // FluxFiles.imgUrl(file, {width, quality}); img_srcset/img_sizes are
                 // a ready responsive set. Present only for images when WebP is on.
                 img_base: this._absUrl(item.img_base) || null,
-                img_srcset: this._absSrcset(item.img_srcset) || null,
+                img_srcset: this._absSrcset(this._srcsetOf(item)) || null,
                 img_sizes: item.img_sizes || null,
                 type: item.type || 'file',
                 is_dir: item.type === 'dir'
@@ -1588,7 +1642,7 @@ function fluxFilesApp() {
         // srcset for the detail panel and lightbox. Never the stored variants: one can be
         // older than the file (an in-place crop, a file replaced outside FluxFiles), while
         // /img is keyed on the source. If /img refuses (rate limit), the original takes over.
-        viewSrcset(file) { return (file && !file._viewOrig && file.img_srcset) || null; },
+        viewSrcset(file) { return (file && !file._viewOrig && this._srcsetOf(file)) || null; },
         viewFailed(file, el) {
             if (file && file.url && !file._viewOrig && this._isImgUrlOf(file, el)) file._viewOrig = true;
         },

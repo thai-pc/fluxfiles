@@ -808,7 +808,7 @@
                                 <span style="font-weight:400;color:var(--color-text-tertiary);" x-text="'(' + filteredFiles.length + ')'"></span>
                             </div>
                             <div class="file-grid" :class="{ 'list-view': view === 'list' }">
-                                <template x-for="(file, idx) in filteredFiles" :key="file.key">
+                                <template x-for="(file, idx) in visibleFiles" :key="file.key">
                                     <div class="file-card"
                                          :style="'--ff-i:' + (idx % 12)"
                                          :class="{ selected: isSelected(file), dragging: dragItem && dragItem.key === file.key }"
@@ -873,6 +873,8 @@
                                     </div>
                                 </template>
                             </div>
+                            <!-- Renders the next chunk of cards when scrolled near (see visibleFiles). -->
+                            <div x-show="filteredFiles.length > fileRenderCap" x-init="observeRenderSentinel($el)" style="height:1px;" aria-hidden="true"></div>
                         </div>
                     </template>
 
@@ -969,7 +971,7 @@
              @click="detailFile && isPreviewable(detailFile, 'image') && displayUrl(detailFile) && (resetZoom(), previewFullscreen = true)">
             <template x-if="detailFile && isPreviewable(detailFile, 'image') && displayUrl(detailFile)">
                 <img :src="displayUrl(detailFile)" :srcset="viewSrcset(detailFile)" @error="viewFailed(detailFile, $el)"
-                     :sizes="detailFile.img_srcset ? (detailFile.img_sizes || '(max-width: 640px) 92vw, 380px') : null"
+                     :sizes="viewSrcset(detailFile) ? (detailFile.img_sizes || '(max-width: 640px) 92vw, 380px') : null"
                      :alt="detailFile.name">
             </template>
             <template x-if="detailFile && isPreviewable(detailFile, 'video') && detailFile.url && !mediaTooLarge(detailFile)">
@@ -1357,7 +1359,7 @@
              click (that pans), so this is the reliable way out at any zoom level. -->
         <button class="ff-preview-close" @click.stop="closePreview()" :title="t('common.close')" :aria-label="t('common.close')">&times;</button>
         <img :src="displayUrl(lightboxFile()) || null" :srcset="viewSrcset(lightboxFile())" @error="viewFailed(lightboxFile(), $el)"
-             :sizes="lightboxFile()?.img_srcset ? (detailFile?.img_sizes || '100vw') : null"
+             :sizes="viewSrcset(lightboxFile()) ? (detailFile?.img_sizes || '100vw') : null"
              :alt="detailFile?.name" draggable="false"
              class="ff-preview-img" :class="{ zoomed: zoom.scale > 1, dragging: zoom.dragging }"
              :style="'transform: translate(' + zoom.x + 'px,' + zoom.y + 'px) scale(' + zoom.scale + ')'"

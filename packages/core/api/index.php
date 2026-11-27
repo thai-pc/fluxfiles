@@ -561,7 +561,9 @@ function routeRequest(
             ff_str_param($_GET, 'cursor'),
             ff_str_param($_GET, 'sort'),
             ff_str_param($_GET, 'order', 'asc'),
-            ff_str_param($_GET, 'type', 'all')
+            ff_str_param($_GET, 'type', 'all'),
+            ff_str_param($_GET, 'dirs_only') === '1',
+            ff_str_param($_GET, 'compact_srcset') === '1'
         );
     }
 
