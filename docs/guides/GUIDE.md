@@ -206,7 +206,7 @@ depends on how you installed:
 ```bash
 # composer require fluxfiles/fluxfiles — the secret can come from the shell, no .env in vendor/ needed
 export FLUXFILES_SECRET=$(openssl rand -hex 32)   # the backend that mints tokens needs the same value
-php vendor/bin/fluxfiles serve --port=8080
+php vendor/bin/fluxfiles serve --port=8080 &
 # in the same shell: mint a token to open the UI with (?token= is for local testing only)
 php -r 'require "vendor/fluxfiles/fluxfiles/embed.php"; echo fluxfiles_token(["user" => "demo", "perms" => ["read","write","delete"], "disks" => ["local"]]), "\n";'
 
