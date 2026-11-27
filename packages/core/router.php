@@ -7,7 +7,7 @@
  *
  * Routes /public/index.html through api/index.php so the locale
  * can be injected server-side (no flash of untranslated content).
- * All other static files (CSS, JS, images) are served directly.
+ * Static files are served from an allowlist only (/public, /assets); anything else is 404.
  */
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -198,5 +198,34 @@ if ($realUri !== false && $realStorage !== false && strncasecmp($realUri, $realS
     }
 }
 
-// Serve static files normally
-return false;
+// Static files: an ALLOWLIST, never "whatever exists under the document root". The built-in
+// server executes any .php it falls through to and serves dotfiles verbatim, so the old
+// `return false;` exposed /.env, /composer.json, /vendor/**, /scripts/*.php and
+// /tests/generate-token.php (a 24 h full-privilege JWT). Only the UI's own asset trees are
+// served (and `/tests/manual/` fixtures in a monorepo checkout), only as non-script files,
+// never through a dotfile segment, and only when the resolved path stays inside that tree.
+foreach (['/public/', '/assets/', '/tests/manual/'] as $staticPrefix) {
+    if (strncasecmp($uri, $staticPrefix, strlen($staticPrefix)) !== 0) {
+        continue;
+    }
+    foreach ($segments as $seg) {
+        if ($seg[0] === '.') {
+            break 2;
+        }
+    }
+    $treeBase = realpath(__DIR__ . rtrim($staticPrefix, '/'));
+    $real = realpath(__DIR__ . $uri);
+    $realExt = $real !== false ? strtolower(pathinfo($real, PATHINFO_EXTENSION)) : '';
+    if ($treeBase !== false && $real !== false && is_file($real)
+        && strncmp($real, $treeBase . DIRECTORY_SEPARATOR, strlen($treeBase) + 1) === 0
+        && !preg_match('/^(php[0-9]?|pht|phtml?|phar|phps|inc|sh|cgi|pl|py)$/', $realExt)
+    ) {
+        return false; // the built-in server serves it, with its own content type
+    }
+    break;
+}
+
+http_response_code(404);
+header('Content-Type: text/plain; charset=utf-8');
+echo 'Not found';
+return true;

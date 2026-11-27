@@ -1,5 +1,11 @@
 <?php
 
+// CLI only: never runnable over HTTP, even if a web server is misconfigured to execute it.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit(1);
+}
+
 require_once __DIR__ . '/../embed.php';
 
 // Load .env from packages/core/ if present, otherwise fall back to repo root.

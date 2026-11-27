@@ -175,9 +175,9 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
             $html = str_replace('</head>', "<script>window.__FM_BOOT__ = {$bootJson};</script>\n</head>", $html);
         }
         // Opportunistic purge (~5% of loads): TTL sweep + global size-budget enforcement.
+        // Deferred until the response is flushed (below), throttled + locked by purgeIfDue().
         if (random_int(1, 20) === 1) {
-            $localRoot = $_ENV['FLUXFILES_LOCAL_ROOT'] ?? ($stateDir . '/uploads');
-            \FluxFiles\DemoMode::purge($localRoot);
+            $demoPurge = [$_ENV['FLUXFILES_LOCAL_ROOT'] ?? ($stateDir . '/uploads'), $stateDir];
         }
     }
 
@@ -210,6 +210,14 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
     }
 
     echo $html;
+    if (isset($demoPurge)) {
+        // Never make a visitor wait for the sweep: flush first when FPM lets us.
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        ignore_user_abort(true);
+        \FluxFiles\DemoMode::purgeIfDue($demoPurge[0], $demoPurge[1]);
+    }
     exit;
 }
 

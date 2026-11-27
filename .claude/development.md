@@ -72,6 +72,7 @@ php packages/core/tests/e2e/test-share-http.php               # share module (pu
 php packages/core/tests/e2e/test-intake-http.php              # intake module (public upload portals) — ports 8113-8115
 php packages/core/tests/e2e/test-intake-notify-http.php       # intake notify-on-receipt webhook — ports 8116-8118 (+ receiver 8163)
 php packages/core/tests/e2e/test-router-storage-http.php      # router.php never serves storage bookkeeping — port 8119
+php packages/core/tests/e2e/test-router-allowlist-http.php    # router.php is an allowlist (/.env, tests/, vendor/ → 404) — ephemeral port
 php packages/core/tests/e2e/test-audit-coverage-http.php      # every mutating route has a named audit action — port 8121
 php packages/core/tests/e2e/test-tus-http.php                 # resumable tus uploads — port 8123
 php packages/core/tests/e2e/test-sso-http.php                 # SSO bridge (OIDC exchange) — ports 8130-8135

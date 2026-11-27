@@ -572,6 +572,28 @@ if ($command === 'ai:test') {
     exit($aExit);
 }
 
+// `demo:purge` — the public-demo sweep (FLUXFILES_DEMO=1) for cron: delete expired
+// sandboxes + their trash, enforce the global size budget, and drop the index / folder-index
+// / sidecar entries of sandboxes that no longer exist (idempotent; also the one-off cleanup
+// for a shared index.json that grew before the purge cleaned up after itself). The page-load
+// sweep is throttled to once per 5 min under a lock; this ignores the throttle, not the lock.
+//   fluxfiles demo:purge
+if ($command === 'demo:purge') {
+    \FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
+    $stateDir = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (dirname(__DIR__) . '/storage'), '/');
+    $localRoot = $_ENV['FLUXFILES_LOCAL_ROOT'] ?? ($stateDir . '/uploads');
+    if (!is_dir($stateDir)) {
+        fwrite(STDERR, "Storage directory does not exist: {$stateDir}\n");
+        exit(1);
+    }
+    if (!\FluxFiles\DemoMode::purgeIfDue($localRoot, $stateDir, true)) {
+        fwrite(STDERR, "Another purge is running (or the lock is not writable); nothing done.\n");
+        exit(2);
+    }
+    fwrite(STDOUT, "Demo purge done.\n");
+    exit(0);
+}
+
 if (!in_array($command, ['index', 'seed'], true)) {
     fwrite(STDERR, "Usage:\n"
         . "  fluxfiles serve [--host=127.0.0.1] [--port=8080]\n"
@@ -580,6 +602,7 @@ if (!in_array($command, ['index', 'seed'], true)) {
         . "  fluxfiles license refresh [--check|--print] [--json]\n"
         . "  fluxfiles doctor [disk] [--origin=https://app.example] [--json]\n"
         . "  fluxfiles ai:test [--cheap] [--json]\n"
+        . "  fluxfiles demo:purge\n"
         . "  fluxfiles notify:run [--disk=local] [--prefix=<p>]... [--prefixes-file=<path>] [--discover] [--dry-run] [--max=50]\n"
         . "  fluxfiles index --disk=local [--path=prefix] [--owner=user-id] [--readonly] [--overwrite] [--dry-run] [--hash] [--variants] [--persist-metadata]\n");
     exit(1);
