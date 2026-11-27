@@ -230,7 +230,12 @@ cp "$CORE_DIR/composer.lock" "$PLUGIN_DIR/composer.lock"
 (
     cd "$PLUGIN_DIR"
     composer update --lock --no-interaction --no-scripts >/dev/null 2>&1 || true
-    composer install --no-dev --optimize-autoloader --no-interaction
+    # --no-scripts: never run the manifest's lifecycle scripts implicitly. The one
+    # we need (core's pre-autoload-dump, which prunes unused AWS SDK services) is
+    # run explicitly, then the optimized autoloader is dumped over the pruned tree.
+    composer install --no-dev --no-interaction --no-scripts
+    composer run-script pre-autoload-dump --no-interaction
+    composer dump-autoload --no-dev --optimize --no-interaction --no-scripts
 )
 
 # Patch the plugin's autoload to also map FluxFiles\ to the bundled api/
