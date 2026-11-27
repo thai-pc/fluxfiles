@@ -12,6 +12,7 @@ use League\Flysystem\Local\LocalFilesystemAdapter;
 /**
  * Local adapter decorator: after any write/move/copy/mkdir whose destination is
  * under a `_fluxfiles/` dir, makes sure that dir carries the guard files.
+ * It also drops the upload-root `.htaccess` (UploadRootGuard) on the first write.
  * Wraps LOCAL disks only (see DiskManager::build()).
  */
 final class GuardedLocalAdapter implements FilesystemAdapter
@@ -21,6 +22,7 @@ final class GuardedLocalAdapter implements FilesystemAdapter
     private function guard(string $path): void
     {
         FluxDirGuard::ensureForPath($this->root, $path);
+        UploadRootGuard::ensure($this->root);
     }
 
     public function fileExists(string $path): bool { return $this->inner->fileExists($path); }

@@ -425,6 +425,7 @@
     "byob_disk_collision": "Questo nome di disco di archiviazione è in conflitto con un disco già configurato sul server.",
     "presign_put_disabled": "I caricamenti diretti PUT sono disattivati per questo account — usa un caricamento tramite modulo (POST)",
     "presign_post_unsupported": "Questo storage non supporta i caricamenti tramite modulo (POST) — usa il caricamento a blocchi",
+    "presign_overwrite_versioned": "Questo file esiste già e ha una cronologia delle versioni, quindi non può essere sostituito con un caricamento diretto — usa il caricamento standard",
     "invalid_sort": "Ordinamento sconosciuto.",
     "invalid_order": "L'ordine deve essere crescente o decrescente.",
     "invalid_type": "Filtro tipo file sconosciuto.",

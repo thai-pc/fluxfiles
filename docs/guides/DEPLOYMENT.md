@@ -203,6 +203,8 @@ Options -ExecCGI -Includes -Indexes
 </IfModule>
 ```
 
+Since this release core drops a smaller version of this file (nosniff, CSP `sandbox` + `attachment` for `.html/.htm/.xhtml/.xml/.svg`, deny `.php`-family names) into a **local** disk root on the first write, as a fallback: it never overwrites an existing `.htaccess` (yours, or the WordPress plugin's) and is skipped when the root holds an `index.php` (a site docroot). It needs `AllowOverride FileInfo AuthConfig` and does nothing on nginx, so keep the `add_header` rules above there.
+
 ## Compression
 
 The page loads the minified `fm.min.js`, ~107 KB raw (~30 KB gzipped); the UI HTML

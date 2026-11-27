@@ -425,6 +425,7 @@
     "byob_disk_collision": "Ce nom de disque de stockage entre en conflit avec un disque déjà configuré sur le serveur.",
     "presign_put_disabled": "Les envois directs PUT sont désactivés pour ce compte — utilisez un envoi par formulaire (POST)",
     "presign_post_unsupported": "Ce stockage ne prend pas en charge les envois par formulaire (POST) — utilisez l'envoi par morceaux",
+    "presign_overwrite_versioned": "Ce fichier existe déjà et possède un historique de versions ; il ne peut pas être remplacé par un envoi direct — utilisez l'envoi standard",
     "invalid_sort": "Option de tri inconnue.",
     "invalid_order": "L'ordre doit être croissant ou décroissant.",
     "invalid_type": "Filtre de type de fichier inconnu.",

@@ -425,6 +425,7 @@
     "byob_disk_collision": "Deze opslagschijfnaam komt in conflict met een schijf die al op de server is geconfigureerd.",
     "presign_put_disabled": "Directe PUT-uploads zijn uitgeschakeld voor dit account — gebruik een formulierupload (POST)",
     "presign_post_unsupported": "Deze opslag ondersteunt geen formulieruploads (POST) — gebruik upload in delen",
+    "presign_overwrite_versioned": "Dit bestand bestaat al en heeft een versiegeschiedenis, dus het kan niet via een directe upload worden vervangen — gebruik de standaard upload",
     "invalid_sort": "Onbekende sortering.",
     "invalid_order": "De volgorde moet oplopend of aflopend zijn.",
     "invalid_type": "Onbekend bestandstypefilter.",

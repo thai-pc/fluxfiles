@@ -1392,7 +1392,8 @@ class FileManager
                 $this->meta->delete($disk, $scoped);
             }
         } catch (\Throwable $e) {
-            throw new ApiException('Delete failed: ' . $e->getMessage(), 500, 'delete_failed');
+            \FluxFiles\Log::warn('FluxFiles: delete failed (delete_failed) — ' . $e->getMessage());
+            throw new ApiException('Delete failed', 500, 'delete_failed');
         }
 
         return ['deleted' => true];
@@ -1480,7 +1481,8 @@ class FileManager
         try {
             $fs->move($scoped, $trashDir . '/' . $basename);
         } catch (\Throwable $e) {
-            throw new ApiException('Trash failed: ' . $e->getMessage(), 500, 'trash_failed');
+            \FluxFiles\Log::warn('FluxFiles: trash failed (trash_failed) — ' . $e->getMessage());
+            throw new ApiException('Trash failed', 500, 'trash_failed');
         }
         $this->setTrashVisibility($disk, $fs, $trashDir . '/' . $basename, false, 'private');
 
@@ -1573,7 +1575,8 @@ class FileManager
                 $files[] = ['rel' => $rel, 'meta' => $meta];
             }
         } catch (\Throwable $e) {
-            throw new ApiException('Trash failed: ' . $e->getMessage(), 500, 'trash_failed');
+            \FluxFiles\Log::warn('FluxFiles: trash failed (trash_failed) — ' . $e->getMessage());
+            throw new ApiException('Trash failed', 500, 'trash_failed');
         }
 
         // Same driver-aware relocation the rename path uses — one native move on
@@ -1583,7 +1586,8 @@ class FileManager
         try {
             $this->moveDirectoryTree($disk, $fs, $scoped, $trashDir . '/payload');
         } catch (\Throwable $e) {
-            throw new ApiException('Trash failed: ' . $e->getMessage(), 500, 'trash_failed');
+            \FluxFiles\Log::warn('FluxFiles: trash failed (trash_failed) — ' . $e->getMessage());
+            throw new ApiException('Trash failed', 500, 'trash_failed');
         }
         $this->setTrashVisibility($disk, $fs, $trashDir . '/payload', true, 'private');
 
@@ -1686,7 +1690,8 @@ class FileManager
         try {
             $fs->move($trashDir . '/' . $payloadName, $target);
         } catch (\Throwable $e) {
-            throw new ApiException('Restore failed: ' . $e->getMessage(), 500, 'restore_failed');
+            \FluxFiles\Log::warn('FluxFiles: restore failed (restore_failed) — ' . $e->getMessage());
+            throw new ApiException('Restore failed', 500, 'restore_failed');
         }
         $this->setTrashVisibility($disk, $fs, $target, false, 'public');
 
@@ -1738,7 +1743,8 @@ class FileManager
             try {
                 $this->moveDirectoryTree($disk, $fs, $payload, $target);
             } catch (\Throwable $e) {
-                throw new ApiException('Restore failed: ' . $e->getMessage(), 500, 'restore_failed');
+                \FluxFiles\Log::warn('FluxFiles: restore failed (restore_failed) — ' . $e->getMessage());
+                throw new ApiException('Restore failed', 500, 'restore_failed');
             }
             $this->setTrashVisibility($disk, $fs, $target, true, 'public');
         } else {
@@ -1895,7 +1901,7 @@ class FileManager
             $fs->deleteDirectory('_fluxfiles/trash/' . $id);
         } catch (\Throwable $e) {
             \FluxFiles\Log::warn("FluxFiles: purging trash item {$id} failed — " . $e->getMessage());
-            throw new ApiException('Could not delete the trashed item: ' . $e->getMessage(), 500, 'purge_failed');
+            throw new ApiException('Could not delete the trashed item', 500, 'purge_failed');
         }
         $this->meta->removeTrash($disk, $id);
 
@@ -3559,6 +3565,7 @@ class FileManager
             throw new ApiException('Presigned URLs are only available for S3/R2 disks', 400);
         }
 
+        $metadata = [];
         if ($method === 'PUT' || $method === 'POST') {
             if ($sizeBytes <= 0) {
                 throw new ApiException('Missing required field: size', 400, 'missing_param');
@@ -3569,29 +3576,53 @@ class FileManager
             }
 
             $fs = $this->disks->disk($disk);
+            $exists = false;
             try {
-                if ($fs->fileExists($scoped)) {
-                    $this->assertOwner($disk, $scoped);
-                    $this->assertNoActiveHold($disk, $scoped);
-                }
-            } catch (ApiException $e) {
-                throw $e;
+                $exists = $fs->fileExists($scoped);
             } catch (\Throwable $e) {
                 // Some adapters can throw on existence checks; presign should still work for new objects.
             }
+            // Same name-collision policy as a normal upload: the bucket would otherwise
+            // replace an existing object silently.
+            if ($exists && $this->claims->uploadCollision !== 'overwrite') {
+                if ($this->claims->uploadCollision === 'reject') {
+                    throw new ApiException('A file with this name already exists', 409, 'name_conflict', ['name' => basename($scoped)]);
+                }
+                $dirUser = dirname($path) === '.' ? '' : trim(str_replace('\\', '/', dirname($path)), '/');
+                $name    = $this->uniqueName($fs, $dirUser, basename($scoped));
+                $scoped  = $this->scopedPath(($dirUser === '' ? '' : $dirUser . '/') . $name);
+                $this->assertNotSystem($scoped, $disk);
+                $exists = false;
+            }
+            if ($exists) {
+                $this->assertOwner($disk, $scoped);
+                $this->assertNoActiveHold($disk, $scoped);
+                // The bytes never pass through this server, so the pre-overwrite snapshot
+                // (Versioning) cannot be taken at the moment of replacement. Taking it at
+                // mint time would miss any edit made during the URL's lifetime, so refuse.
+                if ($this->versionKeeper !== null) {
+                    throw new ApiException('This file has version history and cannot be replaced by a direct upload', 409, 'presign_overwrite_versioned');
+                }
+            }
+            $metadata = $this->presignMetadata($disk, $scoped, $exists);
         }
 
         $client = $this->disks->s3Client($disk);
         $bucket = $config['bucket'] ?? '';
 
         if ($method === 'POST') {
-            return $this->presignPost($client, $config, $bucket, $scoped, $ttl, $sizeBytes);
+            return $this->presignPost($client, $config, $bucket, $scoped, $ttl, $sizeBytes, $metadata) + ['path' => $this->outKey($scoped)];
         }
 
         $params = [
             'Bucket' => $bucket,
             'Key'    => $scoped,
         ];
+        if ($method === 'PUT' && $metadata !== []) {
+            // Signed in: the client must send these as `x-amz-meta-*` request headers
+            // (returned below), so the object is born with its owner like a normal upload.
+            $params['Metadata'] = $metadata;
+        }
         // Same reasoning as fileUrl()'s presign path: an inline .svg/.html executes in
         // the bucket's origin, so sign the disposition in rather than letting R2/S3
         // serve it with whatever Content-Type it stored.
@@ -3624,10 +3655,35 @@ class FileManager
         $request = $client->createPresignedRequest($cmd, "+{$ttl} seconds");
         $url = (string) $request->getUri();
 
-        return [
+        $out = [
             'url'        => $url,
             'expires_at' => time() + $ttl,
         ];
+        if ($method === 'PUT') {
+            $out['path']    = $this->outKey($scoped);
+            $out['headers'] = [];
+            foreach ($metadata as $k => $v) {
+                $out['headers']['x-amz-meta-' . $k] = $v;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * `fm-*` object metadata a presigned upload must carry: the uploader as owner
+     * (new object) or the object's current headers (overwrite, so owner/title/alt/tags
+     * survive). Empty and non-header-safe values are skipped: the client has to send
+     * each one verbatim as a request header / form field.
+     *
+     * @return array<string,string>
+     */
+    private function presignMetadata(string $disk, string $scoped, bool $exists): array
+    {
+        $m = $this->s3WriteConfigFor($disk, $scoped, $exists)['Metadata'] ?? [];
+        return array_filter(
+            array_map('strval', $m),
+            static fn ($v) => $v !== '' && preg_match('/^[\x21-\x7E]([\x20-\x7E]*[\x21-\x7E])?$/', $v) === 1
+        );
     }
 
     /**
@@ -3646,7 +3702,7 @@ class FileManager
      *
      * @return array{url:string,fields:array<string,string>,expires_at:int,max_bytes:int}
      */
-    private function presignPost($client, array $config, string $bucket, string $scoped, int $ttl, int $sizeBytes): array
+    private function presignPost($client, array $config, string $bucket, string $scoped, int $ttl, int $sizeBytes, array $metadata = []): array
     {
         $endpointHost = strtolower((string) (parse_url((string) ($config['endpoint'] ?? ''), PHP_URL_HOST) ?? ''));
         if ($endpointHost !== '' && str_ends_with($endpointHost, '.r2.cloudflarestorage.com')) {
@@ -3657,16 +3713,24 @@ class FileManager
             );
         }
         $contentType = self::presignContentType($scoped);
+        $fields = ['key' => $scoped, 'Content-Type' => $contentType];
+        $conditions = [
+            ['bucket' => $bucket],
+            ['eq', '$key', $scoped],
+            ['eq', '$Content-Type', $contentType],
+            ['content-length-range', 0, $sizeBytes],
+        ];
+        // Owner (and carried-over headers) pinned by the policy: the client cannot drop
+        // or change them, so the object is never born ownerless.
+        foreach ($metadata as $k => $v) {
+            $fields['x-amz-meta-' . $k] = $v;
+            $conditions[] = ['eq', '$x-amz-meta-' . $k, $v];
+        }
         $post = new \Aws\S3\PostObjectV4(
             $client,
             $bucket,
-            ['key' => $scoped, 'Content-Type' => $contentType],
-            [
-                ['bucket' => $bucket],
-                ['eq', '$key', $scoped],
-                ['eq', '$Content-Type', $contentType],
-                ['content-length-range', 0, $sizeBytes],
-            ],
+            $fields,
+            $conditions,
             "+{$ttl} seconds"
         );
         return [
@@ -5337,6 +5401,9 @@ class FileManager
      */
     public static function isGuardKey(array $diskConfig, string $key): bool
     {
+        if (UploadRootGuard::isRootGuardKey($diskConfig, $key)) {
+            return true;
+        }
         $names = $diskConfig['hidden_files'] ?? null;
         return is_array($names) && $names !== [] && in_array(trim($key, '/'), $names, true);
     }
