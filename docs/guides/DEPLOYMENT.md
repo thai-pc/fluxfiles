@@ -28,9 +28,12 @@ server {
     # Set this a bit above your biggest per-file limit (here: 100 MB).
     client_max_body_size 100M;
 
-    # API — rewrite to PHP router
+    # API — everything under /api/ goes to the ONE PHP entrypoint. Never use
+    # `try_files $uri ...` here and never a generic `location ~ \.php$`: either lets a
+    # request name another script (tests/generate-token.php prints a full-privilege JWT;
+    # scripts/*.php, vendor/**/*.php, embed.php and config/disks.php are not web endpoints).
     location /api/ {
-        try_files $uri /api/index.php?$query_string;
+        rewrite ^ /api/index.php last;
     }
 
     # Public HTML — MUST go through PHP so the resolved locale (messages + dir)
@@ -92,19 +95,27 @@ server {
         }
     }
 
-    # PHP-FPM
-    location ~ \.php$ {
+    # PHP-FPM: api/index.php is the only script that ever runs (exact match wins
+    # over every regex location).
+    location = /api/index.php {
         fastcgi_pass unix:/run/php/php8.2-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param SCRIPT_FILENAME $document_root/api/index.php;
         include fastcgi_params;
         fastcgi_read_timeout 120;
     }
 
+    # Any other script-shaped path: 404, never a handler and never raw source.
+    location ~* \.(php[0-9]?|pht|phtml?|phar|phps|inc)$ { return 404; }
+
     # Block dotfiles and sensitive paths
     location ~ /\. { deny all; }
-    location ~ ^/(\.env|composer\.|vendor/) { deny all; }
     location /storage/rate_limit { deny all; }   # rate_limit.json + rate_limit.d/ shards
     location /_fluxfiles/ { deny all; }
+
+    # Default-deny: composer.json/lock, vendor/, bin/, scripts/, tests/, config/, db/,
+    # lang/ and embed.php are not public; only the locations above are served.
+    location /public/ { }
+    location / { return 404; }
 }
 ```
 
@@ -123,6 +134,14 @@ RewriteEngine On
 
 # API routes
 RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+
+# api/index.php is the ONLY PHP script that may run over HTTP. Deny every other .php
+# (tests/generate-token.php prints a full-privilege JWT; scripts/, vendor/, embed.php,
+# config/disks.php are not endpoints) and the dev/runtime trees outright. This must come
+# AFTER the api/ rule above so /api/* still reaches the entrypoint.
+RewriteRule ^(vendor|tests|scripts|bin|config|db|lang|docker)/ - [F,L,NC]
+RewriteCond %{REQUEST_URI} !^/api/index\.php$
+RewriteRule \.php[0-9]?$ - [F,L,NC]
 
 # Public HTML through PHP for locale injection
 RewriteRule ^public/(index\.html)?$ api/index.php [QSA,L]
