@@ -59,10 +59,7 @@ now serve those pages). Each affected record carries a path note under its statu
 
 ## Not in git
 
-`docs/ROADMAP.md`, `docs/COMMERCIAL-STRATEGY.md`, `docs/LICENSING-PLAN.md`,
-`docs/COMPETITOR-RESEARCH-2026-11.md`, `docs/WP-PRO-ADDON-DESIGN.md` and
-`docs/LICENSE-SERVER-DEPLOYMENT.md` are the owner's local notes (gitignored), as are the
-signing keys under `docs/`. Links to them from tracked docs only resolve on the owner's
-machine.
+A few planning notes are kept out of git as the maintainer's local notes; any link to
+one from a tracked doc only resolves on the maintainer's machine.
 `docs/update-server.example.php` (reference update server) and `docs/testdata/`
 (cross-language token/BYOB vectors) are tracked.

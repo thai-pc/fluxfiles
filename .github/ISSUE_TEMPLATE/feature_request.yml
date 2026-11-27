@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest an improvement to the free core or an adapter.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. FluxFiles keeps the server stateless (token claims decide what a user may do, metadata lives with your storage), so proposals that fit that model are the easiest to take on.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How you'd like it to work, e.g. a new token claim, endpoint, UI action or adapter option.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you use now, or other tools that solve it.
+  - type: dropdown
+    id: package
+    attributes:
+      label: Area
+      options:
+        - core (API / UI)
+        - Laravel adapter
+        - WordPress plugin
+        - JS SDK / React / Vue
+        - Rich-text editor plugins
+        - Node / Python token SDK
+        - MCP server
+        - Documentation
+        - Other

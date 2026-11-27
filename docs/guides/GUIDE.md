@@ -73,7 +73,7 @@ separate, gitignored modules gated by license — see [`docs/guides/ACTIVATE.md`
 | **Media** | Inline image/video/audio/PDF preview + gated private local streaming · opt-in PDF/video poster thumbnails | Course platforms, private media, document portals |
 | **Admin / hosting** | Code/config editor (CodeMirror), **SFTP chmod**, optional **terminal embed** (your own ttyd via `terminal_pty_url`) | cPanel-style tooling: edit `.env`/`nginx.conf`, set permissions |
 | **BYO embeds** | Your own **PDF tools** (Stirling-PDF, `pdf_tools_url`), **office suite** (Collabora/OnlyOffice, `office_url`) and **e-signature** (DocuSeal, `esign_url`) in a modal — free config toggles | PDF merge/split, editing office files, signing contracts without a paid add-on |
-| **Metadata** | Title/alt/caption/tags + full-text file & folder search · AI auto-tag (free, bring your own provider key) | Digital Asset Management, SEO, large media libraries |
+| **Metadata** | Title/alt/caption/tags + file & folder search over names and that metadata (not file contents) · AI auto-tag (free, bring your own provider key) | Digital Asset Management, SEO, large media libraries |
 | | 🔒 Paid: **AI vision** (background removal/upscale/smart-crop, BYO key), **OCR** | Image clean-up, text extraction |
 | **Insights** | Storage usage dashboard (quota + by type/folder) + **duplicate finder** | Show tenants their consumption, reclaim wasted space |
 | **Safety** | Dedup (SHA-256), rate limiting, tamper-evident (HMAC-chained) audit log, quota, origin/CSRF, dangerous-ext block, SSRF + zip guards | Production hardening, baked in |
@@ -113,7 +113,7 @@ Open **http://localhost:8080/public/index.html** with a token: the page needs on
 to load files (`?token=` is for local testing only). Mint one inside the container:
 
 ```bash
-docker exec fluxfiles php -r 'require "/app/packages/core/embed.php"; echo fluxfiles_token(userId: "demo", perms: ["read","write","delete"], disks: ["local"]);'
+docker exec fluxfiles php -r 'require "/app/packages/core/embed.php"; echo fluxfiles_token(["user" => "demo", "perms" => ["read","write","delete"], "disks" => ["local"]]);'
 ```
 
 Persist uploads + runtime state with a volume, and add cloud creds as needed:
@@ -204,8 +204,11 @@ depends on how you installed:
 ### 3. Run
 
 ```bash
-# composer require fluxfiles/fluxfiles
+# composer require fluxfiles/fluxfiles — the secret can come from the shell, no .env in vendor/ needed
+export FLUXFILES_SECRET=$(openssl rand -hex 32)   # the backend that mints tokens needs the same value
 php vendor/bin/fluxfiles serve --port=8080
+# in the same shell: mint a token to open the UI with (?token= is for local testing only)
+php -r 'require "vendor/fluxfiles/fluxfiles/embed.php"; echo fluxfiles_token(["user" => "demo", "perms" => ["read","write","delete"], "disks" => ["local"]]), "\n";'
 
 # git clone (monorepo)
 cd packages/core && php -S localhost:8080 router.php
@@ -253,25 +256,33 @@ When opening FluxFiles directly via `/public/index.html`, configure it with URL 
 // Monorepo clone: packages/core/embed.php
 require_once 'path/to/fluxfiles/embed.php';
 
-$token = fluxfiles_token(
-    userId:       'user-123',
-    perms:        ['read', 'write', 'delete'],
-    disks:        ['local', 's3', 'r2'],
-    prefix:       'user-123/',   // scope user to their own directory
-    maxUploadMb:  10,            // MB — max size PER uploaded file
-    allowedExt:   ['jpg','png','pdf'], // extensions (lowercase, no dot); null = all safe types
-    ttl:          3600,          // SECONDS — token lifetime (3600 = 1 hour)
-    ownerOnly:    false,         // true = users only manage files they uploaded
-    maxStorageMb: 1000,          // MB — total quota for the prefix; 0 = unlimited
-    maxFiles:     0              // max number of files under the prefix; 0 = unlimited
-);
+$token = fluxfiles_token([
+    'user'         => 'user-123',
+    'perms'        => ['read', 'write', 'delete'],
+    'disks'        => ['local', 's3', 'r2'],
+    'prefix'       => 'user-123/',                 // scope user to their own directory
+    'maxUploadMb'  => 10,                          // MB — max size PER uploaded file
+    'allowedExt'   => ['jpg','png','pdf'],         // extensions (lowercase, no dot); null = all safe types
+    'ttl'          => 3600,                        // SECONDS — token lifetime (3600 = 1 hour)
+    'ownerOnly'    => false,                       // true = users only manage files they uploaded
+    'maxStorageMb' => 1000,                        // MB — total quota for the prefix; 0 = unlimited
+    'maxFiles'     => 0,                           // max number of files under the prefix; 0 = unlimited
+]);
 ```
 
 > **Units at a glance:** `maxUploadMb` and `maxStorageMb` are **megabytes (MB)**,
 > `ttl` is **seconds**, `allowedExt` is a list of **extensions** (lowercase, no
 > leading dot). See the [configuration reference](../reference/CONFIG.md) for
-> parameter types and units — and for the recommended one-options-array form
-> (`fluxfiles_token(['user' => …, 'claims' => […]])`).
+> parameter types and units. Any other claim goes in the `claims` map by its raw
+> name (`fluxfiles_token(['user' => …, 'claims' => ['pro_hints' => false]])`).
+> An unknown option key, an empty `user`, or a missing / too short (< 32 bytes)
+> `FLUXFILES_SECRET` throws instead of minting a wrong token; pass `'secret' => …`
+> to sign with a key that isn't in the environment.
+>
+> **Token lifetime:** `ttl` defaults to 1 hour, and core does not cap it. A token
+> can't be revoked before `exp` except by rotating `FLUXFILES_SECRET` (which
+> invalidates every token), so keep TTLs short and refresh them
+> ([Token Refresh](#token-refresh)).
 
 Or generate via CLI for testing:
 
@@ -571,12 +582,12 @@ For server-rendered pages, use the PHP helper to generate the iframe HTML:
 require_once 'path/to/fluxfiles/embed.php';
 
 // Generate token
-$token = fluxfiles_token(
-    userId: (string) $currentUser->id,
-    perms:  ['read', 'write', 'delete'],
-    disks:  ['local', 'r2'],
-    prefix: 'users/' . $currentUser->id . '/'
-);
+$token = fluxfiles_token([
+    'user'   => (string) $currentUser->id,
+    'perms'  => ['read', 'write', 'delete'],
+    'disks'  => ['local', 'r2'],
+    'prefix' => 'users/' . $currentUser->id . '/',
+]);
 
 // Render inline embed
 echo fluxfiles_embed(
@@ -864,12 +875,12 @@ Edit a file's **text** content in place — the cPanel "Edit" use case for
 ```php
 // trusted admin token — can edit configs under this tenant's prefix only
 $token = fluxfiles_token([
-    'user'   => 'admin-7',
-    'perms'  => ['read', 'write'],
-    'disks'  => ['sftp'],
-    'prefix' => 'sites/acme/',
+    'user'        => 'admin-7',
+    'perms'       => ['read', 'write'],
+    'disks'       => ['sftp'],
+    'prefix'      => 'sites/acme/',
     'maxUploadMb' => 50,
-    'claims' => ['allow_code_edit' => true, 'show_hidden' => true],
+    'claims'      => ['allow_code_edit' => true, 'show_hidden' => true],
 ]);
 ```
 
@@ -1148,30 +1159,30 @@ Drive the numbers from your plans / database — e.g. a free tier vs. a pro tier
 
 ```php
 // Free tier — 5 MB/file, images only, 500 MB quota, 200 files
-$token = fluxfiles_token(
-    userId:       "tenant_{$tenant->id}",
-    perms:        ['read', 'write', 'delete'],
-    disks:        ['local'],
-    prefix:       "tenant_{$tenant->id}/",
-    maxUploadMb:  5,
-    allowedExt:   ['jpg', 'jpeg', 'png', 'webp'],
-    ttl:          3600,
-    maxStorageMb: 500,
-    maxFiles:     200,
-);
+$token = fluxfiles_token([
+    'user'         => "tenant_{$tenant->id}",
+    'perms'        => ['read', 'write', 'delete'],
+    'disks'        => ['local'],
+    'prefix'       => "tenant_{$tenant->id}/",
+    'maxUploadMb'  => 5,
+    'allowedExt'   => ['jpg', 'jpeg', 'png', 'webp'],
+    'ttl'          => 3600,
+    'maxStorageMb' => 500,
+    'maxFiles'     => 200,
+]);
 
 // Pro tier — 100 MB/file, any safe type, 50 GB quota, unlimited files
-$token = fluxfiles_token(
-    userId:       "tenant_{$tenant->id}",
-    perms:        ['read', 'write', 'delete', 'audit'],
-    disks:        ['s3'],
-    prefix:       "tenant_{$tenant->id}/",
-    maxUploadMb:  100,
-    allowedExt:   null,            // all non-dangerous types
-    ttl:          3600,
-    maxStorageMb: 51200,           // 50 GB
-    maxFiles:     0,               // unlimited
-);
+$token = fluxfiles_token([
+    'user'         => "tenant_{$tenant->id}",
+    'perms'        => ['read', 'write', 'delete', 'audit'],
+    'disks'        => ['s3'],
+    'prefix'       => "tenant_{$tenant->id}/",
+    'maxUploadMb'  => 100,
+    'allowedExt'   => null,                                 // all non-dangerous types
+    'ttl'          => 3600,
+    'maxStorageMb' => 51200,                                // 50 GB
+    'maxFiles'     => 0,                                    // unlimited
+]);
 ```
 
 > Issuing tokens from a JS backend instead? `@fluxfiles/node`'s `createToken()`
@@ -1194,22 +1205,22 @@ FluxFiles provides two layers of user isolation that can be used independently o
 **Layer 1: Path prefix (recommended)** — Each user gets a unique `prefix` so they physically cannot see or touch other users' files:
 
 ```php
-$token = fluxfiles_token(
-    userId:   $user->id,
-    perms:    ['read', 'write', 'delete'],
-    prefix:   'users/' . $user->id . '/',  // user 42 → users/42/*
-);
+$token = fluxfiles_token([
+    'user'   => $user->id,
+    'perms'  => ['read', 'write', 'delete'],
+    'prefix' => 'users/' . $user->id . '/',  // user 42 → users/42/*
+]);
 ```
 
 **Layer 2: Owner-only mode** — When multiple users share the same prefix (e.g., a shared team folder), `owner_only` restricts destructive operations (delete, rename, move, crop) to the user who uploaded the file:
 
 ```php
-$token = fluxfiles_token(
-    userId:    $user->id,
-    perms:     ['read', 'write', 'delete'],
-    prefix:    'team/shared/',
-    ownerOnly: true,  // can only delete/rename own files
-);
+$token = fluxfiles_token([
+    'user'      => $user->id,
+    'perms'     => ['read', 'write', 'delete'],
+    'prefix'    => 'team/shared/',
+    'ownerOnly' => true,                        // can only delete/rename own files
+]);
 ```
 
 | Scenario | Use |
@@ -1308,8 +1319,10 @@ $token = FluxFiles\Laravel\FluxFilesFacade::token((string) auth()->id(), [
 ```
 ```tsx
 // React (same token)
+// onSelect gets FluxFile | FluxFile[] (an array when `multiple` is set)
 <FluxFiles endpoint="https://fm.example.com" token={token} disk="s3"
-           onSelect={(file) => console.log(file.url)} style={{ height: 600 }} />
+           onSelect={(file) => { if (!Array.isArray(file)) console.log(file.url); }}
+           style={{ height: 600 }} />
 ```
 
 ---
@@ -1441,16 +1454,22 @@ Mitigations regardless of delivery:
 
 ## Testing
 
-> First: `composer install -d packages/core` — the PHP tests load
-> `packages/core/vendor/autoload.php`.
+> First, from the repo root: `composer install -d packages/core` (the PHP tests
+> load `packages/core/vendor/autoload.php`) and give the tests a signing secret in
+> the gitignored `packages/core/.env`:
+> `echo "FLUXFILES_SECRET=$(openssl rand -hex 32)" > packages/core/.env`.
+
+All commands below run from the repo root.
 
 ```bash
 # Core PHP — unit + integration suite
 for f in packages/core/tests/unit/*.php packages/core/tests/integration/*.php; do php "$f"; done
 
-# API e2e (boots a dev server) + env-gated live S3/R2 (LocalStack/AWS/R2)
-cd packages/core && php -S 127.0.0.1:8080 router.php &
-bash packages/core/tests/e2e/test-api.sh
+# API e2e against a dev server (needs curl + python3). The script mints its tokens
+# from the environment (or a repo-root .env), so export the same secret first:
+export $(grep '^FLUXFILES_SECRET=' packages/core/.env)
+(cd packages/core && php -S 127.0.0.1:8080 router.php) &
+bash packages/core/tests/e2e/test-api.sh   # not idempotent: rerun against fresh storage
 
 # Self-booting HTTP e2e (each starts its own php -S)
 for f in packages/core/tests/e2e/*-http.php; do php "$f"; done
@@ -1585,7 +1604,9 @@ Still stuck? Check [`docs/reference/ARCHITECTURE.md`](../reference/ARCHITECTURE.
 
 ## Attribution
 
-Created and maintained by **thai-pc**. If you fork or redistribute, please retain the copyright notice:
+Created and maintained by **thai-pc**. The MIT licence only requires that you keep
+its copyright and permission notice in copies of the code. A credit line in your
+project is appreciated but not required, for example:
 
 ```
 Based on FluxFiles by thai-pc — https://github.com/thai-pc/fluxfiles

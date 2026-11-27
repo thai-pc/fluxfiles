@@ -144,7 +144,7 @@ export default defineNuxtConfig({
 | `navigate(path)` | Navigate to a directory |
 | `setDisk(disk)` | Switch storage disk |
 | `refresh()` | Reload current directory |
-| `search(query)` | Full-text search |
+| `search(query)` | Search file names and metadata (title, alt, caption, tags) |
 | `crossCopy(disk, path?)` | Copy selection to another disk |
 | `crossMove(disk, path?)` | Move selection to another disk |
 | `aiTag()` | AI auto-tag selected image |

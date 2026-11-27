@@ -18,7 +18,7 @@ BYOB disk configured with the `s3` driver) get true object-metadata storage.
 | Component | Location | Notes |
 | ---------------- | ------------------------------------ | ----------------------------------------------------- |
 | **Metadata**     | S3 object metadata (x-amz-meta-*)    | title, alt_text, caption, tags — max 2KB/object       |
-| **Search index** | `_fluxfiles/index.json` in the bucket | Updated when metadata is saved; used for full-text search |
+| **Search index** | `_fluxfiles/index.json` in the bucket | Updated when metadata is saved; used for name + metadata search |
 | **Trash**        | `_fluxfiles/trash/<id>/` + `_fluxfiles/trash.json` manifest | Soft-delete, move-based (see Trash below)  |
 | **Audit**        | `_fluxfiles/audit.jsonl`             | Appended on every event                               |
 | **Audit archive** | `_fluxfiles/audit/archive/audit-<ts>-<hex>.jsonl` | Rotated-out audit tail, kept (not deleted) — see Audit retention below |
