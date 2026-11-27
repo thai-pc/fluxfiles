@@ -52,7 +52,7 @@ class FluxFilesShortcode
         $width  = esc_attr($atts['width']);
         $height = esc_attr($atts['height']);
 
-        $locale = substr(get_locale(), 0, 2);
+        $locale = FluxFilesPlugin::uiLocale();
 
         // The SDK drives ONE iframe per page (a module-level singleton: open() closes
         // the previous one), so a second [fluxfiles] would silently replace the first.

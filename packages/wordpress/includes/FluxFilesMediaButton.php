@@ -98,7 +98,7 @@ class FluxFilesMediaButton
 
         $endpoint = FluxFilesPlugin::apiEndpoint();
 
-        $locale = substr(get_locale(), 0, 2);
+        $locale = FluxFilesPlugin::uiLocale();
 
         $config = [
             'endpoint' => $endpoint,
