@@ -25,14 +25,19 @@ permissions, its quota. No storage credentials are involved.
 
 ## Setup
 
-1. Mint a **narrow** token for the agent — a dedicated prefix, read-only unless
-   you really want writes, and a TTL you're comfortable with:
+1. Mint a **narrow, short-lived** token for the agent — a dedicated prefix,
+   read-only unless you really want writes, and a TTL of hours, not weeks:
 
    ```js
    import { createToken } from '@fluxfiles/node';
    const token = createToken({ userId: 'ai-agent', perms: ['read'], disks: ['local'],
-     prefix: 'shared/knowledge-base', ttl: 30 * 24 * 3600 }); // secret: FLUXFILES_SECRET env
+     prefix: 'shared/knowledge-base', ttl: 8 * 3600 }); // 8 h; secret: FLUXFILES_SECRET env
    ```
+
+   Core does not cap `exp`, and a token can't be revoked before it expires except by
+   rotating `FLUXFILES_SECRET` (which invalidates every token). So keep the TTL short
+   and re-mint the token (and restart the MCP server) when it runs out, e.g. from a
+   daily script, rather than minting one that lives for a month.
 
 2. Add the server to your MCP client. Claude Desktop (`claude_desktop_config.json`):
 

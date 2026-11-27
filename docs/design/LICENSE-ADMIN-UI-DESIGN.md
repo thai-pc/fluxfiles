@@ -1456,7 +1456,7 @@ The only file outside `services/license-server/` that may change is `docs/update
 3. [Cloudflare docs: self-hosted public app with Access, and validating the Access token](https://developers.cloudflare.com/cloudflare-one/applications/configure-apps/self-hosted-public-app/)
 4. [Polar: webhook events](https://polar.sh/docs/integrate/webhooks/events)
 5. [Polar API: Order object (amounts, discount, `billing_reason`, `subscription_id`)](https://docs.polar.sh/api-reference/orders/get)
-6. [Polar guide referencing `https://polar.sh/dashboard/${org_slug}/settings`](https://polar.sh/docs/guides/allow-multiple-subscriptions-per-customer)
+6. Polar dashboard settings URL pattern `https://polar.sh/dashboard/${org_slug}/settings` (the Polar guide that documented it has since been removed)
 7. [Hookdeck: guide to Polar webhooks](https://hookdeck.com/webhooks/platforms/guide-to-polar-webhooks-features-and-best-practices)
 8. [Polar: manage subscriptions](https://polar.sh/docs/features/subscriptions/manage), and [the revoke API (`subscriptions:write`)](https://docs.polar.sh/api-reference/subscriptions/revoke)
 9. [Resend: verify webhook requests (Svix)](https://resend.com/docs/webhooks/verify-webhooks-requests), and [Hookdeck: Resend webhooks](https://hookdeck.com/webhooks/platforms/guide-to-resend-webhooks-features-and-best-practices)

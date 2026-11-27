@@ -624,13 +624,6 @@ class Claims
     }
 
     /**
-     * Sanitize `dlp_scan_extensions`: lowercase, strip a leading dot, alnum only —
-     * same normalization as `allowed_ext`. Falls back to the built-in text-bearing
-     * default list when the claim is absent or nothing usable remains.
-     *
-     * @return string[]
-     */
-    /**
      * At most 20 rules; each needs days >= 1 (capped at 100 years) and an action
      * of `trash` (default) or `delete`. The path is normalized like any user path
      * (dot segments dropped) — it is resolved under the tenant prefix at run time.
@@ -663,6 +656,13 @@ class Claims
         return $out;
     }
 
+    /**
+     * Sanitize `dlp_scan_extensions`: lowercase, strip a leading dot, alnum only —
+     * same normalization as `allowed_ext`. Falls back to the built-in text-bearing
+     * default list when the claim is absent or nothing usable remains.
+     *
+     * @return string[]
+     */
     public static function sanitizeDlpScanExtensions($raw): array
     {
         $out = [];
@@ -1077,13 +1077,6 @@ class Claims
     }
 
     /**
-     * Strip null bytes and `..`/`.` traversal segments from a path WITHOUT
-     * applying/removing the tenant prefix — the shared primitive behind
-     * scopePath() and isPathInScope(). A literal dot inside a filename
-     * component (e.g. "report.v2.pdf") is untouched; only whole "." / ".."
-     * path segments are dropped.
-     */
-    /**
      * The `prefix` claim is the tenant's sandbox, so it must name a real folder.
      * A `.`/`..` segment, a backslash or a NUL is resolved by Flysystem when it
      * builds a key ("users/.." is the disk root), so a host that builds the prefix
@@ -1107,6 +1100,13 @@ class Claims
         }
     }
 
+    /**
+     * Strip null bytes and `..`/`.` traversal segments from a path WITHOUT
+     * applying/removing the tenant prefix — the shared primitive behind
+     * scopePath() and isPathInScope(). A literal dot inside a filename
+     * component (e.g. "report.v2.pdf") is untouched; only whole "." / ".."
+     * path segments are dropped.
+     */
     private static function stripDotSegments(string $path): string
     {
         $path = str_replace(["\0", "\x00"], '', $path);

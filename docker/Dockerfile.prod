@@ -13,18 +13,25 @@ FROM php:8.3-fpm-alpine
 RUN apk add --no-cache nginx libpng libjpeg-turbo freetype libwebp libavif libzip libcurl oniguruma sqlite-libs libpq mariadb-connector-c \
     && apk add --no-cache --virtual .build $PHPIZE_DEPS libpng-dev libjpeg-turbo-dev freetype-dev libwebp-dev libavif-dev libzip-dev curl-dev oniguruma-dev sqlite-dev postgresql-dev mariadb-connector-c-dev \
     && docker-php-ext-configure gd --with-jpeg --with-freetype --with-webp --with-avif \
-    && docker-php-ext-install -j"$(nproc)" curl gd mbstring pdo_mysql pdo_pgsql pdo_sqlite zip \
+    && docker-php-ext-install -j"$(nproc)" curl gd mbstring opcache pdo_mysql pdo_pgsql pdo_sqlite zip \
     && apk del .build
 
 WORKDIR /app
 COPY packages/core /app/packages/core
 COPY --from=vendor /src/packages/core/vendor /app/packages/core/vendor
+# Dev-only trees: tests/generate-token.php prints a full-privilege JWT, scripts/ are
+# one-off CLI tools. nginx only ever executes api/index.php, but don't ship them at all.
+RUN rm -rf /app/packages/core/tests /app/packages/core/scripts
 COPY docker/nginx.conf /etc/nginx/http.d/default.conf
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-fluxfiles.ini
+COPY docker/php-fpm-pool.conf /usr/local/etc/php-fpm.d/zz-fluxfiles.conf
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh \
     && mkdir -p /app/packages/core/storage/uploads \
     && chown -R www-data:www-data /app/packages/core/storage
+
+# FPM pool sizing (docker/php-fpm-pool.conf); override with `docker run -e FPM_MAX_CHILDREN=...`.
+ENV FPM_MAX_CHILDREN=24 FPM_START_SERVERS=4 FPM_MIN_SPARE_SERVERS=2 FPM_MAX_SPARE_SERVERS=8 FPM_MAX_REQUESTS=500
 
 EXPOSE 80
 ENTRYPOINT ["/entrypoint.sh"]

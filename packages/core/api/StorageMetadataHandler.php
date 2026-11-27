@@ -390,6 +390,140 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         }
     }
 
+    /** @var array<string,bool> "disk|key" => the last read found a non-empty manifest nothing could decode */
+    private array $corruptManifest = [];
+    /** @var array<string,bool> "disk|key" => the last read recovered from the .bak copy */
+    private array $healedFromBak = [];
+
+    /**
+     * Decoded JSON-object manifest (index, trash, dirs). A manifest that exists and
+     * is non-empty but does not decode (torn write, ENOSPC, operator edit) is NOT an
+     * empty one: it falls back to the `.bak` copy kept by writeManifest(), and when
+     * that is unusable too it reads as empty but is remembered as corrupt so the next
+     * write refuses instead of replacing the real data with a fresh near-empty map.
+     *
+     * @return array<mixed>
+     */
+    private function readJsonManifest(string $disk, string $key): array
+    {
+        $flag = $disk . '|' . $key;
+        $this->corruptManifest[$flag] = false;
+        $this->healedFromBak[$flag] = false;
+        $json = $this->readManifest($disk, $key);
+        if ($json === null) {
+            return [];
+        }
+        if (trim($json) !== '') {
+            $data = json_decode($json, true);
+            if (is_array($data)) {
+                return $data;
+            }
+        }
+        // Empty, unreadable or undecodable: look for the last good copy.
+        $bakData = null;
+        if (!$this->isS3Compatible($disk)) {
+            try {
+                $bak = $this->readManifest($disk, $key . '.bak');
+                $bakData = ($bak !== null && trim($bak) !== '') ? json_decode($bak, true) : null;
+            } catch (\Throwable $e) {
+                $bakData = null;
+            }
+        }
+        if (is_array($bakData)) {
+            \FluxFiles\Log::warn("FluxFiles: {$key} on disk '{$disk}' is unreadable — using the last good copy ({$key}.bak)");
+            $this->healedFromBak[$flag] = true;
+            return $bakData;
+        }
+        if (trim($json) !== '') {
+            \FluxFiles\Log::warn("FluxFiles: {$key} on disk '{$disk}' is corrupt and has no usable backup — refusing to overwrite it");
+            $this->corruptManifest[$flag] = true;
+        }
+        return [];
+    }
+
+    private static function metadataCorrupt(string $key): ApiException
+    {
+        return new ApiException(
+            "The metadata file {$key} is corrupt; refusing to overwrite it until it is repaired (see `fluxfiles trash:reconcile`)",
+            409,
+            'metadata_corrupt'
+        );
+    }
+
+    /**
+     * Write a manifest without ever leaving a half-written file in place: local and
+     * SFTP disks write a temp file then move it over the target (rename is atomic on
+     * a local filesystem; a bucket PUT is atomic already). The previous good content
+     * is kept as `<key>.bak`. Refuses (metadata_corrupt) when the file on disk is
+     * corrupt and was not recovered from the backup, so a mutation based on a failed
+     * read can never replace the real data.
+     */
+    private function writeManifest(string $disk, string $key, string $json): void
+    {
+        $fs = $this->diskManager->disk($disk);
+        $flag = $disk . '|' . $key;
+        $dir = dirname($key);
+        if ($dir !== '.' && !$fs->directoryExists($dir)) {
+            $fs->createDirectory($dir);
+        }
+        if ($this->isS3Compatible($disk)) {
+            if (!empty($this->corruptManifest[$flag])) {
+                throw self::metadataCorrupt($key);
+            }
+            $fs->write($key, $json, self::INTERNAL_WRITE);
+            return;
+        }
+
+        $current = null;
+        if ($fs->fileExists($key)) {
+            try {
+                $current = $fs->read($key);
+            } catch (\Throwable $e) {
+                throw self::metadataCorrupt($key);
+            }
+        }
+        $currentValid = $current !== null && trim($current) !== '' && is_array(json_decode($current, true));
+        if ($current !== null && trim($current) !== '' && !$currentValid && empty($this->healedFromBak[$flag])) {
+            throw self::metadataCorrupt($key);
+        }
+        if ($currentValid) {
+            try {
+                $fs->write($key . '.bak', $current, self::INTERNAL_WRITE);
+            } catch (\Throwable $e) {
+                \FluxFiles\Log::warn("FluxFiles: could not refresh {$key}.bak on disk '{$disk}' — " . $e->getMessage());
+            }
+        }
+
+        $tmp = $key . '.tmp-' . bin2hex(random_bytes(4));
+        $fs->write($tmp, $json, self::INTERNAL_WRITE);
+        try {
+            try {
+                $fs->move($tmp, $key);
+            } catch (\Throwable $e) {
+                // SFTP servers refuse a rename onto an existing file: drop it, then rename.
+                $fs->delete($key);
+                $fs->move($tmp, $key);
+            }
+        } catch (\Throwable $e) {
+            try { $fs->delete($tmp); } catch (\Throwable $e2) { /* leave the temp file */ }
+            throw $e;
+        }
+        $this->corruptManifest[$flag] = false;
+        $this->healedFromBak[$flag] = false;
+    }
+
+    /**
+     * Fail early (before anything is moved) when a manifest the caller is about to
+     * rewrite is corrupt.
+     */
+    public function assertTrashWritable(string $disk): void
+    {
+        $this->allTrash($disk);
+        if (!empty($this->corruptManifest[$disk . '|' . self::TRASH_KEY])) {
+            throw self::metadataCorrupt(self::TRASH_KEY);
+        }
+    }
+
     /**
      * Owner recorded in the search index for each key (null: not indexed or no
      * owner) — ONE index read, no sidecar/S3 HEAD fallback. The index can disagree
@@ -586,6 +720,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             $count = 0;
             $updated = [];
             foreach ($dirs as $k => $_true) {
+                $k = (string) $k; // an all-digit folder name is an int array key
                 if ($k === $oldPrefix || str_starts_with($k, $oldPrefix . '/')) {
                     $newKey = $newPrefix . substr($k, strlen($oldPrefix));
                     $updated[$newKey] = $_true; // preserve the folder's created time
@@ -613,6 +748,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             $dirs = $this->loadDirsIndex($disk);
             $count = 0;
             foreach (array_keys($dirs) as $k) {
+                $k = (string) $k; // an all-digit folder name is an int array key
                 if ($k === $prefix || str_starts_with($k, $prefix . '/')) {
                     unset($dirs[$k]);
                     $count++;
@@ -639,6 +775,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $results = [];
 
         foreach ($dirs as $dirKey => $created) {
+            $dirKey = (string) $dirKey; // an all-digit folder name is an int array key
             // Defend against indexes polluted before reserved dirs were filtered.
             if ($this->isReservedPath($dirKey)) {
                 continue;
@@ -1228,8 +1365,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      * writable"). For those remote disks we skip the flock: index writes still
      * go through Flysystem (disk-aware), the lock is just best-effort and is
      * impossible to take locally anyway — same as S3 has always been.
-     */
-    /**
+     *
      * Re-entrant: nested holders (save() → updateIndex(), or a batch) only count.
      * Before this, the inner release dropped the outer holder's lock early.
      */
@@ -1582,16 +1718,11 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     /** @return array<string,array> */
     private function readTrash(string $disk): array
     {
-        $fs = $this->diskManager->disk($disk);
-        if (!$fs->fileExists(self::TRASH_KEY)) {
-            return [];
+        $out = [];
+        foreach ($this->readJsonManifest($disk, self::TRASH_KEY) as $id => $entry) {
+            $out[(string) $id] = $entry; // PHP coerces an all-digit id to int
         }
-        try {
-            $data = json_decode($fs->read(self::TRASH_KEY), true);
-            return is_array($data) ? $data : [];
-        } catch (\Throwable $e) {
-            return [];
-        }
+        return $out;
     }
 
     public function getTrash(string $disk, string $id): ?array
@@ -1636,12 +1767,118 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function saveTrashNow(string $disk, array $all): void
     {
+        $this->writeManifest($disk, self::TRASH_KEY, (string) json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    /**
+     * Rebuild trash.json from the payloads under `_fluxfiles/trash/<id>/`, for a
+     * manifest that was lost or corrupted. The original location is not stored in a
+     * payload, so a recovered entry restores to the disk root (files) or to
+     * `recovered-<id>` (folders) with its metadata empty and no recorded owner. Entries
+     * already in the manifest are never changed; entries whose payload is gone are
+     * only dropped with $prune.
+     *
+     * @return array{recovered:string[],dangling:string[],applied:bool}
+     */
+    public function reconcileTrash(string $disk, bool $apply = true, bool $prune = false): array
+    {
         $fs = $this->diskManager->disk($disk);
-        $dir = dirname(self::TRASH_KEY);
-        if ($dir !== '.' && !$fs->directoryExists($dir)) {
-            $fs->createDirectory($dir);
+        $this->acquireIndexLock($disk);
+        try {
+            $all = $this->allTrash($disk);
+            // We are the repair: a corrupt manifest with no backup is rebuilt, not refused.
+            $flag = $disk . '|' . self::TRASH_KEY;
+            if (!empty($this->corruptManifest[$flag])) {
+                $this->corruptManifest[$flag] = false;
+                $this->healedFromBak[$flag] = true;
+            }
+            $onDisk = [];
+            if ($fs->directoryExists('_fluxfiles/trash')) {
+                foreach ($fs->listContents('_fluxfiles/trash', false) as $item) {
+                    $id = basename($item->path());
+                    if (!$item->isFile() && preg_match('/^[a-f0-9]{16}$/', $id)) {
+                        $onDisk[$id] = $item->path();
+                    }
+                }
+            }
+            $recovered = [];
+            foreach ($onDisk as $id => $dirPath) {
+                if (isset($all[$id])) {
+                    continue;
+                }
+                $entry = $this->trashEntryFromPayload($fs, $disk, $id, $dirPath);
+                if ($entry !== null) {
+                    $all[$id] = $entry;
+                    $recovered[] = $id;
+                }
+            }
+            $dangling = [];
+            foreach (array_keys($all) as $id) {
+                if (!isset($onDisk[(string) $id])) {
+                    $dangling[] = (string) $id;
+                }
+            }
+            if ($apply && $prune) {
+                foreach ($dangling as $id) {
+                    unset($all[$id]);
+                }
+            }
+            if ($apply && ($recovered !== [] || ($prune && $dangling !== []))) {
+                $this->saveTrash($disk, $all);
+            }
+            return ['recovered' => $recovered, 'dangling' => $dangling, 'applied' => $apply];
+        } finally {
+            $this->releaseIndexLock($disk);
         }
-        $fs->write(self::TRASH_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE), self::INTERNAL_WRITE);
+    }
+
+    private function trashEntryFromPayload($fs, string $disk, string $id, string $dirPath): ?array
+    {
+        $files = [];
+        $dirs = [];
+        $payloadFiles = [];
+        $variants = [];
+        $size = 0;
+        $when = 0;
+        $isDir = $fs->directoryExists($dirPath . '/payload');
+        foreach ($fs->listContents($dirPath, true) as $item) {
+            $rel = substr($item->path(), strlen($dirPath) + 1);
+            if ($isDir) {
+                if (!str_starts_with($rel, 'payload/') || $rel === 'payload/') {
+                    continue;
+                }
+                $rel = substr($rel, 8);
+                if ($item->isFile()) {
+                    $files[] = ['rel' => $rel, 'meta' => []];
+                    $size += (int) ($item->fileSize() ?? 0);
+                } else {
+                    $dirs[] = $rel;
+                }
+            } elseif ($item->isFile()) {
+                if (str_starts_with($rel, 'v/')) {
+                    $variants[] = basename($rel, '.webp');
+                } elseif (!str_contains($rel, '/')) {
+                    $payloadFiles[] = [$rel, (int) ($item->fileSize() ?? 0)];
+                }
+            }
+            if ($item->isFile()) {
+                $when = max($when, (int) ($item->lastModified() ?? 0));
+            }
+        }
+        $base = [
+            'disk'         => $disk,
+            'deleted_at'   => $when > 0 ? $when : time(),
+            'deleted_by'   => null,
+            'reconstructed' => true,
+        ];
+        if ($isDir) {
+            return $base + ['original_key' => 'recovered-' . $id, 'basename' => 'recovered-' . $id, 'is_dir' => true, 'size' => $size, 'files' => $files, 'dirs' => $dirs];
+        }
+        if ($payloadFiles === []) {
+            return null;
+        }
+        [$name, $fsize] = $payloadFiles[0];
+        return $base + ['original_key' => $name, 'basename' => $name, 'size' => $fsize, 'variants' => $variants, 'meta' => []];
     }
 
     // ---------------------------------------------------------------------
@@ -1878,11 +2115,6 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function readIndex(string $disk): array
     {
-        $json = $this->readManifest($disk, self::INDEX_KEY);
-        if ($json === null) {
-            return [];
-        }
-        $data = json_decode($json, true);
         // Note: json_decode() coerces decimal-integer-looking string keys
         // (e.g. "5", "0", "-3") into real PHP int array keys — this is a
         // fundamental PHP array behaviour (any canonical-decimal string key
@@ -1894,7 +2126,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         // str_starts_with() in findByHash()) must therefore cast the loop key
         // with `(string)` before using it, to avoid a TypeError under
         // strict_types without silently dropping the entry.
-        return is_array($data) ? $data : [];
+        return $this->readJsonManifest($disk, self::INDEX_KEY);
     }
 
     private function saveIndex(string $disk, array $index): void
@@ -1910,13 +2142,8 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function writeIndex(string $disk, array $index): void
     {
-        $fs = $this->diskManager->disk($disk);
-        $dir = dirname(self::INDEX_KEY);
-        if ($dir !== '.' && !$fs->directoryExists($dir)) {
-            $fs->createDirectory($dir);
-        }
         $json = (string) json_encode($index, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-        $fs->write(self::INDEX_KEY, $json, self::INTERNAL_WRITE);
+        $this->writeManifest($disk, self::INDEX_KEY, $json);
         $this->warnIfIndexLarge($disk, strlen($json));
     }
 
@@ -2028,21 +2255,23 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     /** @return array<string,?int> */
     private function readDirsIndex(string $disk): array
     {
-        $json = $this->readManifest($disk, self::DIRS_KEY);
-        if ($json === null) {
-            return [];
-        }
-        $data = json_decode($json, true);
-        if (!is_array($data)) {
-            return [];
+        $data = $this->readJsonManifest($disk, self::DIRS_KEY);
+        // The folder index only holds created times and empty-folder markers, so a
+        // corrupt one with no backup is rebuilt by the next write rather than refused.
+        if (!empty($this->corruptManifest[$disk . '|' . self::DIRS_KEY])) {
+            $this->corruptManifest[$disk . '|' . self::DIRS_KEY] = false;
+            $this->healedFromBak[$disk . '|' . self::DIRS_KEY] = true;
         }
         // Two on-disk shapes: legacy list of keys `["a","b"]`, and the current
         // map `{"a": <created ts|null>}`. Normalize to key => (?int created).
-        $isList = array_is_list($data);
+        // (A map whose first key is "0" is a list by index only: legacy lists hold strings.)
+        $isList = array_is_list($data) && count(array_filter($data, 'is_string')) === count($data);
         $this->dirsLegacyShape[$disk] = $isList;
         $set = [];
         foreach ($data as $kk => $vv) {
             $k = $isList ? $vv : $kk;
+            // json_decode() turns an all-digit folder name ("2024") into an int key.
+            if (is_int($k)) $k = (string) $k;
             if (!is_string($k)) continue;
             $k = trim($k, '/');
             if ($k === '' || $k === '_fluxfiles' || str_contains($k, '/_fluxfiles')) continue;
@@ -2067,19 +2296,14 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function writeDirsIndex(string $disk, array $dirs): void
     {
-        $fs = $this->diskManager->disk($disk);
-        $dir = dirname(self::DIRS_KEY);
-        if ($dir !== '.' && !$fs->directoryExists($dir)) {
-            $fs->createDirectory($dir);
-        }
-
         ksort($dirs, SORT_STRING);
 
         try {
             // Map shape `{dirKey: <created ts|null>}` so folder created dates persist.
-            $fs->write(self::DIRS_KEY, json_encode((object) $dirs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE), self::INTERNAL_WRITE);
+            $this->writeManifest($disk, self::DIRS_KEY, (string) json_encode((object) $dirs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
         } catch (\Throwable $e) {
-            // Silent fail
+            // Best effort (the folder index is a convenience), but say so.
+            \FluxFiles\Log::warn("FluxFiles: could not write the folder index on disk '{$disk}' — " . $e->getMessage());
         }
     }
 

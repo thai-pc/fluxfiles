@@ -1,0 +1,6 @@
+# This file becomes the ROOT .gitattributes of the fluxfiles-core split repo
+# (.github/workflows/split.yml subtree-splits packages/core), so Composer's dist archive
+# stays lean: the test suite carries tests/generate-token.php, which prints a
+# full-privilege JWT and must never land in a customer's web root.
+/tests export-ignore
+/.gitattributes export-ignore

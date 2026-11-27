@@ -61,6 +61,9 @@ final class DemoMode
         'vbs', 'wsf', 'jsp', 'jspx', 'asp', 'aspx', 'htaccess', 'htpasswd',
     ];
 
+    /** Minimum seconds between two purge runs (see purgeIfDue()). */
+    private const PURGE_INTERVAL = 300;
+
     private const DEFAULT_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'];
 
     /**
@@ -238,7 +241,8 @@ final class DemoMode
     /** Max new sandboxes a single IP may mint per hour (anti sandbox-spam). */
     public static function ipMintsPerHour(): int
     {
-        return max(1, (int) (self::env('FLUXFILES_DEMO_IP_MINTS', '20')));
+        // 100: a whole office / university / mobile carrier shares one NAT address.
+        return max(1, (int) (self::env('FLUXFILES_DEMO_IP_MINTS', '100')));
     }
 
     /**
@@ -404,6 +408,7 @@ final class DemoMode
             if (@filemtime($dir) < $cutoff) {
                 self::rrmdir($dir);
                 self::dropTrash($root, $meta, $trash[basename($dir)] ?? []);
+                self::dropSandboxMeta($root, $meta, basename($dir));
                 unset($trash[basename($dir)]);
             }
         }
@@ -427,7 +432,106 @@ final class DemoMode
             }
             self::rrmdir($dir);
             self::dropTrash($root, $meta, $trash[basename($dir)] ?? []);
+            self::dropSandboxMeta($root, $meta, basename($dir));
             $total -= $info['size'];
+        }
+    }
+
+    /**
+     * Run the purge off the request path: at most once per PURGE_INTERVAL, and never two at
+     * once (a non-blocking flock on `<stateDir>/demo_purge.lock`; the lock file's mtime is
+     * the last-run stamp). Safe to call from a page load AFTER the response is flushed, or
+     * from cron (`fluxfiles demo:purge`, which passes $force). Returns true when it ran.
+     */
+    public static function purgeIfDue(string $localRoot, string $stateDir, bool $force = false): bool
+    {
+        $lock = rtrim($stateDir, '/') . '/demo_purge.lock';
+        $fh = @fopen($lock, 'c');
+        if ($fh === false) {
+            return false;
+        }
+        try {
+            if (!flock($fh, LOCK_EX | LOCK_NB)) {
+                return false; // another request is purging right now
+            }
+            clearstatcache(true, $lock);
+            $last = (int) @filemtime($lock);
+            // A brand-new (empty) lock file has mtime = now: treat size 0 as "never ran".
+            $never = (int) @filesize($lock) === 0;
+            if (!$force && !$never && time() - $last < self::PURGE_INTERVAL) {
+                return false;
+            }
+            ftruncate($fh, 0);
+            fwrite($fh, (string) time());
+            fflush($fh);
+            self::purge($localRoot);
+            self::purgeOrphanMeta($localRoot);
+            return true;
+        } finally {
+            flock($fh, LOCK_UN);
+            fclose($fh);
+        }
+    }
+
+    /**
+     * Idempotent cleanup of bookkeeping left by sandboxes that no longer exist on disk (the
+     * purge used to remove the directories but not their index / dirs / sidecar entries, so
+     * the shared index grew without bound). Sandbox ids are found in the folder index and
+     * in `_fluxfiles/meta/demo/`; every id without a `demo/<id>/` directory loses its
+     * entries. Returns the number of sandboxes cleaned.
+     */
+    public static function purgeOrphanMeta(string $localRoot, ?MetadataRepositoryInterface $meta = null): int
+    {
+        $root = rtrim($localRoot, '/');
+        try {
+            if ($meta === null) {
+                $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root]]);
+                $meta = PublicContext::resolveMeta($dm);
+            }
+            $ids = [];
+            foreach (array_keys($meta->dirsCreated('local')) as $dir) {
+                if (preg_match('#^demo/([A-Za-z0-9_-]+)(?:/|$)#', (string) $dir, $m) === 1) {
+                    $ids[$m[1]] = true;
+                }
+            }
+            foreach (glob($root . '/_fluxfiles/meta/demo/*', GLOB_ONLYDIR) ?: [] as $d) {
+                $ids[basename($d)] = true;
+            }
+        } catch (\Throwable $e) {
+            Log::warn('FluxFiles demo purge: cannot list sandbox metadata — ' . $e->getMessage());
+            return 0;
+        }
+        $n = 0;
+        foreach (array_keys($ids) as $id) {
+            $id = (string) $id;
+            if (!is_dir($root . '/demo/' . $id)) {
+                self::dropSandboxMeta($root, $meta, $id);
+                $n++;
+            }
+        }
+        return $n;
+    }
+
+    /** Drop one sandbox's search-index entries, folder-index entries and sidecars. */
+    private static function dropSandboxMeta(string $root, ?MetadataRepositoryInterface &$meta, string $id): void
+    {
+        if (preg_match('/^[A-Za-z0-9_-]+$/', $id) !== 1) {
+            return;
+        }
+        try {
+            if ($meta === null) {
+                $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root]]);
+                $meta = PublicContext::resolveMeta($dm);
+            }
+            $meta->deleteChildren('local', 'demo/' . $id);
+            $meta->deleteDirPrefix('local', 'demo/' . $id);
+        } catch (\Throwable $e) {
+            Log::warn('FluxFiles demo purge: cannot drop sandbox metadata — ' . $e->getMessage());
+        }
+        // Sidecars of files the index no longer lists (and the now-empty directories).
+        $side = $root . '/_fluxfiles/meta/demo/' . $id;
+        if (is_dir($side)) {
+            self::rrmdir($side);
         }
     }
 

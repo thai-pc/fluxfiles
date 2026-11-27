@@ -326,6 +326,58 @@ if ($command === 'update') {
     exit(0);
 }
 
+// `trash:reconcile` — rebuild `_fluxfiles/trash.json` from the payloads under
+// `_fluxfiles/trash/<id>/` after the manifest was lost or went corrupt (a corrupt one makes
+// every trash write answer 409 metadata_corrupt). A payload does not record where it came
+// from, so a recovered entry restores to the disk root (folders: `recovered-<id>`).
+//   fluxfiles trash:reconcile [--disk=local] [--dry-run] [--prune]
+// --prune also drops manifest entries whose payload is gone. JSON backend only.
+// Exit: 0 ok, 1 usage/config, 2 storage failure.
+if ($command === 'trash:reconcile') {
+    $tUsage = "Usage: fluxfiles trash:reconcile [--disk=local] [--dry-run] [--prune]\n";
+    $tOpts = ['disk' => 'local', 'dry_run' => false, 'prune' => false];
+    foreach (array_slice($argv, 2) as $arg) {
+        if ($arg === '--dry-run') { $tOpts['dry_run'] = true; }
+        elseif ($arg === '--prune') { $tOpts['prune'] = true; }
+        elseif (preg_match('/^--disk=(.+)$/s', $arg, $m)) { $tOpts['disk'] = $m[1]; }
+        else {
+            fwrite(STDERR, $tUsage);
+            exit(1);
+        }
+    }
+    \FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
+    if (($_ENV['FLUXFILES_STORAGE_BACKEND'] ?? 'json') === 'db') {
+        fwrite(STDERR, "trash:reconcile rebuilds the JSON manifest; it does not apply to FLUXFILES_STORAGE_BACKEND=db.\n");
+        exit(1);
+    }
+    try {
+        $tDisks = \FluxFiles\DiskConfig::load(__DIR__ . '/../config/disks.php');
+    } catch (\FluxFiles\ApiException $e) {
+        fwrite(STDERR, ($e instanceof \FluxFiles\DiskConfigException ? $e->getDetail() : $e->getMessage()) . "\n");
+        exit(1);
+    }
+    if (!isset($tDisks[$tOpts['disk']])) {
+        fwrite(STDERR, "Disk '{$tOpts['disk']}' is not configured.\n");
+        exit(1);
+    }
+    try {
+        $tRes = (new StorageMetadataHandler(new DiskManager($tDisks)))
+            ->reconcileTrash($tOpts['disk'], !$tOpts['dry_run'], $tOpts['prune']);
+    } catch (\Throwable $e) {
+        fwrite(STDERR, 'Trash reconcile failed: ' . $e->getMessage() . "\n");
+        exit(2);
+    }
+    fwrite(STDOUT, sprintf(
+        "%s: %d trash entr%s %s; %d manifest entr%s without a payload%s.\n",
+        $tOpts['dry_run'] ? 'Dry run' : 'Done',
+        count($tRes['recovered']), count($tRes['recovered']) === 1 ? 'y' : 'ies',
+        $tOpts['dry_run'] ? 'would be recovered' : 'recovered',
+        count($tRes['dangling']), count($tRes['dangling']) === 1 ? 'y' : 'ies',
+        $tOpts['prune'] ? ($tOpts['dry_run'] ? ' (would be dropped)' : ' (dropped)') : ' (left; use --prune to drop)'
+    ));
+    exit(0);
+}
+
 // `notify:run` — the e-mail notice sweep from a system cron (hourly), the standalone
 // counterpart of `POST /api/fm/notify/run`. Mail from FLUXFILES_MAIL_*; needs the Intake
 // or Share module installed + licensed. The sweep reads ONE store per prefix and mails the
@@ -572,6 +624,28 @@ if ($command === 'ai:test') {
     exit($aExit);
 }
 
+// `demo:purge` — the public-demo sweep (FLUXFILES_DEMO=1) for cron: delete expired
+// sandboxes + their trash, enforce the global size budget, and drop the index / folder-index
+// / sidecar entries of sandboxes that no longer exist (idempotent; also the one-off cleanup
+// for a shared index.json that grew before the purge cleaned up after itself). The page-load
+// sweep is throttled to once per 5 min under a lock; this ignores the throttle, not the lock.
+//   fluxfiles demo:purge
+if ($command === 'demo:purge') {
+    \FluxFiles\EnvBootstrap::load(\FluxFiles\EnvBootstrap::cliDirs(__DIR__));
+    $stateDir = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (dirname(__DIR__) . '/storage'), '/');
+    $localRoot = $_ENV['FLUXFILES_LOCAL_ROOT'] ?? ($stateDir . '/uploads');
+    if (!is_dir($stateDir)) {
+        fwrite(STDERR, "Storage directory does not exist: {$stateDir}\n");
+        exit(1);
+    }
+    if (!\FluxFiles\DemoMode::purgeIfDue($localRoot, $stateDir, true)) {
+        fwrite(STDERR, "Another purge is running (or the lock is not writable); nothing done.\n");
+        exit(2);
+    }
+    fwrite(STDOUT, "Demo purge done.\n");
+    exit(0);
+}
+
 if (!in_array($command, ['index', 'seed'], true)) {
     fwrite(STDERR, "Usage:\n"
         . "  fluxfiles serve [--host=127.0.0.1] [--port=8080]\n"
@@ -580,6 +654,7 @@ if (!in_array($command, ['index', 'seed'], true)) {
         . "  fluxfiles license refresh [--check|--print] [--json]\n"
         . "  fluxfiles doctor [disk] [--origin=https://app.example] [--json]\n"
         . "  fluxfiles ai:test [--cheap] [--json]\n"
+        . "  fluxfiles demo:purge\n"
         . "  fluxfiles notify:run [--disk=local] [--prefix=<p>]... [--prefixes-file=<path>] [--discover] [--dry-run] [--max=50]\n"
         . "  fluxfiles index --disk=local [--path=prefix] [--owner=user-id] [--readonly] [--overwrite] [--dry-run] [--hash] [--variants] [--persist-metadata]\n");
     exit(1);

@@ -299,7 +299,7 @@ on an FTP server have to be copied to local, SFTP or S3 storage first.
 
 - A maintained, MIT-licensed core in place of an archived CC BY-NC one.
 - Per-user limits are signed claims, not a shared `config.php` or session.
-- Soft-delete trash with restore, full-text search, dark mode, 16 languages with RTL,
+- Soft-delete trash with restore, name + metadata search, dark mode, 16 languages with RTL,
   and S3/R2/SFTP storage.
 - **Changes:** PHP 8.1 or newer; no FTP storage; extract and download handle zip only;
   no general image editor; no switch to allow renaming without allowing other writes.
@@ -482,7 +482,7 @@ Laravel 5.4–5.8 `illuminate/*` components and Symfony 3.4/4
 ### Mapping
 
 RichFilemanager concepts below are from its
-[README](https://github.com/psolom/RichFilemanager/blob/master/README.md).
+[README](https://github.com/psolom/RichFilemanager/blob/master/ReadMe.md).
 
 | RichFilemanager | FluxFiles |
 |---|---|
@@ -500,7 +500,7 @@ RichFilemanager concepts below are from its
 | Folder download as zip | `allow_zip` |
 | CodeMirror text editor | CodeMirror editor through `allow_code_edit` |
 | ViewerJS (PDF/OpenOffice), Google Docs viewer (MS Office) | Built-in PDF preview; office files through your own Collabora/OnlyOffice (`office_url`) |
-| Text search filter | Full-text search over file names and metadata, plus folder search |
+| Text search filter | Search over file names and metadata (title, alt, caption, tags), plus folder search |
 
 ### Before and after
 

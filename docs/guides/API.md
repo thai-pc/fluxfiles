@@ -79,7 +79,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 
 | Method | Path | Params | Description |
 |--------|------|--------|-------------|
-| `GET` | `/search?disk=&q=&limit=` | `limit` default 50 | Full-text search across file names + metadata |
+| `GET` | `/search?disk=&q=&limit=` | `limit` default 50 | Search file names + metadata (title, alt text, caption, tags); not file contents |
 | `GET` | `/search-folders?disk=&q=&limit=` | `limit` default 50 | Search folder names via the directory index |
 | `GET` | `/quota?disk=` | — | Storage usage: used_mb, max_mb, percentage |
 | `GET` | `/usage?disk=&refresh=` | — | **Usage dashboard** — quota + per-type and per-folder breakdown (file-cached; `refresh=true` recomputes, tight bucket) |

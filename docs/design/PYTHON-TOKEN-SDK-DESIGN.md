@@ -1144,7 +1144,7 @@ requires-python = ">=3.10"
 dependencies = ["PyJWT>=2.8,<3", "cryptography>=42"]
 
 [project.urls]
-Homepage = "https://github.com/thai-pc/fluxfiles#python-server-side-token-sdk"
+Homepage = "https://github.com/thai-pc/fluxfiles#framework-adapters"
 Repository = "https://github.com/thai-pc/fluxfiles"
 
 [build-system]
