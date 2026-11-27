@@ -43,6 +43,12 @@ The **Pages Router** works identically. Always mint the JWT **on the server**
 API route, or by asking your FluxFiles core backend for one — and pass it in as
 `token`.
 
+## Before you embed: secret, origins, claims
+
+- **Same secret.** The backend that mints tokens must use the **same** `FLUXFILES_SECRET` (>= 32 bytes) as the FluxFiles server. Share one `.env`: `echo "FLUXFILES_SECRET=$(openssl rand -hex 32)" >> .env`, then `docker run --env-file .env ...` for the server and `node --env-file=.env server.js` for your backend.
+- **Allow your app's origin.** On the FluxFiles server set `FLUXFILES_ALLOWED_ORIGINS` (CORS) and `FLUXFILES_FRAME_ANCESTORS` (CSP `frame-ancestors`) to your app's exact origin(s), scheme + host + port, e.g. `http://localhost:5173`. If neither is set, **any website can frame the FluxFiles UI.** See [CONFIG.md](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md#4-server-env-vars-server-wide).
+- **Default claims are read-only.** A token minted without explicit claims is `read`-only on the `local` disk. Pass `perms` (e.g. `['read', 'write', 'delete']`) and `disks` when minting, e.g. `createToken({ userId, perms: [...], disks: [...] })` from `@fluxfiles/node`.
+
 ## Components
 
 ### FluxFilesModal

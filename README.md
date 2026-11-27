@@ -34,12 +34,25 @@
 ## Try it in 30 seconds
 
 ```bash
-docker run -d --name fluxfiles -p 8080:80 -e FLUXFILES_SECRET="$(openssl rand -hex 32)" ghcr.io/thai-pc/fluxfiles:latest
-TOKEN=$(docker exec fluxfiles php -r 'require "/app/packages/core/embed.php"; echo fluxfiles_token(userId: "demo", perms: ["read","write","delete"], disks: ["local"]);')
+# One secret (>= 32 bytes), shared by this server and by whatever backend mints your tokens
+echo "FLUXFILES_SECRET=$(openssl rand -hex 32)" >> .env
+docker run -d --name fluxfiles -p 8080:80 --env-file .env ghcr.io/thai-pc/fluxfiles:latest
+TOKEN=$(docker exec fluxfiles php -r 'require "/app/packages/core/embed.php"; echo fluxfiles_token(["user" => "demo", "perms" => ["read","write","delete"], "disks" => ["local"]]);')
 echo "http://localhost:8080/public/index.html?token=$TOKEN"
 ```
 
 Open the printed URL. The `?token=` URL is only for trying it locally; in a real app the SDK hands the token to the iframe, and it never appears in a URL.
+
+**Before you embed it in an app, lock down who may use it.** Add your app's exact origin(s) (scheme + host + port, no path, comma-separated) to `.env`:
+
+```bash
+FLUXFILES_ALLOWED_ORIGINS=http://localhost:5173        # CORS: which sites may call the API
+FLUXFILES_FRAME_ANCESTORS=http://localhost:5173        # CSP: which sites may frame the UI
+```
+
+`FLUXFILES_FRAME_ANCESTORS` falls back to `'self'` plus `FLUXFILES_ALLOWED_ORIGINS` when unset, but **if neither is set, no header is sent and any website can frame the FluxFiles UI.** Set them in production. See [CONFIG.md](docs/reference/CONFIG.md#4-server-env-vars-server-wide).
+
+Your token-minting backend (Node, Python or PHP) must use the **same** `FLUXFILES_SECRET`, e.g. `node --env-file=.env server.js`. A token signed with a different secret is rejected.
 
 No Docker? `composer require fluxfiles/fluxfiles`, then `php vendor/bin/fluxfiles serve` ([install guide](docs/guides/GUIDE.md#quick-start)).
 
@@ -49,6 +62,7 @@ Two pieces: your backend mints a token for the signed-in user, and the page open
 
 ```php
 // Backend: who may do what, and where (PHP; Node, Python, Laravel and WordPress do the same)
+// Uses the same FLUXFILES_SECRET as the FluxFiles server.
 require 'vendor/fluxfiles/fluxfiles/embed.php';
 
 $token = fluxfiles_token([
