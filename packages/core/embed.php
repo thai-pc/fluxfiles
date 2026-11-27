@@ -55,6 +55,8 @@ function fluxfiles_token(
     //                                 'allow_optimize' => true, 'upload_collision' => 'overwrite']]);
     // The `claims` map takes ANY of the JWT claims (snake_case) — the single escape
     // hatch so nothing is unsettable. See docs/reference/CONFIG.md for the full claim list.
+    // `secret` signs with that key instead of FLUXFILES_SECRET. An unknown option key,
+    // an empty `user` or a missing/short (< 32 bytes) secret throws.
     if (is_array($userId)) {
         return _fluxfiles_build_token($userId);
     }
@@ -97,11 +99,61 @@ function fluxfiles_assert_prefix(string $prefix): void
     }
 }
 
+/**
+ * Every option key fluxfiles_token() understands. Anything else is a typo
+ * (`maxUplaodMb` would otherwise mint a token with the default 10 MB limit), so
+ * it throws instead of being dropped. Raw claim names go in `claims`.
+ */
+const FLUXFILES_TOKEN_OPTIONS = [
+    'user', 'userId', 'sub', 'secret', 'perms', 'disks', 'prefix', 'ttl',
+    'maxUploadMb', 'max_upload', 'allowedExt', 'allowed_ext',
+    'ownerOnly', 'owner_only', 'maxStorageMb', 'max_storage', 'maxFiles', 'max_files',
+    'aiAutoTag', 'ai_auto_tag', 'rateRead', 'rate_read', 'rateWrite', 'rate_write',
+    'variants', 'import', 'media', 'webp', 'usage', 'edition', 'role', 'claims', 'extra',
+];
+
+/**
+ * The signing secret: an explicit one (the `secret` option) wins, else
+ * FLUXFILES_SECRET from $_ENV (a loaded .env) or the real environment (PHP leaves
+ * $_ENV empty under the production variables_order = GPCS). Throws a clear
+ * error instead of firebase/php-jwt's bare "Provided key is too short".
+ */
+function fluxfiles_resolve_secret(?string $explicit = null): string
+{
+    $secret = $explicit;
+    if ($secret === null || $secret === '') {
+        $env = $_ENV['FLUXFILES_SECRET'] ?? null;
+        $secret = is_string($env) && $env !== '' ? $env : (string) getenv('FLUXFILES_SECRET');
+    }
+    if ($secret === '') {
+        throw new \RuntimeException(
+            'FluxFiles: no signing secret. Set FLUXFILES_SECRET (e.g. FLUXFILES_SECRET=$(openssl rand -hex 32)) '
+            . 'in the environment or .env, or pass the `secret` option.'
+        );
+    }
+    if (strlen($secret) < 32) {
+        throw new \RuntimeException(
+            'FluxFiles: the signing secret must be at least 32 bytes (HS256); got ' . strlen($secret)
+            . '. Generate one with: openssl rand -hex 32'
+        );
+    }
+    return $secret;
+}
+
 function _fluxfiles_build_token(array $o): string
 {
-    // $_ENV when the host loaded a .env; otherwise the real env var (PHP leaves
-    // $_ENV empty under the production variables_order = GPCS).
-    $secret = $_ENV['FLUXFILES_SECRET'] ?? (string) getenv('FLUXFILES_SECRET');
+    $unknown = array_diff(array_map('strval', array_keys($o)), FLUXFILES_TOKEN_OPTIONS);
+    if ($unknown !== []) {
+        throw new \InvalidArgumentException(
+            'FluxFiles: unknown fluxfiles_token() option(s): ' . implode(', ', $unknown)
+            . '. Put raw JWT claims under `claims`; see docs/reference/CONFIG.md.'
+        );
+    }
+    $secretOpt = $o['secret'] ?? null;
+    if ($secretOpt !== null && !is_string($secretOpt)) {
+        throw new \InvalidArgumentException('FluxFiles: the `secret` option must be a string');
+    }
+    $secret = fluxfiles_resolve_secret($secretOpt);
     $now = time();
     $pick = static function (array $keys, $default) use ($o) {
         foreach ($keys as $k) {
@@ -110,6 +162,12 @@ function _fluxfiles_build_token(array $o): string
         return $default;
     };
 
+    $sub = $pick(['user', 'userId', 'sub'], '');
+    if (!is_scalar($sub) || trim((string) $sub) === '') {
+        throw new \InvalidArgumentException('FluxFiles: `user` (the token subject) must be a non-empty id');
+    }
+    $sub = (string) $sub;
+
     $ttl = (int) $pick(['ttl'], 3600);
     // Role preset (DX sugar, docs/design/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base
     // payload array, because `perms` already has an unconditional default baked into
@@ -117,7 +175,7 @@ function _fluxfiles_build_token(array $o): string
     fluxfiles_assert_prefix((string) $pick(['prefix'], ''));
     $roleDefaults = fluxfiles_role_preset($pick(['role'], null));
     $payload = [
-        'sub'         => (string) $pick(['user', 'userId', 'sub'], ''),
+        'sub'         => $sub,
         'iat'         => $now,
         'exp'         => $now + $ttl,
         'jti'         => bin2hex(random_bytes(12)),
@@ -311,7 +369,7 @@ function fluxfiles_byob_token(
     ?string $role = null
 ): string {
     fluxfiles_assert_prefix($prefix);
-    $secret = $_ENV['FLUXFILES_SECRET'] ?? (string) getenv('FLUXFILES_SECRET');
+    $secret = fluxfiles_resolve_secret();
     $now = time();
 
     // Encrypt each BYOB disk config
@@ -389,7 +447,7 @@ function fluxfiles_mixed_token(
     ?array $usage = null
 ): string {
     fluxfiles_assert_prefix($prefix);
-    $secret = $_ENV['FLUXFILES_SECRET'] ?? (string) getenv('FLUXFILES_SECRET');
+    $secret = fluxfiles_resolve_secret();
     $now = time();
 
     // Encrypt BYOB disks

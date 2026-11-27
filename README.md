@@ -5,27 +5,16 @@
 </p>
 
 [![Packagist Version](https://img.shields.io/packagist/v/fluxfiles/fluxfiles?label=packagist&color=f28d1a)](https://packagist.org/packages/fluxfiles/fluxfiles)
-[![Docker image](https://img.shields.io/badge/ghcr.io-fluxfiles-2496ed?logo=docker&logoColor=white)](https://github.com/thai-pc/fluxfiles/pkgs/container/fluxfiles)
-[![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
 [![Tests](https://github.com/thai-pc/fluxfiles/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/thai-pc/fluxfiles/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
-[![laravel on Packagist](https://img.shields.io/packagist/v/fluxfiles/laravel?label=laravel&color=ff2d20)](https://packagist.org/packages/fluxfiles/laravel)
-[![sdk on npm](https://img.shields.io/npm/v/fluxfiles?label=sdk&color=cb3837)](https://www.npmjs.com/package/fluxfiles)
-[![react on npm](https://img.shields.io/npm/v/@fluxfiles/react?label=react&color=61dafb)](https://www.npmjs.com/package/@fluxfiles/react)
-[![vue on npm](https://img.shields.io/npm/v/@fluxfiles/vue?label=vue&color=42b883)](https://www.npmjs.com/package/@fluxfiles/vue)
-[![ckeditor4 on npm](https://img.shields.io/npm/v/@fluxfiles/ckeditor4?label=ckeditor4&color=1eb5ff)](https://www.npmjs.com/package/@fluxfiles/ckeditor4)
-[![ckeditor5 on npm](https://img.shields.io/npm/v/@fluxfiles/ckeditor5?label=ckeditor5&color=0ae)](https://www.npmjs.com/package/@fluxfiles/ckeditor5)
-[![tinymce on npm](https://img.shields.io/npm/v/@fluxfiles/tinymce?label=tinymce&color=2dc26b)](https://www.npmjs.com/package/@fluxfiles/tinymce)
-[![summernote on npm](https://img.shields.io/npm/v/@fluxfiles/summernote?label=summernote&color=73a839)](https://www.npmjs.com/package/@fluxfiles/summernote)
-[![node on npm](https://img.shields.io/npm/v/@fluxfiles/node?label=node&color=339933)](https://www.npmjs.com/package/@fluxfiles/node)
-[![mcp on npm](https://img.shields.io/npm/v/@fluxfiles/mcp?label=mcp&color=6b4fbb)](https://www.npmjs.com/package/@fluxfiles/mcp)
-[![python on PyPI](https://img.shields.io/pypi/v/fluxfiles-token?label=python&color=3776ab)](https://pypi.org/project/fluxfiles-token/)
+[![Docker image](https://img.shields.io/badge/ghcr.io-fluxfiles-2496ed?logo=docker&logoColor=white)](https://github.com/thai-pc/fluxfiles/pkgs/container/fluxfiles)
 
-**An embeddable file manager for PHP 8.1+.** Files stay on your own storage: local disk, AWS S3, Cloudflare R2 or SFTP. Your backend signs a short-lived JWT that decides what each user can see and do, so FluxFiles keeps no user database of its own.
+**An embeddable file manager for PHP 8.1+.** Files stay on your own storage: local disk, AWS S3, Cloudflare R2 or SFTP. Your backend signs a JWT (1 hour by default) that decides what each user can see and do, so FluxFiles keeps no user database of its own.
 
 - **Drop it into any app** with an iframe and a small JS SDK, or use the adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4/5**, **TinyMCE** and **Summernote**.
 - **Scoped per token:** disks, folder prefix, permissions, upload size, file types and quota are claims in the token, enforced on every request.
 - **MIT core:** folders, trash, search, WebP/AVIF images, crop, zip, cross-disk copy and more. Paid add-ons are optional and separate.
+- **No phoning home:** the server makes no calls to the vendor. Only the CLI commands `fluxfiles license refresh` and `fluxfiles update`, which you run yourself, contact vendor hosts.
 
 **[Live demo](https://fluxfiles-demo.thai-pc.com/)** · **[Documentation](docs/guides/GUIDE.md)** · **[Website](https://fluxfiles.thai-pc.com/)** · **[WordPress plugin](https://fluxfiles.thai-pc.com/wordpress/)** · **[Pro add-ons](https://fluxfiles.thai-pc.com/pricing/)**
 
@@ -43,6 +32,8 @@ echo "http://localhost:8080/public/index.html?token=$TOKEN"
 
 Open the printed URL. The `?token=` URL is only for trying it locally; in a real app the SDK hands the token to the iframe, and it never appears in a URL.
 
+On an unlicensed server the standalone UI shows locked "Pro" entries for the paid add-ons. To hide them, mint tokens with the `pro_hints` claim set to `false` (`'claims' => ['pro_hints' => false]`); embedded (framed) UIs never show them. See [CONFIG.md](docs/reference/CONFIG.md).
+
 **Before you embed it in an app, lock down who may use it.** Add your app's exact origin(s) (scheme + host + port, no path, comma-separated) to `.env`:
 
 ```bash
@@ -56,7 +47,17 @@ FLUXFILES_FRAME_ANCESTORS=http://localhost:5173
 
 Your token-minting backend (Node, Python or PHP) must use the **same** `FLUXFILES_SECRET`, e.g. `node --env-file=.env server.js`. A token signed with a different secret is rejected.
 
-No Docker? `composer require fluxfiles/fluxfiles`, then `php vendor/bin/fluxfiles serve` ([install guide](docs/guides/GUIDE.md#quick-start)).
+**No Docker?** Install the package, export a secret in the shell, and start the built-in server from that shell:
+
+```bash
+composer require fluxfiles/fluxfiles
+export FLUXFILES_SECRET=$(openssl rand -hex 32)   # keep it: your token backend needs the same value
+php vendor/bin/fluxfiles serve &                  # http://127.0.0.1:8080/public/
+TOKEN=$(php -r 'require "vendor/fluxfiles/fluxfiles/embed.php"; echo fluxfiles_token(["user" => "demo", "perms" => ["read","write","delete"], "disks" => ["local"]]);')
+echo "http://127.0.0.1:8080/public/index.html?token=$TOKEN"
+```
+
+The server reads `FLUXFILES_SECRET` from the environment, so you don't need a `.env` inside `vendor/`. Without it, every API call answers "FLUXFILES_SECRET not configured". More in the [install guide](docs/guides/GUIDE.md#quick-start).
 
 ## Embed it in your app
 
@@ -92,8 +93,10 @@ $token = fluxfiles_token([
 
 ```tsx
 // React: npm i @fluxfiles/react
+// onSelect gets FluxFile | FluxFile[] (an array when `multiple` is set)
 <FluxFiles endpoint="https://files.example.com" token={token} disk="s3"
-           onSelect={(file) => setCover(file.url)} style={{ height: 600 }} />
+           onSelect={(file) => { if (!Array.isArray(file)) setCover(file.permanent_url || file.url || ''); }}
+           style={{ height: 600 }} />
 ```
 
 ```vue
@@ -105,6 +108,8 @@ $token = fluxfiles_token([
 {{-- Laravel: composer require fluxfiles/laravel --}}
 <x-fluxfiles disk="s3" mode="browser" height="600px" />
 ```
+
+The Laravel component renders "not available" until you register a claims resolver that says which folder and rights each user gets, e.g. `FluxFiles::resolveClaimsUsing(fn ($user) => ['prefix' => 'users/' . $user->id])` in `AppServiceProvider::boot()`. See [per-user token policy](packages/laravel/README.md#per-user-token-policy-claims-resolver).
 
 - **WordPress:** install the plugin ZIP from the [releases page](https://github.com/thai-pc/fluxfiles/releases?q=wordpress-v), then use *Media → FluxFiles*, the `[fluxfiles]` shortcode or the block. See [`packages/wordpress`](packages/wordpress).
 - **TinyMCE (4–8), CKEditor 4, CKEditor 5, Summernote:** a toolbar button and the editor's own image-dialog "browse" button. See [Framework adapters](#framework-adapters).
@@ -127,7 +132,7 @@ All SDK options, events, commands and token refresh are covered in the [embeddin
 
 | | Included in the MIT core |
 |---|---|
-| **Files** | Upload (chunked, resumable tus, presigned), download, move, copy, rename, bulk select, trash with restore, zip and extract, import from URL, full-text search, duplicate finder |
+| **Files** | Upload (chunked, resumable tus, presigned), download, move, copy, rename, bulk select, trash with restore, zip and extract, import from URL, search by name and metadata (title, alt, caption, tags), duplicate finder |
 | **Images and media** | WebP variants and on-demand WebP/AVIF at any size with `srcset`, crop, watermark editor, optimize at rest, EXIF/GPS stripping, image/video/audio/PDF preview |
 | **Access** | JWT claims for disks, folder prefix, permissions, owner-only, quota, file count and file types; `role` presets; rate limits; HMAC-chained audit log |
 | **Storage** | Local, AWS S3, Cloudflare R2, S3-compatible, SFTP, BYOB; bookkeeping in JSON files next to your files, or in your own MySQL/PostgreSQL/SQLite |
@@ -140,20 +145,20 @@ Pro add-ons, sold separately: share links, upload portals and document requests,
 
 | Adapter | Install | What it does |
 |---|---|---|
-| [**Laravel**](packages/laravel) | `composer require fluxfiles/laravel` | `<x-fluxfiles>` Blade component, `FluxFiles::token()`, config, route proxy |
+| [**Laravel**](packages/laravel) [![laravel on Packagist](https://img.shields.io/packagist/v/fluxfiles/laravel?label=&color=ff2d20)](https://packagist.org/packages/fluxfiles/laravel) | `composer require fluxfiles/laravel` | `<x-fluxfiles>` Blade component, `FluxFiles::token()`, config, route proxy |
 | [**WordPress**](packages/wordpress) | plugin ZIP | Media page, shortcode, block, Classic-editor button, settings for S3/R2/SFTP and AI tagging |
-| [**React**](packages/react) | `npm i @fluxfiles/react` | `<FluxFiles>`, `<FluxFilesModal>`, `useFluxFiles()` (TypeScript) |
-| [**Vue 3 / Nuxt 3**](packages/vue) | `npm i @fluxfiles/vue` | Components, composable, Nuxt plugin |
-| [**TinyMCE**](packages/tinymce) | `npm i @fluxfiles/tinymce` | Toolbar button and image-dialog picker, TinyMCE 4–8 |
-| [**CKEditor 4**](packages/ckeditor4) / [**CKEditor 5**](packages/ckeditor5) | `npm i @fluxfiles/ckeditor4` / `@fluxfiles/ckeditor5` | Toolbar button and the editor's image "browse" |
-| [**Summernote**](packages/summernote) | `npm i @fluxfiles/summernote` | Toolbar button that inserts the picked file |
-| [**JS SDK**](packages/sdk) | `npm i fluxfiles` or `/fluxfiles.js` from your server | The iframe + `postMessage` bridge the others build on |
-| [**Node**](packages/node) / [**Python**](packages/python) | `npm i @fluxfiles/node` / `pip install fluxfiles-token` | Mint tokens from a non-PHP backend, byte-compatible with the PHP helper |
-| [**MCP server**](packages/mcp) | `npx -y @fluxfiles/mcp` | Let an AI agent list, search and read files through a scoped token |
+| [**React**](packages/react) [![react on npm](https://img.shields.io/npm/v/@fluxfiles/react?label=&color=61dafb)](https://www.npmjs.com/package/@fluxfiles/react) | `npm i @fluxfiles/react` | `<FluxFiles>`, `<FluxFilesModal>`, `useFluxFiles()` (TypeScript) |
+| [**Vue 3 / Nuxt 3**](packages/vue) [![vue on npm](https://img.shields.io/npm/v/@fluxfiles/vue?label=&color=42b883)](https://www.npmjs.com/package/@fluxfiles/vue) | `npm i @fluxfiles/vue` | Components, composable, Nuxt plugin |
+| [**TinyMCE**](packages/tinymce) [![tinymce on npm](https://img.shields.io/npm/v/@fluxfiles/tinymce?label=&color=2dc26b)](https://www.npmjs.com/package/@fluxfiles/tinymce) | `npm i @fluxfiles/tinymce` | Toolbar button and image-dialog picker, TinyMCE 4–8 |
+| [**CKEditor 4**](packages/ckeditor4) [![ckeditor4 on npm](https://img.shields.io/npm/v/@fluxfiles/ckeditor4?label=&color=1eb5ff)](https://www.npmjs.com/package/@fluxfiles/ckeditor4) / [**CKEditor 5**](packages/ckeditor5) [![ckeditor5 on npm](https://img.shields.io/npm/v/@fluxfiles/ckeditor5?label=&color=0ae)](https://www.npmjs.com/package/@fluxfiles/ckeditor5) | `npm i @fluxfiles/ckeditor4` / `@fluxfiles/ckeditor5` | Toolbar button and the editor's image "browse" |
+| [**Summernote**](packages/summernote) [![summernote on npm](https://img.shields.io/npm/v/@fluxfiles/summernote?label=&color=73a839)](https://www.npmjs.com/package/@fluxfiles/summernote) | `npm i @fluxfiles/summernote` | Toolbar button that inserts the picked file |
+| [**JS SDK**](packages/sdk) [![sdk on npm](https://img.shields.io/npm/v/fluxfiles?label=&color=cb3837)](https://www.npmjs.com/package/fluxfiles) | `npm i fluxfiles` or `/fluxfiles.js` from your server | The iframe + `postMessage` bridge the others build on |
+| [**Node**](packages/node) [![node on npm](https://img.shields.io/npm/v/@fluxfiles/node?label=&color=339933)](https://www.npmjs.com/package/@fluxfiles/node) / [**Python**](packages/python) [![python on PyPI](https://img.shields.io/pypi/v/fluxfiles-token?label=&color=3776ab)](https://pypi.org/project/fluxfiles-token/) | `npm i @fluxfiles/node` / `pip install fluxfiles-token` | Mint tokens from a non-PHP backend, byte-compatible with the PHP helper |
+| [**MCP server**](packages/mcp) [![mcp on npm](https://img.shields.io/npm/v/@fluxfiles/mcp?label=&color=6b4fbb)](https://www.npmjs.com/package/@fluxfiles/mcp) | `npx -y @fluxfiles/mcp` | Let an AI agent list, search and read files through a scoped token |
 
 ## Security in brief
 
-- **Tokens:** HS256 only, short-lived, refused if they carry no `exp`; the main token travels over `postMessage` and `Authorization: Bearer`, never in a URL.
+- **Tokens:** HS256 only, short-lived by default (1 hour), refused if they carry no `exp`; the main token travels over `postMessage` and `Authorization: Bearer`, never in a URL. Core does not cap `exp`, so keep TTLs short: a token can't be revoked before it expires except by rotating `FLUXFILES_SECRET`, which invalidates every token.
 - **Scope:** every path is normalised and confined to the token's prefix; disks, permissions and file types are checked on every request.
 - **Uploads:** dangerous extensions (including double extensions such as `shell.php.jpg`) are refused, an extension can't be changed after upload, and zip extract is guarded against path slip and zip bombs.
 - **Network:** CORS and `Origin` allow-lists; BYOB endpoints and URL imports are SSRF-checked and pinned to the resolved IP.
@@ -174,10 +179,11 @@ The full list, token handling and a production checklist are in the [security se
 
 ## Contributing
 
-Bug reports and pull requests are welcome. The repository is a monorepo: core in `packages/core`, each adapter in its own package with its own tests. To run the core suite:
+Bug reports and pull requests are welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md). The repository is a monorepo: core in `packages/core`, each adapter in its own package with its own tests. To run the core suite on a fresh clone:
 
 ```bash
 composer install -d packages/core
+echo "FLUXFILES_SECRET=$(openssl rand -hex 32)" > packages/core/.env   # gitignored; the tests sign tokens with it
 for f in packages/core/tests/unit/*.php packages/core/tests/integration/*.php; do php "$f"; done
 ```
 
@@ -185,7 +191,7 @@ More test suites (end-to-end, browser, adapters) are listed in the [guide](docs/
 
 ## License
 
-[MIT](LICENSE). Created and maintained by **thai-pc**. If you fork or redistribute, please keep the copyright notice:
+[MIT](LICENSE). Created and maintained by **thai-pc**. The MIT licence only asks that you keep its copyright and permission notice in copies of the code. A credit line in your project is appreciated but not required, for example:
 
 ```
 Based on FluxFiles by thai-pc — https://github.com/thai-pc/fluxfiles

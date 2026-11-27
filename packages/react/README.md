@@ -73,6 +73,8 @@ function App() {
                 disk="local"
                 locale="en"
                 onSelect={(file) => {
+                    // FluxFile | FluxFile[]: an array only when `multiple` is set.
+                    if (Array.isArray(file)) return;
                     // For saved content, prefer permanent_url (url is presigned/
                     // expiring on private disks). file also has mime/width/height
                     // and created/modified (Unix seconds).
@@ -152,7 +154,7 @@ function App() {
 | `navigate(path)` | Navigate to a directory |
 | `setDisk(disk)` | Switch storage disk |
 | `refresh()` | Reload current directory |
-| `search(query)` | Full-text search |
+| `search(query)` | Search file names and metadata (title, alt, caption, tags) |
 | `crossCopy(disk, path?)` | Copy selection to another disk |
 | `crossMove(disk, path?)` | Move selection to another disk |
 | `aiTag()` | AI auto-tag selected image |

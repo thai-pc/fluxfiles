@@ -193,7 +193,7 @@ Concretely, this means:
         "status": "locked",
         "why_not": "not_licensed",
         "claim_snippet": null,
-        "docs_url": "https://fluxfiles.dev/pricing"
+        "docs_url": "https://fluxfiles.thai-pc.com/pricing/"
       },
       {
         "id": "sso",
@@ -206,7 +206,7 @@ Concretely, this means:
         "status": "locked",
         "why_not": "not_installed",
         "claim_snippet": null,
-        "docs_url": "https://fluxfiles.dev/pricing"
+        "docs_url": "https://fluxfiles.thai-pc.com/pricing/"
       },
       {
         "id": "dlp_scan",
@@ -219,7 +219,7 @@ Concretely, this means:
         "status": "locked",
         "why_not": "not_installed",
         "claim_snippet": null,
-        "docs_url": "https://fluxfiles.dev/pricing"
+        "docs_url": "https://fluxfiles.thai-pc.com/pricing/"
       },
       {
         "id": "legal_hold",
@@ -232,7 +232,7 @@ Concretely, this means:
         "status": "locked",
         "why_not": "not_installed",
         "claim_snippet": null,
-        "docs_url": "https://fluxfiles.dev/pricing"
+        "docs_url": "https://fluxfiles.thai-pc.com/pricing/"
       }
     ]
   },
