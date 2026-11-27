@@ -28,6 +28,8 @@ final class ImageToken
 {
     private const TYPE = 'img';
     public const MAX_TTL = 86400; // 24h
+    /** Longest start-rounding window of a versioned token (6h); see mint(). */
+    public const MAX_STABLE_WINDOW = 21600;
 
     /**
      * @param int $maxWidth Per-tenant clamp on the requested resize width.
@@ -60,8 +62,11 @@ final class ImageToken
         // SAME URL and the browser's copy (the answer is `immutable`) is reused. The start
         // only ever moves back: the token expires up to a quarter of its TTL early, never
         // late. $version must change with the source bytes, or a stale image would be reused.
+        // The window is a quarter of the TTL, capped at 6h (was 15 min: a gallery's thumbnail
+        // URLs changed every <=15 min and the whole page re-downloaded); `exp` is still
+        // start + ttl, so a token never outlives the TTL it was minted with.
         if ($version !== null && $version !== '') {
-            $window = min(900, intdiv($ttl, 4));
+            $window = min(self::MAX_STABLE_WINDOW, intdiv($ttl, 4));
             $now -= $window > 1 ? $now % $window : 0;
         }
         $payload = [

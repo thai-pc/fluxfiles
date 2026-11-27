@@ -126,6 +126,7 @@ class MediaEndpoint
         return [
             'range'  => isset($server['HTTP_RANGE']) ? (string) $server['HTTP_RANGE'] : null,
             'accept' => (string) ($server['HTTP_ACCEPT'] ?? ''),
+            'if_none_match' => (string) ($server['HTTP_IF_NONE_MATCH'] ?? ''),
         ];
     }
 
@@ -269,7 +270,7 @@ class MediaEndpoint
      * string. Honours HTTP Range so a <video>/<audio> can seek. Emits raw bytes.
      *
      * @param array<string,mixed> $query   the query params (`token`)
-     * @param array{range?:?string,accept?:string} $headers
+     * @param array{range?:?string,accept?:string,if_none_match?:string} $headers
      */
     public function stream(array $query, array $headers = []): void
     {
@@ -408,7 +409,7 @@ class MediaEndpoint
      * variants per file is mathematically bounded (no per-request counting needed).
      *
      * @param array<string,mixed> $query   `token`, `width`, `height`, `fit`, `dpr`, `quality`, `format`
-     * @param array{range?:?string,accept?:string} $headers `accept` drives format=auto negotiation
+     * @param array{range?:?string,accept?:string,if_none_match?:string} $headers `accept` drives format=auto negotiation
      */
     public function image(array $query, array $headers = []): void
     {
@@ -422,7 +423,7 @@ class MediaEndpoint
 
     /**
      * @param array<string,mixed> $query
-     * @param array{range?:?string,accept?:string} $headers
+     * @param array{range?:?string,accept?:string,if_none_match?:string} $headers
      */
     private function serveImage(array $query, array $headers): void
     {
@@ -547,22 +548,130 @@ class MediaEndpoint
         $cacheKey = ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, $wmSig, $format, $height, $fit);
         $outMime = 'image/' . $format;
 
-        if ($fs->fileExists($cacheKey)) {
-            // S3/R2: redirect to a presigned URL of the cached image so the bucket
-            // serves the bytes directly (no app-server egress). Local disks read
-            // cheaply, so we just serve them.
-            if (($this->diskManager->config($disk)['driver'] ?? '') === 's3') {
-                $redirect = $this->diskManager->presignGetUrl($disk, $cacheKey, 3600);
-                if ($redirect !== null) {
-                    $this->header('Cache-Control: private, max-age=600');
-                    $this->header('Vary: Accept');
-                    $this->header('Location: ' . $redirect, true, 302);
-                    return;
-                }
-            }
-            $this->serveBytes((string) $fs->read($cacheKey), $outMime, true, !empty($scope['byob']));
+        // Validator: the cache key already folds in the source mtime, watermark
+        // signature, size, quality, fit and format, so it IS the content identity.
+        // Never for BYOB (its answers are not cacheable beyond the viewer).
+        $etag = empty($scope['byob'])
+            ? '"' . substr(hash('sha256', $disk . '|' . $cacheKey), 0, 32) . '"' : '';
+        if ($etag !== '' && self::etagMatches((string) ($headers['if_none_match'] ?? ''), $etag)) {
+            $this->header('ETag: ' . $etag);
+            $this->header('Cache-Control: public, max-age=31536000, immutable');
+            $this->header('Vary: Accept');
+            $this->status(304);
             return;
         }
+
+        if ($fs->fileExists($cacheKey)) {
+            $this->serveCachedImage($fs, $disk, $cacheKey, $outMime, $scope, $etag);
+            return;
+        }
+
+        // Cold transform: one encode per cache key, not one per concurrent viewer.
+        // A request that waited on the lock finds the file the winner wrote.
+        $lock = $this->lockTransform($disk . '|' . $cacheKey);
+        try {
+            if ($lock !== null && $fs->fileExists($cacheKey)) {
+                $this->serveCachedImage($fs, $disk, $cacheKey, $outMime, $scope, $etag);
+                return;
+            }
+            $this->transformAndServe($optimizer, $fs, $scope, $disk, $path, $sub, $width, $height, $fit, $quality, $format,
+                $cacheKey, $ver, $wmSig, $wmEnabled, $wmSigCfg, $wmLogoPath, $noOriginal, $origMime, $etag);
+        } finally {
+            if ($lock !== null) {
+                flock($lock, LOCK_UN);
+                fclose($lock);
+            }
+        }
+    }
+
+    /** Cache hit: nginx fast path (local), presigned redirect (S3/R2), else read through PHP. */
+    private function serveCachedImage($fs, string $disk, string $cacheKey, string $outMime, array $scope, string $etag): void
+    {
+        $driver = $this->diskManager->config($disk)['driver'] ?? '';
+        // S3/R2: redirect to a presigned URL of the cached image so the bucket
+        // serves the bytes directly (no app-server egress). Local disks read
+        // cheaply, so we just serve them.
+        if ($driver === 's3') {
+            $redirect = $this->diskManager->presignGetUrl($disk, $cacheKey, 3600);
+            if ($redirect !== null) {
+                $this->header('Cache-Control: private, max-age=600');
+                $this->header('Vary: Accept');
+                $this->header('Location: ' . $redirect, true, 302);
+                return;
+            }
+        }
+        // Local + FLUXFILES_XACCEL (same internal location /stream uses): hand the
+        // cached file to nginx instead of copying it through PHP. Same root guard.
+        if ($driver === 'local' && $this->xaccelBase !== '' && empty($scope['byob'])) {
+            $root = realpath($this->diskManager->config($disk)['root'] ?? (__DIR__ . '/../storage/uploads'));
+            $abs  = $root !== false ? realpath($root . '/' . $cacheKey) : false;
+            if ($abs !== false && strpos($abs, $root . DIRECTORY_SEPARATOR) === 0 && is_file($abs)) {
+                $this->header('Content-Type: ' . $outMime);
+                $this->header('X-Content-Type-Options: nosniff');
+                $this->header('Content-Disposition: inline');
+                $this->header('Vary: Accept');
+                $this->header('Cache-Control: public, max-age=31536000, immutable');
+                if ($etag !== '') {
+                    $this->header('ETag: ' . $etag);
+                }
+                $this->header('X-Accel-Redirect: ' . self::xaccelUri($this->xaccelBase, $cacheKey));
+                return;
+            }
+        }
+        $this->serveBytes((string) $fs->read($cacheKey), $outMime, true, !empty($scope['byob']), $etag);
+    }
+
+    /** True when an If-None-Match header lists $etag (or `*`). Weak prefixes are ignored. */
+    public static function etagMatches(string $ifNoneMatch, string $etag): bool
+    {
+        if ($ifNoneMatch === '') {
+            return false;
+        }
+        if (trim($ifNoneMatch) === '*') {
+            return true;
+        }
+        foreach (explode(',', $ifNoneMatch) as $candidate) {
+            $candidate = trim($candidate);
+            if (strncmp($candidate, 'W/', 2) === 0) {
+                $candidate = substr($candidate, 2);
+            }
+            if ($candidate === $etag) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Exclusive advisory lock striped over 256 files in the system temp dir (a
+     * stripe is shared by unrelated keys but is only held for one encode). null =
+     * could not lock; the caller proceeds unlocked, as before.
+     *
+     * @return resource|null
+     */
+    private function lockTransform(string $id)
+    {
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'fluxfiles-img-locks';
+        if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
+            return null;
+        }
+        $fh = @fopen($dir . DIRECTORY_SEPARATOR . (hexdec(substr(hash('sha256', $id), 0, 2))) . '.lock', 'c');
+        if ($fh === false) {
+            return null;
+        }
+        if (!flock($fh, LOCK_EX)) {
+            fclose($fh);
+            return null;
+        }
+        return $fh;
+    }
+
+    /** @param object $fs */
+    private function transformAndServe(ImageOptimizer $optimizer, $fs, array $scope, string $disk, string $path, string $sub,
+        int $width, int $height, string $fit, int $quality, string $format, string $cacheKey, string $ver, string $wmSig,
+        bool $wmEnabled, ?array $wmSigCfg, string $wmLogoPath, bool $noOriginal, string $origMime, string $etag): void
+    {
+        $outMime = 'image/' . $format;
 
         // Not cached: this request decodes and encodes an image, which is what the `img`
         // budget bounds. Answers from the cache only count against `thumb`.
@@ -598,9 +707,12 @@ class MediaEndpoint
         if ($outFormat !== $format) {
             $cacheKey = ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, $wmSig, $outFormat, $height, $fit);
             $outMime = 'image/' . $outFormat;
+            if ($etag !== '') {
+                $etag = '"' . substr(hash('sha256', $disk . '|' . $cacheKey), 0, 32) . '"';
+            }
         }
         try { $fs->write($cacheKey, $out['data']); } catch (\Throwable $e) { /* best-effort cache */ }
-        $this->serveBytes($out['data'], $outMime, true, !empty($scope['byob']));
+        $this->serveBytes($out['data'], $outMime, true, !empty($scope['byob']), $etag);
     }
 
     /**
@@ -646,7 +758,7 @@ class MediaEndpoint
     }
 
     /** Emit image bytes with safe headers; $immutable adds a long-lived cache policy. */
-    private function serveBytes(string $data, string $mime, bool $immutable = false, bool $byob = false): void
+    private function serveBytes(string $data, string $mime, bool $immutable = false, bool $byob = false, string $etag = ''): void
     {
         $this->header('Content-Type: ' . $mime);
         $this->header('X-Content-Type-Options: nosniff');
@@ -658,6 +770,9 @@ class MediaEndpoint
         $this->header($immutable && !$byob
             ? 'Cache-Control: public, max-age=31536000, immutable'
             : 'Cache-Control: private, no-store');
+        if ($etag !== '' && $immutable && !$byob) {
+            $this->header('ETag: ' . $etag);
+        }
         $this->header('Content-Length: ' . strlen($data));
         $this->write($data);
     }

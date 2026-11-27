@@ -43,10 +43,9 @@ test('pages stream in on scroll until the folder is complete', async ({ page }) 
   // Auto-loading replaces the manual button.
   await expect(page.locator('.ff-load-progress .ff-load-more-btn')).toBeHidden();
 
-  await scrollToEnd(page);
-  await expect(cards(page)).toHaveCount(400, { timeout: 15_000 });
-  await scrollToEnd(page);
-  await expect(cards(page)).toHaveCount(450, { timeout: 15_000 });
+  // The grid renders incrementally (300 cards at a time), so the DOM trails the loaded
+  // pages: keep scrolling until every card is in.
+  await expect.poll(async () => { await scrollToEnd(page); return cards(page).count(); }, { timeout: 30_000 }).toBe(450);
 
   await expect(page.locator('.ff-load-done')).toContainText('450');
   await expect(page.locator('.ff-load-progress')).toHaveCount(0);
