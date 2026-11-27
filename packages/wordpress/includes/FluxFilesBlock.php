@@ -72,7 +72,7 @@ class FluxFilesBlock
             'token'     => $token,
             'disk'      => FluxFilesPlugin::enabledDisks()[0],
             'disks'     => FluxFilesPlugin::enabledDisks(),
-            'locale'    => substr(get_locale(), 0, 2),
+            'locale'    => FluxFilesPlugin::uiLocale(),
             'attachUrl' => esc_url_raw(rest_url('fluxfiles/v1/api/fm/attach')),
             'tokenUrl'  => esc_url_raw(rest_url('fluxfiles/v1/api/fm/token')),
             'nonce'     => wp_create_nonce('wp_rest'),

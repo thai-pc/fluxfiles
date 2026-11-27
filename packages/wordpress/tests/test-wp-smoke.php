@@ -3099,6 +3099,20 @@ test('nginx notice: loads with the warning + a background check; a verified resu
     }
 });
 
+test('every picker host uses the user\'s language (determine_locale), not the site\'s', function () {
+    $dir = __DIR__ . '/../';
+    foreach (['includes/FluxFilesBlock.php', 'includes/FluxFilesMediaButton.php', 'includes/FluxFilesMediaIntegration.php', 'includes/FluxFilesShortcode.php'] as $f) {
+        $src = (string) file_get_contents($dir . $f);
+        assertTrue(strpos($src, 'get_locale(') === false, "{$f} does not read the site locale");
+        assertTrue(strpos($src, 'FluxFilesPlugin::uiLocale()') !== false, "{$f} uses uiLocale()");
+    }
+    $GLOBALS['__fx_locale'] = 'en_US';
+    if (!function_exists('determine_locale')) { eval('function determine_locale() { return $GLOBALS["__fx_locale"]; }'); }
+    assertEqual('en', FluxFilesPlugin::uiLocale(), 'profile language wins');
+    $GLOBALS['__fx_locale'] = 'vi';
+    assertEqual('vi', FluxFilesPlugin::uiLocale());
+});
+
 test('every picker host hands the enabled disks to the UI (else only LOCAL is offered)', function () {
     $dir = __DIR__ . '/../';
     foreach (['includes/FluxFilesBlock.php', 'includes/FluxFilesMediaButton.php', 'includes/FluxFilesMediaIntegration.php', 'includes/FluxFilesShortcode.php'] as $f) {

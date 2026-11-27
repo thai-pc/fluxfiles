@@ -1561,6 +1561,17 @@ HTACCESS;
      *
      * @return string[]
      */
+    /**
+     * Two-letter UI language for the file manager. determine_locale() is the user's profile
+     * language in wp-admin (and the site language on the front end); get_locale() is always
+     * the site language, so an admin who set English on a Vietnamese site got a Vietnamese UI.
+     */
+    public static function uiLocale(): string
+    {
+        $locale = function_exists('determine_locale') ? determine_locale() : get_locale();
+        return substr((string) $locale, 0, 2);
+    }
+
     public static function enabledDisks(): array
     {
         $disks = array_values(array_filter(
