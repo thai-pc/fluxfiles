@@ -265,6 +265,21 @@ class FileManager
         }
     }
 
+    /** @return array{0:bool,1:bool} [needVirus, needPii] for staging a copy of $scopedPath. */
+    private function copyScanNeeds($fs, string $scopedPath): array
+    {
+        $needVirus = $this->virusScanner !== null;
+        $needPii = false;
+        if ($this->dlpScanner !== null) {
+            $ext = strtolower(pathinfo($scopedPath, PATHINFO_EXTENSION));
+            if (in_array($ext, $this->claims->dlpScanExtensions, true)) {
+                $size = (int) $fs->fileSize($scopedPath);
+                $needPii = $size <= $this->claims->dlpMaxScanKb * 1024;
+            }
+        }
+        return [$needVirus, $needPii];
+    }
+
     /**
      * Scan a file that is ALREADY stored (copy / cross-disk copy / cross-disk move)
      * before its bytes are written to a new location. Streams the source to a temp
@@ -289,21 +304,6 @@ class FileManager
      * a server-side CopyObject. The temp file can outlive a fatal/timeout (shared
      * with writeScopedStream).
      */
-    /** @return array{0:bool,1:bool} [needVirus, needPii] for staging a copy of $scopedPath. */
-    private function copyScanNeeds($fs, string $scopedPath): array
-    {
-        $needVirus = $this->virusScanner !== null;
-        $needPii = false;
-        if ($this->dlpScanner !== null) {
-            $ext = strtolower(pathinfo($scopedPath, PATHINFO_EXTENSION));
-            if (in_array($ext, $this->claims->dlpScanExtensions, true)) {
-                $size = (int) $fs->fileSize($scopedPath);
-                $needPii = $size <= $this->claims->dlpMaxScanKb * 1024;
-            }
-        }
-        return [$needVirus, $needPii];
-    }
-
     private function stageScannedCopy($fs, string $scopedPath): ?string
     {
         [$needVirus, $needPii] = $this->copyScanNeeds($fs, $scopedPath);
@@ -1002,12 +1002,10 @@ class FileManager
         $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
         $this->assertExt($ext);
         $this->assertSafeFilename($name);
-        // Same dangerous-character blacklist rename() enforces — assertSafeFilename()
-        // only blocks dangerous EXTENSIONS, so without this an uploaded name could
-        // still carry <>:"|?* or control chars through to storage/metadata/UI.
-        if (preg_match('/[<>:"\/\\\\|?*\x00-\x1f]/', $name)) {
-            throw new ApiException('Name contains invalid characters', 400, 'name_invalid');
-        }
+        // Same name rule as rename()/mkdir() — assertSafeFilename() only blocks
+        // dangerous EXTENSIONS, so without this an uploaded name could still carry
+        // <>:"|?* or control chars (or be too long for its sidecar) into storage.
+        $this->assertValidName($name);
 
         $sizeMb = ($file['size'] ?? 0) / (1024 * 1024);
         $this->assertUploadSize($sizeMb);
@@ -1136,7 +1134,8 @@ class FileManager
         // (it was missing here, letting a different tenant overwrite another
         // user's file in place), then snapshot the current bytes (Versioning
         // module) before replacing it.
-        if ($fs->fileExists($scoped)) {
+        $existedBefore = $fs->fileExists($scoped);
+        if ($existedBefore) {
             $this->assertOwner($disk, $scoped);
             $this->assertNoActiveHold($disk, $scoped);
             $this->keepVersion($disk, $scoped, $fs);
@@ -1155,39 +1154,49 @@ class FileManager
             }
         }
 
-        // Hash (duplicate detection) + metadata below land in one index write.
-        $this->beginIndexBatch($disk);
+        // Hash (duplicate detection) + metadata below land in one index write. If that
+        // bookkeeping fails the bytes are already on disk: remove a NEW object rather
+        // than leave an ownerless orphan (assertOwner allows ownerless files).
         try {
-            if ($hash !== false) {
-                $this->meta->saveHash($disk, $scoped, $hash);
-            }
-
-            // Store ownership + MIME, and image dimensions (so listings and the
-            // select payload can carry them without re-opening the object).
-            // size + modified are indexed too, so search results can sort by date/size.
-            $attrs = [
-                'uploaded_by' => $this->claims->userId,
-                'size'        => (int) ($file['size'] ?? 0),
-                'modified'    => time(),
-                'created'     => time(), // first-upload time; kept immutable by the index merge
-            ];
-            $mime = @mime_content_type($file['tmp_name']);
-            if ($mime === false || $mime === null || $mime === '') {
-                $mime = $file['type'] ?? null;
-            }
-            if ($mime) {
-                $attrs['mime'] = $mime;
-            }
-            if ($this->imageOptimizer->isImage($name)) {
-                $dims = @getimagesize($file['tmp_name']);
-                if (is_array($dims) && isset($dims[0], $dims[1])) {
-                    $attrs['width']  = (int) $dims[0];
-                    $attrs['height'] = (int) $dims[1];
+            $this->beginIndexBatch($disk);
+            try {
+                if ($hash !== false) {
+                    $this->meta->saveHash($disk, $scoped, $hash);
                 }
+
+                // Store ownership + MIME, and image dimensions (so listings and the
+                // select payload can carry them without re-opening the object).
+                // size + modified are indexed too, so search results can sort by date/size.
+                $attrs = [
+                    'uploaded_by' => $this->claims->userId,
+                    'size'        => (int) ($file['size'] ?? 0),
+                    'modified'    => time(),
+                    'created'     => time(), // first-upload time; kept immutable by the index merge
+                ];
+                $mime = @mime_content_type($file['tmp_name']);
+                if ($mime === false || $mime === null || $mime === '') {
+                    $mime = $file['type'] ?? null;
+                }
+                if ($mime) {
+                    $attrs['mime'] = $mime;
+                }
+                if ($this->imageOptimizer->isImage($name)) {
+                    $dims = @getimagesize($file['tmp_name']);
+                    if (is_array($dims) && isset($dims[0], $dims[1])) {
+                        $attrs['width']  = (int) $dims[0];
+                        $attrs['height'] = (int) $dims[1];
+                    }
+                }
+                $this->meta->save($disk, $scoped, $attrs);
+            } finally {
+                $this->endIndexBatch($disk);
             }
-            $this->meta->save($disk, $scoped, $attrs);
-        } finally {
-            $this->endIndexBatch($disk);
+        } catch (\Throwable $e) {
+            if (!$existedBefore) {
+                try { $fs->delete($scoped); } catch (\Throwable $e2) { /* keep the original error */ }
+                try { $this->meta->delete($disk, $scoped); } catch (\Throwable $e2) { /* ditto */ }
+            }
+            throw $e;
         }
 
         // Record the on-upload optimization savings into the tenant's counter, and
@@ -1344,7 +1353,6 @@ class FileManager
         return $this->trashScoped($disk, $this->scopedPath($path));
     }
 
-    /** trash() for an already-scoped key — see deleteScoped() for why. */
     /**
      * On a public native-AWS disk every object is written public-read, and a move
      * into the trash keeps that ACL — so trashed bytes stayed fetchable by URL
@@ -1372,6 +1380,7 @@ class FileManager
         }
     }
 
+    /** trash() for an already-scoped key — see deleteScoped() for why. */
     private function trashScoped(string $disk, string $scoped): array
     {
         $this->assertDisk($disk);
@@ -1383,6 +1392,11 @@ class FileManager
         // private helper only ever reached through here).
         $this->assertNotDiskRoot($scoped);
         $this->assertNoActiveHold($disk, $scoped);
+
+        // A corrupt trash manifest cannot take the new entry: refuse BEFORE anything moves.
+        if ($this->meta instanceof StorageMetadataHandler) {
+            $this->meta->assertTrashWritable($disk);
+        }
 
         $fs = $this->disks->disk($disk);
         $isDir = false;
@@ -1439,16 +1453,30 @@ class FileManager
 
         // Drop the active metadata; the trash entry (written last) is the commit point.
         $this->meta->delete($disk, $scoped);
-        $this->meta->addTrash($disk, $id, [
-            'original_key' => $scoped,
-            'disk'         => $disk,
-            'basename'     => $basename,
-            'size'         => $size,
-            'deleted_at'   => time(),
-            'deleted_by'   => $this->claims->userId,
-            'variants'     => $movedVariants,
-            'meta'         => $metaSnapshot,
-        ]);
+        try {
+            $this->meta->addTrash($disk, $id, [
+                'original_key' => $scoped,
+                'disk'         => $disk,
+                'basename'     => $basename,
+                'size'         => $size,
+                'deleted_at'   => time(),
+                'deleted_by'   => $this->claims->userId,
+                'variants'     => $movedVariants,
+                'meta'         => $metaSnapshot,
+            ]);
+        } catch (\Throwable $e) {
+            // The file is already in the trash dir but no entry says so: put it back
+            // (and its metadata) instead of leaving an unlisted, unrestorable orphan.
+            try {
+                $fs->move($trashDir . '/' . $basename, $scoped);
+                if ($metaSnapshot !== []) {
+                    $this->meta->save($disk, $scoped, $metaSnapshot);
+                }
+            } catch (\Throwable $e2) {
+                \FluxFiles\Log::warn("FluxFiles: trash entry {$id} could not be recorded or undone for '{$scoped}' (payload under _fluxfiles/trash/{$id}; run `fluxfiles trash:reconcile`) — " . $e2->getMessage());
+            }
+            throw $e;
+        }
 
         return ['trashed' => true, 'trash_id' => $id];
     }
@@ -1507,17 +1535,34 @@ class FileManager
         $this->meta->deleteChildren($disk, $scoped);
         $this->meta->deleteDirPrefix($disk, $scoped);
 
-        $this->meta->addTrash($disk, $id, [
-            'original_key' => $scoped,
-            'disk'         => $disk,
-            'basename'     => basename($scoped),
-            'is_dir'       => true,
-            'size'         => $total,
-            'deleted_at'   => time(),
-            'deleted_by'   => $this->claims->userId,
-            'files'        => $files,
-            'dirs'         => $dirs,
-        ]);
+        try {
+            $this->meta->addTrash($disk, $id, [
+                'original_key' => $scoped,
+                'disk'         => $disk,
+                'basename'     => basename($scoped),
+                'is_dir'       => true,
+                'size'         => $total,
+                'deleted_at'   => time(),
+                'deleted_by'   => $this->claims->userId,
+                'files'        => $files,
+                'dirs'         => $dirs,
+            ]);
+        } catch (\Throwable $e) {
+            // Same as the file case: relocate the tree back so nothing is orphaned.
+            try {
+                $this->moveDirectoryTree($disk, $fs, $trashDir . '/payload', $scoped);
+                foreach ($files as $f) {
+                    if (!empty($f['meta'])) {
+                        $this->meta->save($disk, $scoped . '/' . $f['rel'], $f['meta']);
+                    }
+                }
+                $this->meta->trackDir($disk, $scoped);
+                $this->meta->trackParents($disk, $scoped);
+            } catch (\Throwable $e2) {
+                \FluxFiles\Log::warn("FluxFiles: trash entry {$id} could not be recorded or undone for '{$scoped}' (payload under _fluxfiles/trash/{$id}; run `fluxfiles trash:reconcile`) — " . $e2->getMessage());
+            }
+            throw $e;
+        }
 
         return ['trashed' => true, 'trash_id' => $id];
     }
@@ -1543,6 +1588,9 @@ class FileManager
             ? $this->scopedPath($newPath)
             : $origin;
         $this->assertNotSystem($target, $disk);
+        // A caller-chosen name follows the full name rule; a manifest name only the
+        // length rule (it may predate the character rule, and must stay restorable).
+        $this->assertValidName(basename($target), $newPath !== null && $newPath !== '');
         // show_hidden=false: a trashed dotfile must not come back under a
         // visible name (nor anything be restored as a dotfile).
         $this->assertNotHidden($origin);
@@ -1783,7 +1831,14 @@ class FileManager
         // same as `/delete`; otherwise "trash then purge" leaves the old bytes
         // restorable under `_fluxfiles/versions/` (erasure + storage leak).
         $this->purgeTrashedVersions($disk, ['_id' => $id] + $entry, $fs);
-        try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $e) { /* best effort */ }
+        // Drop the manifest entry only once the bytes are really gone; a failed delete
+        // keeps the entry so the purge can be retried (it used to orphan the payload).
+        try {
+            $fs->deleteDirectory('_fluxfiles/trash/' . $id);
+        } catch (\Throwable $e) {
+            \FluxFiles\Log::warn("FluxFiles: purging trash item {$id} failed — " . $e->getMessage());
+            throw new ApiException('Could not delete the trashed item: ' . $e->getMessage(), 500, 'purge_failed');
+        }
         $this->meta->removeTrash($disk, $id);
 
         return ['purged' => true];
@@ -1802,6 +1857,7 @@ class FileManager
         $fs = $this->disks->disk($disk);
         $n = 0;
         $held = 0;
+        $failed = 0;
         // trash.json is rewritten once per batch window, not once per purged item.
         $bulk = $this->bulkOpen($disk);
         try {
@@ -1815,7 +1871,14 @@ class FileManager
                     continue;
                 }
                 $this->purgeTrashedVersions($disk, ['_id' => (string) $id] + $e, $fs); // permanent → history goes too
-                try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $ex) { /* best effort */ }
+                try {
+                    $fs->deleteDirectory('_fluxfiles/trash/' . $id);
+                } catch (\Throwable $ex) {
+                    // Keep the entry (the payload is still there) and go on with the rest.
+                    \FluxFiles\Log::warn("FluxFiles: emptying trash item {$id} failed — " . $ex->getMessage());
+                    $failed++;
+                    continue;
+                }
                 $this->meta->removeTrash($disk, $id);
                 $n++;
                 $this->bulkTick($disk, $bulk);
@@ -1823,7 +1886,11 @@ class FileManager
         } finally {
             $this->bulkClose($disk, $bulk);
         }
-        return ['purged' => $n, 'held' => $held];
+        $out = ['purged' => $n, 'held' => $held];
+        if ($failed > 0) {
+            $out['failed'] = $failed;
+        }
+        return $out;
     }
 
     /**
@@ -1896,9 +1963,7 @@ class FileManager
         }
         // A dot-only name is a path segment, not a name: `..` would resolve the
         // target to the parent directory.
-        if (preg_match('/[<>:"\/\\\\|?*\x00-\x1f]/', $newName) || trim($newName, '.') === '') {
-            throw new ApiException('Name contains invalid characters', 400, 'name_invalid');
-        }
+        $this->assertValidName($newName);
 
         $this->assertSafeFilename($newName);
 
@@ -1917,8 +1982,12 @@ class FileManager
             throw new ApiException('New name is the same as current name', 400, 'name_same');
         }
 
-        // Check target doesn't already exist
-        $this->assertTargetAvailable($fs, $newPath);
+        // Check target doesn't already exist. A case-only rename (Photo.txt ->
+        // photo.txt) on a case-insensitive filesystem "finds" the source itself.
+        $caseOnly = $this->isCaseOnlyRename($disk, $fs, $scoped, $newPath);
+        if (!$caseOnly) {
+            $this->assertTargetAvailable($fs, $newPath);
+        }
 
         $isDir = false;
         try {
@@ -1955,7 +2024,13 @@ class FileManager
             // the folder) and subdirectories that hold no files at all. This runs
             // before any index bookkeeping so a failure can never leave the folder
             // index describing a directory that is no longer there.
-            $this->moveDirectoryTree($disk, $fs, $scoped, $newPath);
+            if ($caseOnly) {
+                $tmpPath = $scoped . '.fxcase-' . bin2hex(random_bytes(4));
+                $this->moveDirectoryTree($disk, $fs, $scoped, $tmpPath);
+                $this->moveDirectoryTree($disk, $fs, $tmpPath, $newPath);
+            } else {
+                $this->moveDirectoryTree($disk, $fs, $scoped, $newPath);
+            }
             // Move metadata for children
             $this->meta->renameChildren($disk, $scoped, $newPath);
             $this->meta->renameDirPrefix($disk, $scoped, $newPath);
@@ -1963,9 +2038,21 @@ class FileManager
             $this->moveVersionsDir($disk, $scoped, $newPath, $fs);
             $this->moveWatermarkBackupsDir($disk, $scoped, $newPath);
         } else {
-            $fs->move($scoped, $newPath);
-            // Move metadata
-            $this->moveMetadata($disk, $scoped, $disk, $newPath);
+            if ($caseOnly) {
+                // Via a temp name (a direct rename is refused on some mounts). The
+                // sidecar of both spellings is ONE file there, so drop the old
+                // record before writing the new one instead of the reverse.
+                $tmpPath = $scoped . '.fxcase-' . bin2hex(random_bytes(4));
+                $fs->move($scoped, $tmpPath);
+                $fs->move($tmpPath, $newPath);
+                $caseMeta = $this->meta->get($disk, $scoped) ?: [];
+                $this->meta->delete($disk, $scoped);
+                $this->copyMetadata($disk, $scoped, $disk, $newPath, true, $caseMeta, false, true);
+            } else {
+                $fs->move($scoped, $newPath);
+                // Move metadata
+                $this->moveMetadata($disk, $scoped, $disk, $newPath);
+            }
             // Move image variants
             $this->moveVariants($disk, $scoped, $disk, $newPath);
             $this->moveWatermarkBackup($disk, $scoped, $newPath);
@@ -1980,6 +2067,26 @@ class FileManager
             'name' => $newName,
             'url'  => $isDir ? null : $this->downloadUrl($disk, $newPath),
         ];
+    }
+
+    /**
+     * True when $newKey differs from $oldKey only by letter case AND both spell the
+     * same file (a case-insensitive local filesystem). On a case-sensitive one (or an
+     * object store) the "new" name is a different, existing entry and stays a conflict.
+     */
+    private function isCaseOnlyRename(string $disk, $fs, string $oldKey, string $newKey): bool
+    {
+        if ($oldKey === $newKey || mb_strtolower($oldKey) !== mb_strtolower($newKey)) {
+            return false;
+        }
+        $cfg = $this->disks->config($disk);
+        if (($cfg['driver'] ?? '') !== 'local' || empty($cfg['root'])) {
+            return false;
+        }
+        $root = rtrim((string) $cfg['root'], '/\\');
+        $a = @stat($root . '/' . $oldKey);
+        $b = @stat($root . '/' . $newKey);
+        return $a !== false && $b !== false && $a['ino'] === $b['ino'] && $a['dev'] === $b['dev'];
     }
 
     public function move(string $disk, string $from, string $to): array
@@ -2104,6 +2211,16 @@ class FileManager
         return ['key' => $this->outKey($scopedTo)];
     }
 
+    /** Folders cannot cross disks; without this a folder answered 404 "File not found". */
+    private function assertNotCrossDiskFolder($srcFs, string $scopedSrc): void
+    {
+        $isDir = false;
+        try { $isDir = $srcFs->directoryExists($scopedSrc); } catch (\Throwable $e) { /* not a dir */ }
+        if ($isDir) {
+            throw new ApiException('Folders cannot be moved or copied to another disk', 400, 'cross_disk_dir_unsupported');
+        }
+    }
+
     public function crossCopy(string $srcDisk, string $srcPath, string $dstDisk, string $dstPath): array
     {
         $this->assertDisk($srcDisk);
@@ -2127,6 +2244,7 @@ class FileManager
         $srcFs = $this->disks->disk($srcDisk);
         $dstFs = $this->disks->disk($dstDisk);
 
+        $this->assertNotCrossDiskFolder($srcFs, $scopedSrc);
         // Clean 404 for a missing source (else readStream throws a raw 500).
         if (!$srcFs->fileExists($scopedSrc)) {
             throw new ApiException('File not found', 404, 'not_found');
@@ -2187,6 +2305,7 @@ class FileManager
         $srcFs = $this->disks->disk($srcDisk);
         $dstFs = $this->disks->disk($dstDisk);
 
+        $this->assertNotCrossDiskFolder($srcFs, $scopedSrc);
         // Clean 404 for a missing source; don't silently clobber the destination.
         if (!$srcFs->fileExists($scopedSrc)) {
             throw new ApiException('File not found', 404, 'not_found');
@@ -2665,6 +2784,13 @@ class FileManager
         $this->assertDisk($disk);
         $this->assertPerm('write');
 
+        // Every segment the caller typed follows the shared name rule (a newline in a
+        // name used to reach Flysystem and surface as a 500).
+        foreach (explode('/', str_replace('\\', '/', $path)) as $segment) {
+            if ($segment !== '' && $segment !== '.' && $segment !== '..') {
+                $this->assertValidName($segment);
+            }
+        }
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped, $disk);
         $fs = $this->disks->disk($disk);
@@ -3122,16 +3248,23 @@ class FileManager
      * $dirUser/$name are UNSCOPED (user-relative); returns the chosen unscoped
      * filename. Falls back to a short random suffix if the numeric probe is exhausted.
      */
-    private function uniqueName($fs, string $dirUser, string $name): string
+    private function uniqueName($fs, string $dirUser, string $name, array $planned = []): string
     {
         $dot  = strrpos($name, '.');
         $base = $dot === false ? $name : substr($name, 0, $dot);
         $ext  = $dot === false ? '' : substr($name, $dot); // includes the leading dot
         $prefix = $dirUser === '' ? '' : $dirUser . '/';
+        // Keep the suffixed name inside MAX_NAME_BYTES (cut the base on a character boundary).
+        $room = max(1, self::MAX_NAME_BYTES - strlen($ext) - 14);
+        if (strlen($base) > $room) {
+            $base = mb_strcut($base, 0, $room, 'UTF-8');
+        }
 
         for ($i = 1; $i <= self::MAX_COLLISION_TRIES; $i++) {
             $candidate = $base . ' (' . $i . ')' . $ext;
-            if (!$fs->fileExists($this->scopedPath($prefix . $candidate))) {
+            $scopedCandidate = $this->scopedPath($prefix . $candidate);
+            // $planned: case-folded keys an in-progress extract has already claimed.
+            if (!isset($planned[mb_strtolower($scopedCandidate)]) && !$fs->fileExists($scopedCandidate)) {
                 return $candidate;
             }
         }
@@ -3904,9 +4037,6 @@ class FileManager
     }
 
     /**
-     * Look up existing variant files (thumb/medium/large WebP) for an image.
-     */
-    /**
      * @param array<string,array<string,string>> $known existingVariants() result; a
      *        folder missing from it falls back to a per-file fileExists()
      */
@@ -3957,6 +4087,8 @@ class FileManager
     private const VARIANT_LISTING_MIN = 8;
 
     /**
+     * Look up existing variant files (thumb/medium/large WebP) for an image.
+     *
      * The variant files that exist, per `_variants/` folder, for the images and
      * PDFs/videos among $items — one non-recursive listing per folder. Folders with
      * only a few candidates are left out (callers fall back to fileExists()), as is
@@ -4033,12 +4165,6 @@ class FileManager
         return $out;
     }
 
-    /**
-     * A stable, non-expiring URL for embedding (editors, saved content), or null
-     * when none exists. Local disks and public disks / disks with a `public_url`
-     * (CDN / custom domain) have one; a private bucket without a public domain
-     * does not (its only URL is a short-lived presigned one).
-     */
     /**
      * Is this a local disk served through gated per-file stream tokens? True only
      * when the disk is local, marked `'private' => true`, and a stream secret is
@@ -4339,7 +4465,7 @@ class FileManager
      * a structural violation aborts before any write. Pass 2 scans and writes each
      * entry; a scan/storage failure leaves earlier successful entries in place.
      *
-     * @return array{extracted:int, dest:string, bytes:int}
+     * @return array{extracted:int, dest:string, bytes:int, failed?:int, failed_entries?:string[]}
      */
     public function extractZip(string $disk, string $path, ?string $dest = null): array
     {
@@ -4376,6 +4502,11 @@ class FileManager
         $destScoped = $this->scopedPath($destUser);
         $this->assertNotSystem($destScoped, $disk);
         $this->assertNotHidden($destScoped);
+        // A file at the destination can't hold the extracted entries (the writes
+        // would fail one by one with a raw 500).
+        if ($destScoped !== '' && $fs->fileExists($destScoped)) {
+            throw new ApiException('The extract destination is a file, not a folder', 400, 'dest_not_folder');
+        }
 
         $maxFiles = $this->claims->zipMaxFiles > 0 ? $this->claims->zipMaxFiles : self::ZIP_DEFAULT_MAX_FILES;
         $maxBytes = ($this->claims->zipMaxMb > 0 ? $this->claims->zipMaxMb : self::ZIP_DEFAULT_MAX_MB) * 1024 * 1024;
@@ -4401,6 +4532,11 @@ class FileManager
             $prefix = $destScoped !== '' ? rtrim($destScoped, '/') . '/' : '';
             $collision = $this->claims->uploadCollision; // rename (default) | overwrite | reject
             $plan = [];   // list of ['orig' => entryName, 'target' => scopedDstKey]
+            // Targets the plan has already claimed (case-folded: Readme.md and README.md
+            // are one file on a case-insensitive disk). Without it an entry could be
+            // planned onto a name an earlier entry was just given (a.txt renamed to
+            // `a (1).txt`, then the archive's own `a (1).txt` overwrote it).
+            $planned = [];
             $total = 0;
             for ($i = 0; $i < $za->numFiles; $i++) {
                 $stat = $za->statIndex($i);
@@ -4432,6 +4568,13 @@ class FileManager
                 // Same policy as upload: block dangerous extensions + honour allowed_ext.
                 $this->assertSafeFilename(basename($rel));
                 $this->assertExt(strtolower(pathinfo($rel, PATHINFO_EXTENSION)));
+                foreach (explode('/', $rel) as $segment) {
+                    try {
+                        $this->assertValidName($segment);
+                    } catch (ApiException $ex) {
+                        throw new ApiException($ex->getMessage(), $ex->getHttpCode(), $ex->getErrorCode(), $ex->getErrorParams() + ['entry' => $name]);
+                    }
+                }
 
                 // Collision with an existing destination file → honour owner_only +
                 // the upload_collision policy (extract no longer clobbers silently).
@@ -4441,9 +4584,14 @@ class FileManager
                 // repo) is the one write path that skips the SFTP git-internal block.
                 $this->assertNotSystem($target, $disk);
                 $overwrite = false;
-                if ($fs->fileExists($target)) {
-                    $this->assertOwner($disk, $target); // don't overwrite another user's file
-                    if ($collision === 'overwrite') {
+                $onDisk = $fs->fileExists($target);
+                if ($onDisk || isset($planned[mb_strtolower($target)])) {
+                    if ($onDisk) {
+                        $this->assertOwner($disk, $target); // don't overwrite another user's file
+                    }
+                    if ($collision === 'overwrite' && !$onDisk) {
+                        // Two entries of ONE archive spelling the same name: the later wins, as in unzip.
+                    } elseif ($collision === 'overwrite') {
                         $this->assertNoActiveHold($disk, $target);
                         $overwrite = true;
                     }
@@ -4452,9 +4600,10 @@ class FileManager
                     }
                     if ($collision !== 'overwrite') { // 'rename' → keep both
                         $dir = strpos($target, '/') !== false ? substr($target, 0, strrpos($target, '/')) : '';
-                        $target = ($dir !== '' ? $dir . '/' : '') . $this->uniqueName($fs, $dir, basename($target));
+                        $target = ($dir !== '' ? $dir . '/' : '') . $this->uniqueName($fs, $dir, basename($target), $planned);
                     }
                 }
+                $planned[mb_strtolower($target)] = true;
 
                 $total += (int) $stat['size'];
                 $plan[] = ['orig' => $name, 'target' => $target, 'size' => (int) $stat['size'], 'overwrite' => $overwrite];
@@ -4485,6 +4634,7 @@ class FileManager
             // upload (metadata + folder index + hash + image variants), so extracted
             // files get thumbnails and show up in search — not just on disk. ──
             $written = 0;
+            $failed = []; // entries whose data could not be read from the archive
             // One index + dirs.json write per batch window instead of ~3 per entry.
             // Slow entries (scanner configured, or large) run their inflate/scan/
             // variant work with the window paused, i.e. without the index lock.
@@ -4496,6 +4646,9 @@ class FileManager
                 }
                 $stream = $za->getStream($e['orig']);
                 if (!is_resource($stream)) {
+                    // Don't drop it silently: the caller sees which entries are missing.
+                    $failed[] = $e['orig'];
+                    $this->bulkResume($disk, $bulk);
                     continue;
                 }
                 // Spool to a local temp so we can both write to $fs and feed the
@@ -4584,7 +4737,12 @@ class FileManager
             $this->bulkClose($disk, $bulk);
         }
 
-        return ['extracted' => $written, 'dest' => $this->outKey($destScoped), 'bytes' => $total];
+        $out = ['extracted' => $written, 'dest' => $this->outKey($destScoped), 'bytes' => $total];
+        if ($failed !== []) {
+            $out['failed'] = count($failed);
+            $out['failed_entries'] = array_slice($failed, 0, 20);
+        }
+        return $out;
     }
 
     /**
@@ -4650,6 +4808,12 @@ class FileManager
         return ($base === '' ? 'files' : $base) . '.zip';
     }
 
+    /**
+     * A stable, non-expiring URL for embedding (editors, saved content), or null
+     * when none exists. Local disks and public disks / disks with a `public_url`
+     * (CDN / custom domain) have one; a private bucket without a public domain
+     * does not (its only URL is a short-lived presigned one).
+     */
     private function permanentUrl(string $disk, string $path): ?string
     {
         $config = $this->disks->config($disk);
@@ -4779,20 +4943,6 @@ class FileManager
     }
 
     /**
-     * Content-Disposition to sign into a presigned S3/R2 GET URL.
-     *
-     * The same inline-safe set as MediaEndpoint::stream() and the Share route: media,
-     * raster images and PDF stay inline so <video>/<img>/pdf preview works, and
-     * everything else — .svg and .html above all — is forced to attachment.
-     *
-     * This matters even though the bucket is a different origin from FluxFiles (so
-     * no main JWT is reachable): an .svg served inline still executes as active
-     * content in the BUCKET's origin, and a custom R2/CDN domain is commonly a
-     * subdomain of the host app's site, which makes it same-site for SameSite=Lax
-     * cookies. Nothing sanitizes SVG on the way in (ImageOptimizer leaves it alone
-     * by design), so the disposition is the control.
-     */
-    /**
      * Content-Type to sign into a presigned S3/R2 GET URL, derived from the
      * extension — never from what the object was stored with. The stored
      * Content-Type is client-controlled: it is not part of a presigned PUT's
@@ -4807,6 +4957,20 @@ class FileManager
             ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
     }
 
+    /**
+     * Content-Disposition to sign into a presigned S3/R2 GET URL.
+     *
+     * The same inline-safe set as MediaEndpoint::stream() and the Share route: media,
+     * raster images and PDF stay inline so <video>/<img>/pdf preview works, and
+     * everything else — .svg and .html above all — is forced to attachment.
+     *
+     * This matters even though the bucket is a different origin from FluxFiles (so
+     * no main JWT is reachable): an .svg served inline still executes as active
+     * content in the BUCKET's origin, and a custom R2/CDN domain is commonly a
+     * subdomain of the host app's site, which makes it same-site for SameSite=Lax
+     * cookies. Nothing sanitizes SVG on the way in (ImageOptimizer leaves it alone
+     * by design), so the disposition is the control.
+     */
     private function presignDisposition(string $path): string
     {
         // MIME by extension, never sniffed — an .html that sniffs as text/html must
@@ -4926,13 +5090,6 @@ class FileManager
     }
 
     /**
-     * Refuse delete/trash/rename/move of the disk root itself (every spelling of
-     * it normalises to '' in scopedPath()). Taking the root would sweep up
-     * `_fluxfiles/` — the audit chain, the holds manifest, the trash — and every
-     * legal hold with it. A prefix-scoped token's own tenant root is a different
-     * (non-empty) key and stays a legitimate target; holds still apply to it.
-     */
-    /**
      * Refuses an operation on the token's own prefix root (`path` "" or ".").
      * No-op for an unscoped token (that is the disk root, see assertNotDiskRoot()).
      */
@@ -4944,6 +5101,13 @@ class FileManager
         }
     }
 
+    /**
+     * Refuse delete/trash/rename/move of the disk root itself (every spelling of
+     * it normalises to '' in scopedPath()). Taking the root would sweep up
+     * `_fluxfiles/` — the audit chain, the holds manifest, the trash — and every
+     * legal hold with it. A prefix-scoped token's own tenant root is a different
+     * (non-empty) key and stays a legitimate target; holds still apply to it.
+     */
     private function assertNotDiskRoot(string $scopedKey): void
     {
         if (trim($scopedKey, '/') === '') {
@@ -4984,8 +5148,7 @@ class FileManager
      * without this guard a plain `write`-permission upload/rename/move/copy could
      * forge one and hijack ownership of the real target file. Reading pre-existing
      * legacy sidecars still works (backward compat); this only closes new writes.
-     */
-    /**
+     *
      * $disk is optional and ADDITIVE: when given and the disk is SFTP, this also
      * refuses any path with a `.git` segment (see isGitInternalSegment() for why
      * SFTP specifically: a writable `.git/config` is a code-execution vector for
@@ -5004,15 +5167,6 @@ class FileManager
         }
     }
 
-    /**
-     * True when any path segment is `.git` (case-insensitively, same reasoning
-     * as isReservedKey()'s case-fold — an SFTP server may sit on a
-     * case-insensitive filesystem too). `.gitignore`/`.gitattributes` are
-     * SIBLING files at a repo's root, not a `.git` segment, so they are
-     * unaffected and stay writable; only the internal directory itself (and
-     * anything nested under it, e.g. `.git/config`, `.git/hooks/post-merge`)
-     * is blocked.
-     */
     /**
      * `show_hidden=false` used to be list()-only cosmetics: a dotfile (`.env`,
      * `.git/config`, `.htpasswd`) was hidden from the listing yet still readable by
@@ -5041,6 +5195,15 @@ class FileManager
         return false;
     }
 
+    /**
+     * True when any path segment is `.git` (case-insensitively, same reasoning
+     * as isReservedKey()'s case-fold — an SFTP server may sit on a
+     * case-insensitive filesystem too). `.gitignore`/`.gitattributes` are
+     * SIBLING files at a repo's root, not a `.git` segment, so they are
+     * unaffected and stay writable; only the internal directory itself (and
+     * anything nested under it, e.g. `.git/config`, `.git/hooks/post-merge`)
+     * is blocked.
+     */
     private static function isGitInternalSegment(string $key): bool
     {
         foreach (explode('/', trim($key, '/')) as $seg) {
@@ -5276,13 +5439,36 @@ class FileManager
         }
     }
 
+    /**
+     * Longest name (bytes) any entry may have. Filesystems cap a name at 255 bytes,
+     * and FluxFiles derives longer names from it: the metadata sidecar adds `.json`
+     * (5) and an image variant `_medium.webp` (12). Staying under 240 keeps every
+     * derived name legal, so a long name is refused up front (400) instead of
+     * failing halfway through a write.
+     */
+    private const MAX_NAME_BYTES = 240;
+
+    /**
+     * ONE name rule for upload, mkdir, rename, extract and restore: not empty / dots
+     * only (a path segment, not a name), none of `<>:"/\|?*` or a control character,
+     * and within MAX_NAME_BYTES. `$checkChars = false` keeps only the length rule (a
+     * restore of a name that was legal when it was stored).
+     */
+    private function assertValidName(string $name, bool $checkChars = true): void
+    {
+        if ($checkChars) {
+            if (trim($name, ". \t") === '' || preg_match('/[<>:"\/\\\\|?*\x00-\x1f\x7f]/', $name)) {
+                throw new ApiException('Name contains invalid characters', 400, 'name_invalid');
+            }
+        }
+        if (strlen($name) > self::MAX_NAME_BYTES) {
+            throw new ApiException('Name is too long', 400, 'name_too_long', ['max' => self::MAX_NAME_BYTES]);
+        }
+    }
+
     public function validateUploadName(string $name, int $sizeBytes = 0): void
     {
-        // A dot-only/empty name is a path segment scopedPath() would drop, not a
-        // file name — the write would land on whatever segment precedes it.
-        if (trim($name, ". \t") === '') {
-            throw new ApiException('Name contains invalid characters', 400, 'name_invalid');
-        }
+        $this->assertValidName($name);
         $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
         $this->assertExt($ext);
         $this->assertSafeFilename($name);

@@ -526,6 +526,15 @@ try {
         $errResp['error_params'] = $e->getErrorParams();
     }
     echo json_encode($errResp);
+} catch (\League\Flysystem\CorruptedPathDetected | \League\Flysystem\PathTraversalDetected $e) {
+    // A path Flysystem refuses (control character, traversal) is the caller's input.
+    http_response_code(400);
+    echo json_encode(['data' => null, 'error' => 'Name contains invalid characters', 'error_code' => 'name_invalid']);
+} catch (\TypeError $e) {
+    // An array/object where a scalar parameter belongs (`?disk[]=x`): bad input, not a crash.
+    error_log('FluxFiles: malformed parameter type — ' . $e->getMessage());
+    http_response_code(400);
+    echo json_encode(['data' => null, 'error' => 'Invalid request parameter', 'error_code' => 'invalid_param']);
 } catch (\Throwable $e) {
     http_response_code(500);
     echo json_encode(['data' => null, 'error' => 'Internal server error', 'error_code' => 'server_error']);
@@ -1453,12 +1462,25 @@ function jsonBody(string ...$keys): array
         throw new ApiException('Invalid JSON body', 400, 'invalid_json');
     }
 
+    // Keys that carry numbers / a list rather than text; every other field is a string.
+    $nonText = ['x', 'y', 'width', 'height', 'part_number', 'ttl', 'parts'];
+
     $result = [];
     foreach ($keys as $key) {
         if (!isset($body[$key])) {
-            throw new ApiException("Missing required field: {$key}", 400);
+            throw new ApiException("Missing required field: {$key}", 400, 'missing_param', ['field' => $key]);
         }
-        $result[] = $body[$key];
+        $value = $body[$key];
+        if ($key === 'parts') {
+            if (!is_array($value)) {
+                throw new ApiException("Invalid field: {$key}", 400, 'invalid_param', ['field' => $key]);
+            }
+        } elseif (!is_scalar($value)) {
+            throw new ApiException("Invalid field: {$key}", 400, 'invalid_param', ['field' => $key]);
+        } elseif (!in_array($key, $nonText, true)) {
+            $value = is_bool($value) ? ($value ? '1' : '') : (string) $value;
+        }
+        $result[] = $value;
     }
 
     return $result;

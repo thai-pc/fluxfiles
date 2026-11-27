@@ -119,19 +119,6 @@ class CredentialEncryptor
     }
 
     /**
-     * Validate a decrypted BYOB disk config.
-     *
-     * @param string $diskName Name of the BYOB disk
-     * @param array  $config   Decrypted config array
-     * @throws ApiException If validation fails, including an s3 disk whose custom
-     *         endpoint host cannot be resolved at all (fail-closed — see
-     *         assertSafeEndpoint()).
-     * @return string|null For an s3 disk with a custom endpoint, the first
-     *         validated public IP — so the caller can pin the connection to it
-     *         (see Claims::fromJwtPayload / DiskManager::build). Null otherwise
-     *         (no endpoint, or a non-s3 driver).
-     */
-    /**
      * True for pasted key material (OpenSSH/PEM "-----BEGIN …", RFC 4716
      * "---- BEGIN SSH2 …", PuTTY "PuTTY-User-Key-File-N:"), false for anything
      * else, including any value that names an existing file.
@@ -152,6 +139,19 @@ class CredentialEncryptor
         return strpos($key, "\0") === false && !@is_file($key);
     }
 
+    /**
+     * Validate a decrypted BYOB disk config.
+     *
+     * @param string $diskName Name of the BYOB disk
+     * @param array  $config   Decrypted config array
+     * @throws ApiException If validation fails, including an s3 disk whose custom
+     *         endpoint host cannot be resolved at all (fail-closed — see
+     *         assertSafeEndpoint()).
+     * @return string|null For an s3 disk with a custom endpoint, the first
+     *         validated public IP — so the caller can pin the connection to it
+     *         (see Claims::fromJwtPayload / DiskManager::build). Null otherwise
+     *         (no endpoint, or a non-s3 driver).
+     */
     public static function validate(string $diskName, array $config): ?string
     {
         $driver = $config['driver'] ?? '';

@@ -216,7 +216,8 @@ if (strpos($jsonOut, '<') === false && strpos($jsonOut, '>') === false) {
 //     argument of `new ApiException(msg, httpCode, 'code')` and check en.json. ---
 $apiDir = __DIR__ . '/../../api';
 $thrown = [];
-foreach (glob($apiDir . '/*.php') as $php) {
+// api/*.php plus its subfolders (Db/, Mail/): db_pdo_missing lived in Db/ and was never checked.
+foreach (array_merge(glob($apiDir . '/*.php'), glob($apiDir . '/*/*.php')) as $php) {
     $src = (string) file_get_contents($php);
     if (preg_match_all("/ApiException\\([^,]+,\\s*\\d{3},\\s*'([a-z_]+)'/", $src, $m)) {
         foreach ($m[1] as $code) {
