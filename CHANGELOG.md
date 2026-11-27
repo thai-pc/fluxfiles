@@ -8,6 +8,31 @@ entry's `> Released:` line names the exact tags it shipped.
 
 ## [Unreleased]
 
+## [1.0.60] — 2026-11-28
+
+> Released: `core-v1.8.0` (security fix for the Docker image and `fluxfiles serve`, metadata robustness, faster images and listings) and `laravel-v1.1.2` (thumbnail rate-limit bucket, trash counts toward quota). **Upgrade the Docker image now** if you run `ghcr.io/thai-pc/fluxfiles`. The WordPress plugin is not affected by the security issues; the WordPress.org review still covers 1.3.4.
+
+### Security
+- **Docker image (critical):** nginx sent every `*.php` under `packages/core` to PHP-FPM, and the image shipped `tests/` and `scripts/`, so an unauthenticated `GET /tests/generate-token.php` returned a 24 h full-privilege token signed with the container's secret. nginx now executes only `api/index.php` (any other `.php` is 404), the image no longer contains `tests/` or `scripts/`, every CLI script refuses to run outside the CLI, and `tests/` is export-ignored from the Composer dist. The nginx and Apache examples in `docs/guides/DEPLOYMENT.md` had the same pattern and are fixed: if you copied them, update your server config (PR 354).
+- **`fluxfiles serve` / `router.php` (high):** the dev router fell through to PHP's built-in server for unknown paths, which served `/.env` (the secret and any storage keys) and ran any `.php`. It now serves an allowlist (`/public`, `/assets`, `/api`, `/fluxfiles(.min).js`, the guarded `/storage/uploads`) and answers 404 to everything else, never through a dotfile. `docker-compose.yml` binds `127.0.0.1:8080` (PR 354).
+- Release pipeline: npm packages are built without the registry token and published with `--provenance --ignore-scripts`; every release workflow refuses a tag that is not on `master`; third-party actions in privileged jobs are pinned to commit SHAs; release checkouts don't persist credentials; `@fluxfiles/ckeditor5` builds from a committed lockfile; the Docker workflow can no longer be dispatched from a branch. WordPress shortcode `width`/`height` accept only CSS lengths (PR 352).
+
+### Fixed
+- Metadata manifests (`index.json`, `trash.json`, `dirs.json`) are written atomically on local and SFTP disks, keep a `.bak` of the last good copy, and a corrupt manifest with no usable backup answers `409 metadata_corrupt` instead of being read as empty and overwritten. New `fluxfiles trash:reconcile` rebuilds `trash.json` from the trashed payloads (PR 355).
+- Folders with an all-digit name (`2024`) were dropped from the folder index; names longer than 240 bytes answer `400 name_too_long` instead of leaving an ownerless file; zip extraction no longer overwrites its own renamed entries (also case-insensitively) and reports unreadable entries; malformed request bodies and parameters answer 400 (`missing_param`, `invalid_param`) instead of 500; mkdir uses the same name rules as upload and rename; a case-only rename works on case-insensitive filesystems; purging trash keeps the entry when the delete fails; a cross-disk folder move answers `400 cross_disk_dir_unsupported` (PR 355).
+- Demo mode: purging an expired sandbox also removes its index, folder-index and sidecar entries (they accumulated forever), the purge runs after the response under a lock with a 5-minute throttle, `fluxfiles demo:purge` runs it from cron and cleans entries already left behind, and `FLUXFILES_DEMO_IP_MINTS` defaults to 100 (PR 354).
+- `fluxfiles_token()` explains a missing or short `FLUXFILES_SECRET`, accepts a `secret` option, requires a non-empty `user`, and **throws on unknown option keys** (a typo used to fall back to the default silently) (PR 353).
+
+### Performance
+- Docker image: OPcache enabled, a sized PHP-FPM pool (24 children by default, `FPM_*` env vars), `memory_limit` 256M (PR 354).
+- Uploaded images are decoded once and the variants cascade large → medium → thumb (a 12 MP JPEG: 2.9 s → 1.6 s). The folder tree lists folders only (`dirs_only=1`). `/img` sends an ETag and answers 304, serves cache hits through X-Accel when configured, and locks a cold transform so concurrent viewers don't encode the same image twice. The UI asks for a compact srcset (`compact_srcset=1`, a 200-image page 420 KB → 88 KB), cancels superseded searches, and renders large folders 300 cards at a time (PR 356).
+
+### Docs
+- README: search covers names and metadata (not file contents); the Laravel component needs a claims resolver first; tokens are 1 h by default and core doesn't cap `exp`; React snippets type-check; the no-Docker and contributor paths include the secret step. New CONTRIBUTING.md, CODE_OF_CONDUCT.md and issue/PR templates (PR 353).
+
+### Laravel (`laravel-v1.1.2`)
+- `rate_limit_thumb` config (`FLUXFILES_THUMB_RATE_LIMIT`, default 1200) for cached images and stored thumbnails; trashed files count toward the quota on core ≥ 1.6.7; `symfony/routing` and `symfony/http-kernel` bumped in the dev lockfile past published advisories.
+
 ## [1.0.59] — 2026-11-27
 
 > Released: `core-v1.7.4` and `wordpress-v1.3.7` (bundles core 1.7.4): on a phone, the Links panel shows each share link and upload portal as a card. The WordPress.org review still covers 1.3.4.
