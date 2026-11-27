@@ -30,33 +30,37 @@ for (const vp of [{ width: 390, height: 844 }, { width: 540, height: 960 }]) {
     await page.setViewportSize(vp);
     await openLinks(page, true);
 
-    const m = await page.evaluate(() => {
-      const panel = document.querySelector('.ff-links-panel') as HTMLElement;
-      const p = panel.getBoundingClientRect();
-      const body = panel.querySelector('.ff-activity-body') as HTMLElement;
-      const first = panel.querySelector('tbody td') as HTMLElement;
-      const btn = panel.querySelector('tbody td:last-child button')!.getBoundingClientRect();
-      const f = first.getBoundingClientRect();
-      return {
-        pl: p.left, pr: p.right, vw: window.innerWidth,
-        fl: f.left, fr: f.right,
-        bl: btn.left, br: btn.right,
-        sw: body.scrollWidth, cw: body.clientWidth,
-        theadDisplay: getComputedStyle(panel.querySelector('thead')!).display,
-        label: first.getAttribute('data-label'),
-      };
-    });
-    expect(m.pl).toBeGreaterThanOrEqual(0);
-    expect(m.pr).toBeLessThanOrEqual(m.vw);
-    // First column cell is fully inside the panel (not clipped left or right).
-    expect(m.fl).toBeGreaterThanOrEqual(m.pl);
-    expect(m.fr).toBeLessThanOrEqual(m.pr);
-    // The Revoke button is reachable without any horizontal scroll.
-    expect(m.bl).toBeGreaterThanOrEqual(m.pl);
-    expect(m.br).toBeLessThanOrEqual(m.pr);
-    expect(m.sw).toBeLessThanOrEqual(m.cw);
-    expect(m.theadDisplay).toBe('none');
-    expect(m.label).toBe('Label');
+    // Measure once the panel has settled: the list re-renders after its fetch and the
+    // overlay animates in, so a single early read can catch a detached or moving row.
+    await expect(async () => {
+      const m = await page.evaluate(() => {
+        const panel = document.querySelector('.ff-links-panel') as HTMLElement;
+        const p = panel.getBoundingClientRect();
+        const body = panel.querySelector('.ff-activity-body') as HTMLElement;
+        const first = panel.querySelector('tbody td') as HTMLElement;
+        const btn = panel.querySelector('tbody td:last-child button')!.getBoundingClientRect();
+        const f = first.getBoundingClientRect();
+        return {
+          pl: p.left, pr: p.right, vw: window.innerWidth,
+          fl: f.left, fr: f.right,
+          bl: btn.left, br: btn.right,
+          sw: body.scrollWidth, cw: body.clientWidth,
+          theadDisplay: getComputedStyle(panel.querySelector('thead')!).display,
+          label: first.getAttribute('data-label'),
+        };
+      });
+      expect(m.pl).toBeGreaterThanOrEqual(0);
+      expect(m.pr).toBeLessThanOrEqual(m.vw);
+      // First column cell is fully inside the panel (not clipped left or right).
+      expect(m.fl).toBeGreaterThanOrEqual(m.pl);
+      expect(m.fr).toBeLessThanOrEqual(m.pr);
+      // The Revoke button is reachable without any horizontal scroll.
+      expect(m.bl).toBeGreaterThanOrEqual(m.pl);
+      expect(m.br).toBeLessThanOrEqual(m.pr);
+      expect(m.sw).toBeLessThanOrEqual(m.cw);
+      expect(m.theadDisplay).toBe('none');
+      expect(m.label).toBe('Label');
+    }).toPass({ timeout: 10000 });
   });
 }
 
