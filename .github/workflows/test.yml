@@ -1,9 +1,17 @@
 name: Tests
 
 on:
+  # Branch pushes are covered by their pull_request run; running both doubled every PR's
+  # jobs (72 instead of 36) and made them queue behind the account's concurrent-job limit.
   push:
-    branches: ['**']
+    branches: [master]
   pull_request:
+  workflow_dispatch:
+
+# A newer commit on the same PR cancels the older run; master runs always finish.
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Make every `npm install` resilient to transient registry hiccups (the npm
 # fetch layer retries ECONNRESET / timeouts instead of failing the job).
@@ -40,6 +48,13 @@ jobs:
       # firebase/php-jwt v7 rejects HS256 keys shorter than 32 bytes.
       - name: Write .env with test secret
         run: echo "FLUXFILES_SECRET=ci-test-secret-$(openssl rand -hex 16)" > .env
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json', '**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
 
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
@@ -109,6 +124,13 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json', '**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
       - name: Install Laravel adapter dependencies (from its lock)
         run: composer install -d packages/laravel --prefer-dist --no-interaction --no-progress
 
@@ -150,6 +172,12 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - name: Cache npm downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package.json', '**/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
       # fm.min.js / fm.min.css are committed build outputs (what the page serves).
       # Rebuild with the esbuild version pinned in scripts/build-ui.sh and fail on
       # any difference: someone edited fm.js/fm.css without running the build.
@@ -191,6 +219,13 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
           coverage: none
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json', '**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
 
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
@@ -245,6 +280,13 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
           coverage: none
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json', '**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
 
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
@@ -325,6 +367,13 @@ jobs:
           php-version: '8.2'
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
           coverage: none
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json', '**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
 
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
@@ -454,6 +503,13 @@ jobs:
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip, pdo, pdo_mysql
           coverage: none
 
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json', '**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
@@ -507,6 +563,13 @@ jobs:
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip, pdo, pdo_pgsql
           coverage: none
 
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json', '**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
@@ -538,6 +601,18 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Cache npm downloads
+
+        uses: actions/cache@v6
+
+        with:
+
+          path: ~/.npm
+
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package.json', '**/package-lock.json') }}
+
+          restore-keys: npm-${{ runner.os }}-
+
       - name: Install + test ${{ matrix.pkg }}
         working-directory: packages/${{ matrix.pkg }}
         run: |
@@ -562,12 +637,31 @@ jobs:
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
           coverage: none
 
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json', '**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+
+      - name: Cache npm downloads
+
+        uses: actions/cache@v6
+
+        with:
+
+          path: ~/.npm
+
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package.json', '**/package-lock.json') }}
+
+          restore-keys: npm-${{ runner.os }}-
 
       - name: Install + typecheck + build + test @fluxfiles/node
         working-directory: packages/node
@@ -605,6 +699,13 @@ jobs:
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
           coverage: none
 
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json', '**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
@@ -635,6 +736,13 @@ jobs:
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
           coverage: none
 
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json', '**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
@@ -642,10 +750,34 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Install Playwright + chromium
+      - name: Cache npm downloads
+
+        uses: actions/cache@v6
+
+        with:
+
+          path: ~/.npm
+
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package.json', '**/package-lock.json') }}
+
+          restore-keys: npm-${{ runner.os }}-
+      - name: Install Playwright
         working-directory: packages/core/tests/browser
         run: |
           bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npm install --no-audit --no-fund
+
+      - name: Playwright version (cache key)
+        id: pw
+        working-directory: packages/core/tests/browser
+        run: echo "v=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.pw.outputs.v }}
+      - name: Install Chromium + system deps (download skipped on a cache hit)
+        working-directory: packages/core/tests/browser
+        run: |
           bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npx playwright install --with-deps chromium
 
       - name: Run Playwright e2e (boots the PHP server, drives the iframe UI)
@@ -667,6 +799,13 @@ jobs:
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
           coverage: none
 
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json', '**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
       - name: Install core dependencies (the real-picker specs serve the picker from a live core)
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
@@ -674,16 +813,40 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Cache npm downloads
+
+        uses: actions/cache@v6
+
+        with:
+
+          path: ~/.npm
+
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package.json', '**/package-lock.json') }}
+
+          restore-keys: npm-${{ runner.os }}-
+
       - name: Build editor plugins (the tests load the shipped plugin.min.js)
         run: |
           for p in tinymce ckeditor4 summernote; do
             (cd "packages/$p" && bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npm install --no-audit --no-fund && npm run build)
           done
-
-      - name: Vendor the real editor libs (incl. CKEditor 5 + Vite) + Playwright
+      - name: Vendor the real editor libs (incl. CKEditor 5 + Vite)
         working-directory: packages/core/tests/editors
         run: |
           bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Playwright version (cache key)
+        id: pw
+        working-directory: packages/core/tests/editors
+        run: echo "v=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.pw.outputs.v }}
+      - name: Install Chromium + system deps (download skipped on a cache hit)
+        working-directory: packages/core/tests/editors
+        run: |
           bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npx playwright install --with-deps chromium
 
       - name: Run live editor e2e (stubbed-picker watermark specs + real-picker specs)
@@ -700,6 +863,12 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - name: Cache npm downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package.json', '**/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
       - name: Build, pack, install each wrapper into a throwaway consumer
         run: |
           for p in sdk react vue ckeditor5 mcp; do bash scripts/ci-retry.sh npm install --prefix packages/$p --no-audit --no-fund; done
