@@ -99,25 +99,6 @@ rm -f "$PLUGIN_DIR/api/Mail/SmtpTransport.php"
 # through HttpTransports, which tolerates these classes being absent.
 rm -f "$PLUGIN_DIR/api/CurlTransport.php" "$PLUGIN_DIR/api/CurlUrlFetcher.php"
 
-# Plugin Check: the file's existing phpcs note (a WordPress-independent library cannot use
-# WP_Filesystem) did not name two calls core 1.6.7 added for the write locks. Core names them
-# since the release after 1.7.1, so this is a no-op there; it stays for builds that bundle
-# core 1.6.7 - 1.7.1. Comment only.
-python3 - "$PLUGIN_DIR/api/StorageMetadataHandler.php" <<'PY'
-import sys
-path = sys.argv[1]
-src = open(path, encoding='utf-8').read()
-first = '// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fclose,'
-if src.count(first) != 1:
-    sys.exit('StorageMetadataHandler.php: the phpcs:disable line changed; update build-wordpress.sh')
-line = next(l for l in src.split('\n') if l.startswith(first))
-for name in ('chmod', 'is_writable'):
-    sniff = 'WordPress.WP.AlternativeFunctions.file_system_operations_' + name
-    if sniff not in line:
-        src = src.replace(first, first + ' ' + sniff + ',', 1)
-open(path, 'w', encoding='utf-8').write(src)
-PY
-
 # The UI page is read from disk by the REST route and served through it with a CSP +
 # frame protection; it must never be openable directly under wp-content/plugins/. No
 # .htaccess can ship (WordPress.org rejects hidden files) and nginx ignores it anyway,
