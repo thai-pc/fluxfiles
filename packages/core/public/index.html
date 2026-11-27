@@ -248,7 +248,7 @@
     </div>
 
     <!-- ═══ Mobile fullscreen search ═══ -->
-    <div class="ff-mobile-search-overlay" x-show="mobileSearchOpen" x-transition.opacity.duration.200ms @keydown.escape.window="mobileSearchOpen = false"
+    <div class="ff-mobile-search-overlay" x-show="mobileSearchOpen" :class="{ 'has-query': (searchQuery || '').trim().length >= 2 }" x-transition.opacity.duration.200ms @keydown.escape.window="mobileSearchOpen = false"
          x-effect="if (mobileSearchOpen) $nextTick(() => $refs.mobileSearchInput?.focus())">
         <div class="ff-mobile-search-header">
             <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.1"/><path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>

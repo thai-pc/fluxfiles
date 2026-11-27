@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- UI on phones: search results were never visible. The full-screen search overlay covered the page with an opaque layer and has no result list of its own, so a match was found and drawn underneath it; closing it with × also cleared the query. From two characters on, the overlay shrinks to its search bar and the results show below it.
+
 ## [1.0.57] — 2026-11-27
 
 > Released: `core-v1.7.2` (the `import_concurrency` claim is enforced) and `wordpress-v1.3.5` (bundles core 1.7.2; the file manager follows the user's profile language). The WordPress.org review still covers 1.3.4.
