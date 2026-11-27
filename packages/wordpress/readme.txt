@@ -4,7 +4,7 @@ Tags: media library, media folders, amazon s3, cloudflare r2, offload media
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.3.4
+Stable tag: 1.3.5
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -180,6 +180,11 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.3.5 =
+* Fix: the file manager uses the language you chose in your profile. It used the site language, so an admin who picked English on a site in another language got the file manager in the site language.
+* Import from URL (when turned on): the limit on how many imports one user can run at once (3 by default) is now enforced.
+* Updates the bundled FluxFiles core to 1.7.2.
+
 = 1.3.4 =
 * Faster browsing: large images without a stored thumbnail are shown as small resized images in the grid instead of full originals, and selecting an image no longer downloads the original in the background.
 * Faster cloud folders: listing files on S3 or R2 that FluxFiles has not indexed yet takes less time, and thumbnails already loaded are reused when you open a folder again.
@@ -339,6 +344,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.3.5 =
+The file manager follows the language in your user profile. No change to your files or settings.
 
 = 1.3.4 =
 Faster image and cloud browsing. Trashed files now count toward a storage limit, so a user close to the limit may need to empty the trash. No change to your files or settings.

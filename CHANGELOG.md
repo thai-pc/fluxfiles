@@ -5,7 +5,12 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.57] — 2026-11-27
+
+> Released: `core-v1.7.2` (the `import_concurrency` claim is enforced) and `wordpress-v1.3.5` (bundles core 1.7.2; the file manager follows the user's profile language). The WordPress.org review still covers 1.3.4.
+
 ### Fixed
+- WordPress: the file manager follows the user's profile language. Every picker host (the admin page and shortcode, the block, the media button and the media-library tab) sent the site language (`get_locale()`), so an admin who chose English on a Vietnamese site got a Vietnamese file manager. `FluxFilesPlugin::uiLocale()` uses `determine_locale()` (the profile language in wp-admin, the site language on the front end).
 - Core: the `import_concurrency` claim is now enforced. It was read into the token and documented, but nothing used it. A URL import holds one of N per-user slots (an exclusive `flock` on a file in the system temp dir, dropped by the OS when the request ends, even on a crash); one more import while all are busy answers `429 rate_limited`. `0` falls back to `FLUXFILES_IMPORT_CONCURRENCY`, else 3, capped at 50. The limit is per server. Applies to the standalone core and both proxies (they all import through `UrlImporter`).
 
 ### Changed
