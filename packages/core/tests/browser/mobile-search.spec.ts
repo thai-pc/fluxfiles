@@ -38,3 +38,18 @@ test('mobile search: results are visible under the search bar', async ({ page })
   await expect(page.locator('.ff-mobile-search-hint')).toBeHidden();
   await expect(overlay).not.toHaveClass(/has-query/);
 });
+
+test('mobile More menu: the header tools (Trash, Storage usage) are reachable on a phone', async ({ page }) => {
+  await openManager(page, mintTokenWithClaims({ prefix: `mmore-${Date.now()}` }));
+  // The header's icon row is not on screen at this width.
+  await expect(page.locator('.ff-theme-toggle-sm[aria-label="Trash"]')).toBeHidden();
+  const more = page.locator('.ff-mobile-more .ff-more-btn');
+  await more.click();
+  await page.locator('.ff-more-menu').getByRole('button', { name: 'Trash' }).click();
+  await expect(page.locator('.ff-trash-modal')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.ff-trash-modal')).toBeHidden();
+  await more.click();
+  await page.locator('.ff-more-menu').getByRole('button', { name: 'Storage usage' }).click();
+  await expect(page.locator('.ff-usage-modal')).toBeVisible();
+});

@@ -7,6 +7,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Fixed
 - UI on phones: search results were never visible. The full-screen search overlay covered the page with an opaque layer and has no result list of its own, so a match was found and drawn underneath it; closing it with × also cleared the query. From two characters on, the overlay shrinks to its search bar and the results show below it.
+- UI on phones: the header tools could not be opened. The header's icon row is hidden at phone width and only the Links entry had a copy in the "More" (⋮) menu, so Trash (restoring a deleted file), Storage usage (with the duplicate finder), the Activity log, Compliance, Doctor, Terminal and PDF tools had no way in. The More menu now lists them, with the same conditions as the header buttons.
 
 ## [1.0.57] — 2026-11-27
 

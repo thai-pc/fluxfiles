@@ -456,6 +456,36 @@
                         <span x-text="t('links.pro_title')"></span>
                         <span class="ff-pro-pill" x-text="t('links.pro_badge')"></span>
                     </button>
+                    <!-- Header tools: the header's icon row is hidden on phones, so this menu is their
+                         only entry point there (same conditions as the header buttons). -->
+                    <button @click="open = false; openActivity()" x-show="canAudit">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                        <span x-text="t('audit.title')"></span>
+                    </button>
+                    <button @click="open = false; openComplianceScorecard()" x-show="canAudit">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                        <span x-text="t('compliance.title')"></span>
+                    </button>
+                    <button @click="open = false; openUsage()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h5"/><path d="M18 3v6h-6"/><path d="M21 3l-9 9"/></svg>
+                        <span x-text="t('usage.title')"></span>
+                    </button>
+                    <button @click="open = false; openDoctor()" x-show="canDiagnose">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h4"/></svg>
+                        <span x-text="t('doctor.title')"></span>
+                    </button>
+                    <button @click="open = false; openTrash()" x-show="canManageTrash">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6v14a2 2 0 002 2h8a2 2 0 002-2V6M10 11v6M14 11v6"/></svg>
+                        <span x-text="t('trash.title')"></span>
+                    </button>
+                    <button @click="open = false; openTerminal()" x-show="canTerminal">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+                        <span x-text="t('terminal.title')"></span>
+                    </button>
+                    <button @click="open = false; openPdfTools()" x-show="pdfToolsUrl">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
+                        <span x-text="t('pdf.title')"></span>
+                    </button>
                     <div class="ff-more-divider"></div>
                     <!-- Sort cycle: name → date → size → type → name -->
                     <button @click="open = false; setSort(sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : sortBy === 'size' ? 'type' : 'name')">
