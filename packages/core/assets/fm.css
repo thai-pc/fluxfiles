@@ -3301,6 +3301,12 @@ body {
         background: var(--color-background-primary);
         padding-top: env(safe-area-inset-top, 0);
     }
+    /* Searching: shrink to the search bar so the results drawn below it stay visible
+       (the overlay has no result list of its own). */
+    .ff-mobile-search-overlay.has-query {
+        bottom: auto;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
 
     .ff-mobile-search-header {
         display: flex;
