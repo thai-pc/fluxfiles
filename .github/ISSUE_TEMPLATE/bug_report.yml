@@ -1,0 +1,74 @@
+name: Bug report
+description: Something in FluxFiles or one of its adapters doesn't work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Security problems go through private reporting, not here** — see SECURITY.md.
+        Please never paste a real token, `FLUXFILES_SECRET`, storage credentials or a `.env` file.
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - core (API / UI / embed.php / CLI)
+        - Docker image
+        - Laravel adapter
+        - WordPress plugin
+        - JS SDK
+        - React
+        - Vue / Nuxt
+        - CKEditor 4
+        - CKEditor 5
+        - TinyMCE
+        - Summernote
+        - Node token SDK
+        - Python token SDK
+        - MCP server
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The package version or release tag (e.g. core-v1.7.1). `php vendor/bin/fluxfiles about` prints the core version.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: PHP version, web server, storage disk (local / S3 / R2 / SFTP), metadata backend (json / db), browser if it's a UI issue.
+      placeholder: PHP 8.3, nginx + php-fpm, S3, json backend, Firefox 140
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Include the exact error message or HTTP status and response body.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps, and the token claims involved (names and non-secret values only).
+      placeholder: |
+        1. Mint a token with perms [read, write], disks [local], prefix users/1
+        2. Upload a 3 MB PNG
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Server error log or browser console. Remove tokens, secrets and personal data first.
+      render: text

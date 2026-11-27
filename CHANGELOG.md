@@ -1,7 +1,10 @@
 # Changelog
 
-All notable changes to FluxFiles are documented here. This project adheres to
-[Semantic Versioning](https://semver.org/).
+All notable changes to FluxFiles are documented here. Each released package is
+versioned on its own and follows [Semantic Versioning](https://semver.org/) through its
+release tag (`core-vX.Y.Z`, `react-vX.Y.Z`, `wordpress-vX.Y.Z`, …). The `[X.Y.Z]`
+headings below are this changelog's own entry counter, **not** a package version: each
+entry's `> Released:` line names the exact tags it shipped.
 
 ## [Unreleased]
 

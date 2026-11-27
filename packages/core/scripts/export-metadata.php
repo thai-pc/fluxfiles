@@ -3,6 +3,12 @@
 
 declare(strict_types=1);
 
+// CLI only: never runnable over HTTP, even if a web server is misconfigured to execute it.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit(1);
+}
+
 require __DIR__ . '/../autoload.php';
 
 // Load .env — same two-directory search as api/index.php (package root when

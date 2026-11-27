@@ -6,36 +6,50 @@ on:
       - "core-v*"
       - "laravel-v*"
 
+permissions:
+  contents: read
+
 jobs:
   split:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - name: core
-            tag_prefix: "core-"
-            local: "packages/core"
-            remote: "fluxfiles-core"
-          - name: laravel
-            tag_prefix: "laravel-"
-            local: "packages/laravel"
-            remote: "fluxfiles-laravel"
-
+    # One tag = one package, so a single job (a two-entry matrix would leave one
+    # no-op job per tag and double the approvals if `release` gets reviewers).
+    # The environment has no protection rules until the owner adds some.
+    environment: release
     steps:
       - uses: actions/checkout@v7
-        if: startsWith(github.ref_name, matrix.package.tag_prefix)
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Split and push ${{ matrix.package.remote }}
-        if: startsWith(github.ref_name, matrix.package.tag_prefix)
+      # Release tags must be cut from master (an unreviewed branch must not publish).
+      - name: Tag must be on master
+        run: |
+          git fetch --no-tags origin master
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/master || { echo "::error::tag ${GITHUB_REF_NAME} (${GITHUB_SHA}) is not on master"; exit 1; }
+
+      - name: Resolve package from tag
+        id: pkg
+        env:
+          MONOREPO_TAG: ${{ github.ref_name }}
+        run: |
+          case "$MONOREPO_TAG" in
+            core-v*)    NAME=core ;;
+            laravel-v*) NAME=laravel ;;
+            *) echo "::error::Unexpected tag ${MONOREPO_TAG}"; exit 1 ;;
+          esac
+          echo "tag_prefix=${NAME}-" >> "$GITHUB_OUTPUT"
+          echo "local=packages/${NAME}" >> "$GITHUB_OUTPUT"
+          echo "remote=fluxfiles-${NAME}" >> "$GITHUB_OUTPUT"
+
+      # Auth is the SPLIT_TOKEN in the push URL below, not the checkout credential
+      # (persist-credentials: false).
+      - name: Split and push ${{ steps.pkg.outputs.remote }}
         env:
           PAT_TOKEN: ${{ secrets.SPLIT_TOKEN }}
-          REMOTE_REPO: ${{ matrix.package.remote }}
-          PKG_DIR: ${{ matrix.package.local }}
-          TAG_PREFIX: ${{ matrix.package.tag_prefix }}
+          REMOTE_REPO: ${{ steps.pkg.outputs.remote }}
+          PKG_DIR: ${{ steps.pkg.outputs.local }}
+          TAG_PREFIX: ${{ steps.pkg.outputs.tag_prefix }}
           MONOREPO_TAG: ${{ github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
@@ -61,11 +75,10 @@ jobs:
       # its periodic crawl (which lagged badly — core sat at an old version for
       # days). No-op (warning, not failure) when the secret isn't configured.
       - name: Notify Packagist
-        if: startsWith(github.ref_name, matrix.package.tag_prefix)
         env:
           PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
           PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
-          REMOTE_REPO: ${{ matrix.package.remote }}
+          REMOTE_REPO: ${{ steps.pkg.outputs.remote }}
         run: |
           if [ -z "${PACKAGIST_TOKEN:-}" ]; then
             echo "::warning::PACKAGIST_TOKEN secret not set — Packagist will only update on its slow periodic crawl. Set PACKAGIST_USERNAME + PACKAGIST_TOKEN to auto-sync."

@@ -13,3 +13,4 @@
 /.cursor export-ignore
 /.DS_Store export-ignore
 
+/packages/core/tests export-ignore

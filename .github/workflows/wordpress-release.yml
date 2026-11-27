@@ -17,6 +17,7 @@ jobs:
   release:
     name: Build and publish the plugin ZIP
     runs-on: ubuntu-latest
+    environment: release   # no rules by default; the owner may add required reviewers
 
     steps:
       - uses: actions/checkout@v7
@@ -24,8 +25,16 @@ jobs:
           # Full history + tags: the build stamps the bundled core version from
           # `git describe --match 'core-v*'` and fails without a reachable core tag.
           fetch-depth: 0
+          # `gh release` below authenticates with GH_TOKEN, not the checkout credential.
+          persist-credentials: false
 
-      - uses: shivammathur/setup-php@v2
+      # Release tags must be cut from master (an unreviewed branch must not publish).
+      - name: Tag must be on master
+        run: |
+          git fetch --no-tags origin master
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/master || { echo "::error::tag ${GITHUB_REF_NAME} (${GITHUB_SHA}) is not on master"; exit 1; }
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.2'
           extensions: zip, mbstring

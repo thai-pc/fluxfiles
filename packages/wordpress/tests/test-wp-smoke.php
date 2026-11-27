@@ -719,6 +719,21 @@ test('token-refresh recovery wiring is present (api + shortcode + media button)'
     assertTrue(strpos($mbSrc, 'onTokenRefresh') !== false, 'media button wires onTokenRefresh');
 });
 
+// [fluxfiles width/height] go into style="": only a strict CSS length may pass.
+test('shortcode width/height accept only a strict CSS length (no CSS injection)', function () {
+    require_once __DIR__ . '/../includes/FluxFilesShortcode.php';
+    foreach (['100%', '600px', '50vh', '80vw', '30em', '2.5rem', ' 400px ', 'calc(100% - 40px)', 'calc(100vh + 2rem)'] as $ok) {
+        assertEqual(trim($ok), FluxFilesShortcode::cssSize($ok, 'DEF'), "accepts {$ok}");
+    }
+    foreach ([
+        '100%;position:fixed;inset:0', '600px" onload="x', 'url(http://e.x/a)', 'expression(alert(1))',
+        '100%/*', '-5px', '10', 'px', '', 'auto', 'calc(100% - 40px) !important', 'calc(100%;color:red)',
+        "10px\n;top:0", 'calc(1px + calc(2px + 3px))', '100% 100%', 'var(--x)',
+    ] as $bad) {
+        assertEqual('DEF', FluxFilesShortcode::cssSize($bad, 'DEF'), 'rejects ' . json_encode($bad));
+    }
+});
+
 // ── Attachment bridge (3-in-1 media manager) ────────────────────────────────
 // Stub the WP attachment functions so FluxFilesAttachments can run headless.
 $GLOBALS['WP_POSTS'] = [];   // id => ['post' => [...], 'meta' => [...]]

@@ -433,7 +433,7 @@ The plugin has no terminal: `terminal_pty_url` is removed from every token it mi
 - Multi-storage — Local disk, AWS S3, Cloudflare R2, SFTP (cursor-based pagination)
 - Image optimization — automatic WebP variants (thumb / medium / large)
 - AI tagging — bring your own key (Anthropic, OpenAI, Gemini, OpenRouter, Groq, Mistral, xAI, Ollama or any OpenAI-compatible endpoint) under Settings → FluxFiles → AI; free, no licence
-- Full-text search across file names + metadata; folder search
+- Search across file names + metadata (title, alt, caption, tags); folder search
 - 16 languages with RTL support; dark mode with auto-detection
 
 ## License

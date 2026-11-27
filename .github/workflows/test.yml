@@ -37,7 +37,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup PHP ${{ matrix.php }}
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: ${{ matrix.php }}
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip, pdo, pdo_sqlite
@@ -108,7 +108,7 @@ jobs:
 
       # The PHP floor: the committed locks must install on the oldest supported PHP.
       - name: Setup PHP 8.1
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.1'
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip, pdo, pdo_sqlite
@@ -149,7 +149,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.2'
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
@@ -214,7 +214,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup PHP ${{ matrix.php }}
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: ${{ matrix.php }}
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
@@ -275,7 +275,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup PHP ${{ matrix.php }}
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: ${{ matrix.php }}
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
@@ -362,7 +362,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.2'
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
@@ -497,7 +497,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.2'
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip, pdo, pdo_mysql
@@ -557,7 +557,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.2'
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip, pdo, pdo_pgsql
@@ -631,7 +631,7 @@ jobs:
       # (Node-minted tokens decode in the PHP core; BYOB blobs round-trip both
       # ways) instead of skipping.
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.2'
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
@@ -693,7 +693,7 @@ jobs:
       # (Python-minted tokens decode in the PHP core; BYOB blobs round-trip
       # both ways) instead of skipping.
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.2'
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
@@ -730,7 +730,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.2'
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
@@ -793,7 +793,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup PHP (static file server + live core for the real-picker specs)
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.2'
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
@@ -885,7 +885,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.2'
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
