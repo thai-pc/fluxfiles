@@ -425,6 +425,7 @@
     "byob_disk_collision": "Este nome de disco de armazenamento entra em conflito com um disco já configurado no servidor.",
     "presign_put_disabled": "Os envios diretos via PUT estão desativados para esta conta — use um envio por formulário (POST)",
     "presign_post_unsupported": "Este armazenamento não suporta envios por formulário (POST) — use o envio em partes",
+    "presign_overwrite_versioned": "Este arquivo já existe e tem histórico de versões, por isso não pode ser substituído por um envio direto — use o envio padrão",
     "invalid_sort": "Opção de ordenação desconhecida.",
     "invalid_order": "A ordem deve ser crescente ou decrescente.",
     "invalid_type": "Filtro de tipo de arquivo desconhecido.",

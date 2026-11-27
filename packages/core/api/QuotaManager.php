@@ -121,7 +121,10 @@ class QuotaManager
             if (!($item instanceof FileAttributes)) {
                 continue;
             }
-            $bytes += $item->fileSize() ?? 0;
+            // The upload-root `.htaccess` core wrote itself is not the user's data.
+            if (!UploadRootGuard::isRootGuardKey($this->diskManager->config($disk), $item->path())) {
+                $bytes += $item->fileSize() ?? 0;
+            }
             // FileManager::isReservedKey() is the single, case-insensitive rule —
             // a case-sensitive substring test here let `_FLUXFILES/` files count
             // against the user's quota (and, worse, diverge from what every other

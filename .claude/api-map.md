@@ -86,6 +86,7 @@ All authenticated routes require `Authorization: Bearer <JWT>`.
   - **GET** (TTL ≤ 86400s): presigned download URL, with `ResponseContentDisposition` and an extension-derived `ResponseContentType` signed in (a spoofed stored type can't render inline HTML).
   - **PUT** (TTL ≤ 900s, `MAX_PUT_PRESIGN_TTL`): the `max_upload`/`max_storage`/`max_files` checks run only against the client-declared `size` at mint time — `ContentLength` **cannot** be signed into an S3/R2 URL (the AWS SDK drops that header from the signature unconditionally), so these checks are **advisory only**. Operators can refuse PUT with `allow_presign_put: false` → `403 presign_put_disabled`.
   - **POST** (TTL ≤ 900s): returns `{url, fields, expires_at, max_bytes}` — an S3 form-upload policy the **bucket enforces** (`content-length-range` = declared size, exact key, extension-pinned `Content-Type`). Cloudflare R2 has no POST Object → `400 presign_post_unsupported`.
+  - PUT/POST are born owned (`fm-uploaded-by` signed into the PUT, returned as `headers` the client must send; pinned as a policy field for POST), apply `upload_collision` at mint time (`path` = the possibly renamed key), and an existing key is `409 presign_overwrite_versioned` while Versioning is on.
   - Like `/api/fm/chunk/*`, PUT and POST are **refused** (`409 virus_unscannable` / `dlp_unscannable`) while `allow_virus_scan` / `allow_dlp_scan` is on — browser→S3 bytes can never be scanned. A PUT/POST onto an existing held key → `403 legal_hold_active`.
 
 - `POST /api/fm/crop`

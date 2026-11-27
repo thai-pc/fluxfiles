@@ -425,6 +425,7 @@
     "byob_disk_collision": "Este nombre de disco de almacenamiento entra en conflicto con un disco ya configurado en el servidor.",
     "presign_put_disabled": "Las subidas directas PUT están desactivadas para esta cuenta: usa una subida por formulario (POST)",
     "presign_post_unsupported": "Este almacenamiento no admite subidas por formulario (POST): usa la subida por partes",
+    "presign_overwrite_versioned": "Este archivo ya existe y tiene historial de versiones, por lo que no se puede reemplazar con una subida directa — usa la subida estándar",
     "invalid_sort": "Opción de orden desconocida.",
     "invalid_order": "El orden debe ser ascendente o descendente.",
     "invalid_type": "Filtro de tipo de archivo desconocido.",

@@ -12,16 +12,18 @@ namespace FluxFiles;
  * cannot drift. Precedence:
  *   1. FLUXFILES_FRAME_ANCESTORS: explicit source list, verbatim.
  *   2. FLUXFILES_ALLOWED_ORIGINS: the hosts already trusted for CORS, plus 'self'.
- *   3. neither set: no header (unchanged behaviour).
+ *   3. neither set: no header (unchanged behaviour), unless the caller asks for the
+ *      safe default (`$selfWhenUnset`: SSO / demo pages, which hold a login or token).
  * X-Frame-Options is deliberately not sent alongside: it has no multi-origin form.
  */
 final class FrameAncestors
 {
     /**
      * @param string[]|null $allowedOrigins already-parsed origins; null = read FLUXFILES_ALLOWED_ORIGINS
+     * @param bool $selfWhenUnset return `frame-ancestors 'self'` when nothing is configured
      * @return string|null the header VALUE (`frame-ancestors …`), or null when none applies
      */
-    public static function policy(?array $allowedOrigins = null): ?string
+    public static function policy(?array $allowedOrigins = null, bool $selfWhenUnset = false): ?string
     {
         if ($allowedOrigins === null) {
             $allowedOrigins = array_filter(array_map('trim', explode(',', (string) ($_ENV['FLUXFILES_ALLOWED_ORIGINS'] ?? ''))));
@@ -33,6 +35,6 @@ final class FrameAncestors
         if ($value !== '' && preg_match('/^[A-Za-z0-9 :\/\.\*\-\']+$/', $value)) {
             return 'frame-ancestors ' . $value;
         }
-        return null;
+        return $value === '' && $selfWhenUnset ? "frame-ancestors 'self'" : null;
     }
 }

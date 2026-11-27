@@ -176,7 +176,7 @@ echo "\n[7] case-only rename\n";
 up($fm, 'Photo.txt', 'PIC');
 $r = $fm->rename('local', 'Photo.txt', 'photo.txt');
 ok(($r['name'] ?? '') === 'photo.txt', 'Photo.txt -> photo.txt is allowed');
-$names = array_diff(scandir($root), ['.', '..', '_fluxfiles']);
+$names = array_diff(scandir($root), ['.', '..', '_fluxfiles', '.htaccess']); // .htaccess = UploadRootGuard
 ok(array_values($names) === ['photo.txt'], 'the file is spelled photo.txt on disk (' . implode(',', $names) . ')');
 ok(($meta->get('local', 'photo.txt')['uploaded_by'] ?? '') === 'u', 'its owner record followed the rename');
 up($fm, 'Other.txt');

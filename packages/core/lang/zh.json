@@ -425,6 +425,7 @@
     "byob_disk_collision": "此存储磁盘名称与服务器上已配置的磁盘冲突。",
     "presign_put_disabled": "此账户已禁用 PUT 直传 — 请使用表单 (POST) 上传",
     "presign_post_unsupported": "此存储不支持表单 (POST) 上传 — 请使用分片上传",
+    "presign_overwrite_versioned": "该文件已存在且有版本历史，无法通过直接上传替换 — 请使用标准上传",
     "invalid_sort": "未知的排序方式。",
     "invalid_order": "排序方向必须是升序或降序。",
     "invalid_type": "未知的文件类型筛选。",

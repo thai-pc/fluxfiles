@@ -79,6 +79,7 @@ if (in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT', 'PATCH', 'DELETE'], tru
         if (!$allowed) {
             http_response_code(403);
             header('Content-Type: application/json; charset=utf-8');
+            header('X-Content-Type-Options: nosniff');
             echo json_encode(['data' => null, 'error' => 'Origin not allowed', 'error_code' => 'origin_denied']);
             exit;
         }
@@ -86,6 +87,8 @@ if (in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT', 'PATCH', 'DELETE'], tru
 }
 
 header('Content-Type: application/json; charset=utf-8');
+// Every JSON answer: never let a browser re-interpret an API body as HTML/script.
+header('X-Content-Type-Options: nosniff');
 
 // I18n — initialize before routing
 $envLocale = $_ENV['FLUXFILES_LOCALE'] ?? '';
@@ -116,7 +119,15 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
     //      operator should fix; docs/reference/CONFIG.md says so.
     // X-Frame-Options is deliberately NOT sent alongside: it has no multi-origin
     // form, so it would contradict an allow-list that CSP is expressing correctly.
-    $frameAncestors = \FluxFiles\FrameAncestors::policy($allowedOrigins);
+    //   4. exception: when this page carries a login (SSO) or an injected demo token
+    //      (__FM_BOOT__) and nothing is configured, default to `frame-ancestors 'self'`
+    //      rather than leaving it frameable by anyone. A plain postMessage embed
+    //      (no SSO/demo) keeps the unconfigured behaviour above.
+    $frameAncestors = \FluxFiles\FrameAncestors::policy(
+        $allowedOrigins,
+        \FluxFiles\DemoMode::enabled()
+            || (($_ENV['FLUXFILES_SSO_ENABLED'] ?? '') === 'true' && \FluxFiles\ModuleRegistry::installed('sso'))
+    );
     if ($frameAncestors !== null) {
         header('Content-Security-Policy: ' . $frameAncestors);
     }

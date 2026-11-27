@@ -425,6 +425,7 @@
     "byob_disk_collision": "Tên ổ đĩa lưu trữ này trùng với một ổ đĩa đã được cấu hình sẵn trên máy chủ.",
     "presign_put_disabled": "Tải lên trực tiếp bằng PUT đã bị tắt cho tài khoản này — hãy dùng tải lên dạng form (POST)",
     "presign_post_unsupported": "Bộ lưu trữ này không hỗ trợ tải lên dạng form (POST) — hãy dùng tải lên theo từng phần",
+    "presign_overwrite_versioned": "Tệp này đã tồn tại và có lịch sử phiên bản nên không thể thay thế bằng tải lên trực tiếp — hãy dùng tải lên tiêu chuẩn",
     "invalid_sort": "Kiểu sắp xếp không hợp lệ.",
     "invalid_order": "Chiều sắp xếp phải là tăng dần hoặc giảm dần.",
     "invalid_type": "Bộ lọc loại file không hợp lệ.",
