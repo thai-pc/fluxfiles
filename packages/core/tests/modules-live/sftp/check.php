@@ -6,8 +6,9 @@ declare(strict_types=1);
 require $autoload;
 use phpseclib3\Net\SFTP;
 $SECRET = getenv($SECRET_ENV);
-// The WordPress plugin refuses /content and /chmod by design (its tokens carry
-// allow_code_edit=false and its /chmod route always answers 403); the other adapters serve them.
+// The WordPress plugin refuses writes through /content and /chmod by design (its tokens carry
+// allow_code_edit=false / allow_chmod=false, and PUT /content + POST /chmod always answer 403
+// whatever the token says); the read-only GETs stay open. The other adapters serve both.
 $WP = str_contains($BASE, '/wp-json/');
 $CFG = ['driver'=>'sftp','host'=>'ff-sftp','port'=>22,'username'=>'ff','password'=>'ffpass','root'=>'upload'];
 $pass=0;$fail=0;$allBodies='';
@@ -44,8 +45,8 @@ t('stream: full bytes match',function()use(&$url,$bin){[$s,$b]=req('GET',abs_url
 t('stream: Range ignored by design on SFTP (200, whole file)',function()use(&$url,$bin){[$s,$b]=req('GET',abs_url($url),null,null,['Range: bytes=100-199']);ok($s===200&&strlen($b)===strlen($bin),"HTTP $s len=".strlen($b));});
 t('meta',function()use($T,$d){[$s,$b,$j]=req('GET',"/meta?disk=$d&path=docs%2Fnote.txt",$T);ok($s===200,"$s $b");});
 if($WP){
-t('WordPress refuses /content (edit_forbidden)',function()use($T,$d){global $DISK;[$s,$b,$j]=req('GET',"/content?disk=$d&path=docs%2Fnote.txt",$T);ok($s===403&&($j['error_code']??'')==='edit_forbidden',"$s $b");[$s,$b,$j]=req('PUT','/content',$T,['disk'=>$DISK,'path'=>'docs/note.txt','content'=>'x']);ok($s===403,"$s $b");});
-t('WordPress refuses /chmod (chmod_forbidden)',function()use($T,$d){global $DISK;[$s,$b,$j]=req('GET',"/chmod?disk=$d&path=docs%2Fnote.txt",$T);ok($s===403&&($j['error_code']??'')==='chmod_forbidden',"$s $b");[$s,$b]=req('POST','/chmod',$T,['disk'=>$DISK,'path'=>'docs/note.txt','mode'=>'640']);ok($s===403,"$s $b");});
+t('WordPress reads /content but refuses PUT (edit_forbidden); server unchanged',function()use($T,$d,$sftp,$R,$txt){global $DISK;[$s,$b,$j]=req('GET',"/content?disk=$d&path=docs%2Fnote.txt",$T);ok($s===200&&($j['data']['content']??'')===$txt,"GET $s $b");[$s,$b,$j]=req('PUT','/content',$T,['disk'=>$DISK,'path'=>'docs/note.txt','content'=>'x']);ok($s===403&&($j['error_code']??'')==='edit_forbidden',"PUT $s $b");$sftp->clearStatCache();ok($sftp->get("$R/docs/note.txt")===$txt,'server changed');});
+t('WordPress reads /chmod but refuses POST (chmod_forbidden); server unchanged',function()use($T,$d,$sftp,$R){global $DISK;[$s,$b,$j]=req('GET',"/chmod?disk=$d&path=docs%2Fnote.txt",$T);ok($s===200&&preg_match('/^[0-7]{3}$/',$j['data']['mode']??'')===1,"GET $s $b");$sftp->clearStatCache();$m0=($sftp->stat("$R/docs/note.txt")['mode']??0)&0777;[$s,$b,$j]=req('POST','/chmod',$T,['disk'=>$DISK,'path'=>'docs/note.txt','mode'=>'640']);ok($s===403&&($j['error_code']??'')==='chmod_forbidden',"POST $s $b");$sftp->clearStatCache();ok((($sftp->stat("$R/docs/note.txt")['mode']??0)&0777)===$m0,'mode changed');});
 }else{
 t('content GET + PUT; server reflects edit',function()use($T,$d,$sftp,$R,$txt){global $DISK;[$s,$b,$j]=req('GET',"/content?disk=$d&path=docs%2Fnote.txt",$T);ok($s===200,"$s $b");ok(($j['data']['content']??'')===$txt,'read');
  [$s,$b]=req('PUT','/content',$T,['disk'=>$DISK,'path'=>'docs/note.txt','content'=>"  edited\nline\n\n"]);ok($s===200,"$s $b");$sftp->clearStatCache();$g=$sftp->get("$R/docs/note.txt");ok($g==="  edited\nline\n\n",'server has: '.var_export($g,true).' status '.$sftp->getLastSFTPError());});
