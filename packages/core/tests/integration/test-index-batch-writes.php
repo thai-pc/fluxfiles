@@ -56,7 +56,7 @@ final class IndexWriteCounter implements FilesystemAdapter
     public function lastModified(string $path): FileAttributes { return $this->in->lastModified($path); }
     public function fileSize(string $path): FileAttributes { return $this->in->fileSize($path); }
     public function listContents(string $path, bool $deep): iterable { return $this->in->listContents($path, $deep); }
-    public function move(string $source, string $destination, Config $config): void { $this->in->move($source, $destination, $config); }
+    public function move(string $source, string $destination, Config $config): void { $this->seen($destination); /* manifests are written to a temp file, then moved into place */ $this->in->move($source, $destination, $config); }
     public function copy(string $source, string $destination, Config $config): void { $this->in->copy($source, $destination, $config); }
 }
 
