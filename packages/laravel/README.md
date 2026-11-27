@@ -23,7 +23,12 @@ Add to your `.env`:
 
 ```env
 FLUXFILES_SECRET=your-random-32-char-secret
+APP_URL=http://127.0.0.1:8000
 ```
+
+Generate the secret with `php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'`.
+
+**`APP_URL` must be the address the browser uses for your app** (scheme, host and port), e.g. `http://127.0.0.1:8000` under `php artisan serve`. In proxy mode (the default) the SDK script and the file-manager iframe are loaded from `config('app.url')`, so a fresh app's `APP_URL=http://localhost` makes the panel stay blank. Run `php artisan config:clear` after changing it.
 
 For the default local disk, expose Laravel public storage once:
 
