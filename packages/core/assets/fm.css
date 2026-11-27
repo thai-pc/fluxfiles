@@ -4220,6 +4220,40 @@ html.ff-branded { --ff-primary-hover: var(--ff-primary); }
 .ff-links-due { display: block; font-size: 11px; color: var(--color-text-tertiary); }
 .ff-links-badge-warn { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
 .ff-links-badge-ok { background: rgba(22, 163, 74, 0.14); color: #15803d; }
+/* Phones: the Links tables have 7-8 columns, so the sideways scroll the other panels
+   use hid the first column's end and the Revoke button. Stack each row as a card
+   (label : value lines, from the cells' data-label) so nothing needs scrolling. */
+@media (max-width: 640px) {
+    .ff-activity-table.ff-links-table { min-width: 0; display: block; }
+    .ff-links-table thead { display: none; }
+    .ff-links-table tbody { display: block; }
+    .ff-links-table tr {
+        display: block;
+        margin-bottom: 10px;
+        border: 1px solid var(--ff-border);
+        border-radius: 8px;
+        padding: 4px 10px;
+    }
+    .ff-links-table td {
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--ff-border);
+        text-align: end;
+        overflow-wrap: anywhere;
+    }
+    .ff-links-table td.ff-activity-file { max-width: none; white-space: normal; }
+    .ff-links-table td:last-child { border-bottom: none; justify-content: flex-end; }
+    .ff-links-table td::before {
+        content: attr(data-label);
+        flex: none;
+        font-weight: 600;
+        color: var(--color-text-secondary);
+        text-align: start;
+    }
+}
 @media (max-width: 520px) {
     .ff-req-item { flex-wrap: wrap; }
     .ff-req-item > input[type="text"] { flex-basis: 100%; }
