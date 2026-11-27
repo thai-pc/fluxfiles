@@ -1830,7 +1830,7 @@
                 <template x-if="linksTab === 'share'">
                     <div>
                         <div x-show="!linksLoading && !linksError && shareList.length === 0" class="ff-activity-state" x-text="t('share.empty')"></div>
-                        <table class="ff-activity-table" x-show="!linksLoading && shareList.length > 0">
+                        <table class="ff-activity-table ff-links-table" x-show="!linksLoading && shareList.length > 0">
                             <thead>
                                 <tr>
                                     <th x-text="t('links.label')"></th>
@@ -1845,7 +1845,7 @@
                             <tbody>
                                 <template x-for="r in shareList" :key="r.jti">
                                     <tr :class="isLinkExpired(r) ? 'ff-links-row-expired' : ''">
-                                        <td>
+                                        <td :data-label="t('links.label')">
                                             <span x-text="r.label || (r.path || '').split('/').pop()"></span>
                                             <span class="ff-links-lock" x-show="r.has_password" :title="t('links.col_password')">&#128274;</span>
                                             <button type="button" class="ff-links-bell" x-show="r.has_notify"
@@ -1856,14 +1856,14 @@
                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/><path class="ff-bell-strike" d="M3 3l18 18"/></svg>
                                             </button>
                                         </td>
-                                        <td class="ff-activity-file" :title="r.path" x-text="r.path || '—'"></td>
-                                        <td :title="formatDate(r.expires)">
+                                        <td :data-label="t('links.col_target')" class="ff-activity-file" :title="r.path" x-text="r.path || '—'"></td>
+                                        <td :data-label="t('links.col_expires')" :title="formatDate(r.expires)">
                                             <span x-show="!isLinkExpired(r)" x-text="formatDate(r.expires)"></span>
                                             <span class="ff-links-badge" x-show="isLinkExpired(r)" x-text="t('links.expired')"></span>
                                         </td>
-                                        <td x-text="r.views ?? 0"></td>
-                                        <td x-text="(r.downloads ?? 0) + (r.max_downloads ? ' / ' + r.max_downloads : '')"></td>
-                                        <td class="ff-links-hidden" :title="t('links.link_hidden_hint')" x-text="t('links.link_hidden')"></td>
+                                        <td :data-label="t('share.col_views')" x-text="r.views ?? 0"></td>
+                                        <td :data-label="t('share.col_downloads')" x-text="(r.downloads ?? 0) + (r.max_downloads ? ' / ' + r.max_downloads : '')"></td>
+                                        <td :data-label="t('links.col_link')" class="ff-links-hidden" :title="t('links.link_hidden_hint')" x-text="t('links.link_hidden')"></td>
                                         <td><button class="ff-btn ff-btn-sm" @click="revokeLink(r.jti)" x-text="t('links.revoke')"></button></td>
                                     </tr>
                                 </template>
@@ -1876,7 +1876,7 @@
                 <template x-if="linksTab === 'intake'">
                     <div>
                         <div x-show="!linksLoading && !linksError && intakeList.length === 0" class="ff-activity-state" x-text="t('intake.empty')"></div>
-                        <table class="ff-activity-table" x-show="!linksLoading && intakeList.length > 0">
+                        <table class="ff-activity-table ff-links-table" x-show="!linksLoading && intakeList.length > 0">
                             <thead>
                                 <tr>
                                     <th x-text="t('links.label')"></th>
@@ -1892,7 +1892,7 @@
                             <tbody>
                                 <template x-for="r in intakeList" :key="r.jti">
                                     <tr :class="isLinkExpired(r) ? 'ff-links-row-expired' : ''">
-                                        <td>
+                                        <td :data-label="t('links.label')">
                                             <span x-text="r.label || (r.path || '').split('/').pop()"></span>
                                             <span class="ff-links-lock" x-show="r.has_password" :title="t('links.col_password')">&#128274;</span>
                                             <button type="button" class="ff-links-bell" x-show="r.has_notify"
@@ -1903,13 +1903,13 @@
                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/><path class="ff-bell-strike" d="M3 3l18 18"/></svg>
                                             </button>
                                         </td>
-                                        <td class="ff-activity-file" :title="r.path" x-text="r.path || '—'"></td>
-                                        <td :title="formatDate(r.expires)">
+                                        <td :data-label="t('links.col_target')" class="ff-activity-file" :title="r.path" x-text="r.path || '—'"></td>
+                                        <td :data-label="t('links.col_expires')" :title="formatDate(r.expires)">
                                             <span x-show="!isLinkExpired(r)" x-text="formatDate(r.expires)"></span>
                                             <span class="ff-links-badge" x-show="isLinkExpired(r)" x-text="t('links.expired')"></span>
                                         </td>
-                                        <td x-text="(r.received ?? 0) + (r.max_files ? ' / ' + r.max_files : '')"></td>
-                                        <td class="ff-links-req" data-testid="req-cell">
+                                        <td :data-label="t('intake.col_received')" x-text="(r.received ?? 0) + (r.max_files ? ' / ' + r.max_files : '')"></td>
+                                        <td :data-label="t('intake.request.col')" class="ff-links-req" data-testid="req-cell">
                                             <template x-if="r.request">
                                                 <div>
                                                     <span x-text="requestProgress(r)"></span>
@@ -1920,8 +1920,8 @@
                                             </template>
                                             <span x-show="!r.request">&mdash;</span>
                                         </td>
-                                        <td x-text="(r.allowed_ext && r.allowed_ext.length) ? r.allowed_ext.join(', ') : t('links.unlimited')"></td>
-                                        <td class="ff-links-hidden" :title="t('links.link_hidden_hint')" x-text="t('links.link_hidden')"></td>
+                                        <td :data-label="t('intake.allowed_ext')" x-text="(r.allowed_ext && r.allowed_ext.length) ? r.allowed_ext.join(', ') : t('links.unlimited')"></td>
+                                        <td :data-label="t('links.col_link')" class="ff-links-hidden" :title="t('links.link_hidden_hint')" x-text="t('links.link_hidden')"></td>
                                         <td><button class="ff-btn ff-btn-sm" @click="revokeLink(r.jti)" x-text="t('links.revoke')"></button></td>
                                     </tr>
                                 </template>
