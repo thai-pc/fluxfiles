@@ -1247,6 +1247,22 @@ test('error(): ApiException code/params reach the REST response body (missing_pa
     assertTrue(($data['error'] ?? '') !== '', 'human message still present');
 });
 
+test('list forwards dirs_only/compact_srcset and /img passes If-None-Match to core', function () {
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($apiSrc, "\$q('dirs_only') === '1'") !== false, 'handleList forwards dirs_only');
+    assertTrue(strpos($apiSrc, "\$q('compact_srcset') === '1'") !== false, 'handleList forwards compact_srcset');
+    $m = new ReflectionMethod(FluxFilesApi::class, 'mediaHeaders');
+    $m->setAccessible(true);
+    $api = (new ReflectionClass(FluxFilesApi::class))->newInstanceWithoutConstructor();
+    $mk = static fn (?string $etag) => new class($etag) extends WP_REST_Request {
+        public function __construct(private ?string $etag) { parent::__construct(); }
+        public function get_header($name) { return $name === 'if_none_match' ? $this->etag : null; }
+    };
+    $h = $m->invoke($api, $mk('"abc"'));
+    assertEqual('"abc"', $h['if_none_match'], 'mediaHeaders() carries If-None-Match');
+    assertEqual('', $m->invoke($api, $mk(null))['if_none_match'], 'absent header is an empty string');
+});
+
 test('error(): ApiException params reach the REST response body (folder_exists → name)', function () {
     $api = new FluxFilesApi();
     $dirName = 'errtest-dir-' . uniqid();

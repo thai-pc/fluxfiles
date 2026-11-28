@@ -1392,7 +1392,11 @@ class FluxFilesApi
                 $q('cursor'),
                 $q('sort'),
                 $q('order', 'asc'),
-                $q('type', 'all')
+                $q('type', 'all'),
+                // Core >= 1.8.0: folders-only listing (folder tree) and the compact
+                // srcset. An older core ignores the extra arguments (full listing).
+                $q('dirs_only') === '1',
+                $q('compact_srcset') === '1'
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
@@ -2974,13 +2978,15 @@ class FluxFilesApi
         return is_scalar($v) ? (string) $v : $default;
     }
 
-    /** The `Range` / `Accept` request headers MediaEndpoint reads. */
+    /** The `Range` / `Accept` / `If-None-Match` request headers MediaEndpoint reads. */
     private function mediaHeaders(\WP_REST_Request $request): array
     {
         $range = $request->get_header('range');
         return [
             'range'  => $range !== null ? (string) $range : null,
             'accept' => (string) ($request->get_header('accept') ?: ''),
+            // /img answers 304 on a matching ETag (core >= 1.8.0; older cores ignore it).
+            'if_none_match' => (string) ($request->get_header('if_none_match') ?? ''),
         ];
     }
 

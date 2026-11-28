@@ -387,7 +387,11 @@ class FluxFilesController
                 // Server-side sort/filter.
                 $q('sort'),
                 $q('order', 'asc'),
-                $q('type', 'all')
+                $q('type', 'all'),
+                // Core >= 1.8.0: folders-only listing (folder tree) and the compact
+                // srcset. An older core ignores the extra arguments (full listing).
+                $q('dirs_only') === '1',
+                $q('compact_srcset') === '1'
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
