@@ -1,0 +1,97 @@
+# FluxFiles
+
+> FluxFiles is an MIT-licensed, embeddable file manager for PHP 8.1+. You run one FluxFiles server next to your app; your backend mints a short-lived JWT per user, and the iframe UI (opened by the JavaScript SDK or a framework adapter) lets that user browse, upload and pick files on your own storage: local disk, AWS S3, Cloudflare R2, any S3-compatible store or SFTP. FluxFiles keeps no user database and makes no calls to the vendor.
+
+This file is for developers and AI assistants integrating FluxFiles into an app (https://llmstxt.org). If you are changing FluxFiles itself, read `AGENTS.md` instead. The same file, with the docs inlined, is served at https://fluxfiles.thai-pc.com/llms-full.txt.
+
+Architecture:
+
+- Core server and iframe UI: the PHP package `fluxfiles/fluxfiles` (or the Docker image) serves a JSON API under `/api/fm/*` and a zero-build UI at `/public/`. Your page embeds the UI in an iframe; the SDK talks to it over `postMessage` and returns the picked file (`file.url`, `file.permanent_url`).
+- Token claims are the configuration: every request carries an HS256 JWT signed with `FLUXFILES_SECRET`. Its claims (disks, folder `prefix`, `perms`, `owner_only`, upload size, file types, quota, `role` presets, feature toggles) are enforced on every request. A different user or tenant gets a different token, not a different server config. Every claim and env var is in `docs/reference/CONFIG.md`.
+- Metadata stays with the storage: titles, tags, the search index, trash and the audit log live in the storage itself, in a `_fluxfiles/` folder (S3/R2 keep per-file metadata as object metadata). Opt-in, `FLUXFILES_STORAGE_BACKEND=db` keeps that bookkeeping in your own MySQL, PostgreSQL or SQLite instead. A tenant can bring their own bucket (BYOB), with its credentials AES-GCM encrypted inside the token.
+- Adapters wrap the same server and token: Laravel and WordPress (PHP, with a route proxy), React, Vue/Nuxt, CKEditor 4/5, TinyMCE and Summernote (JavaScript), token SDKs for Node and Python, and an MCP server for AI agents.
+- Paid modules are optional and separate: share links, upload portals, versioning, webhooks, AI vision, OCR, virus scan, backup, C2PA, audit export, SSO, DLP and legal hold are proprietary packages installed with a licence key (`php vendor/bin/fluxfiles update <module>`). Nothing in the MIT core needs them; without a module, its routes answer `501 module_not_installed`. Plans: https://fluxfiles.thai-pc.com/pricing/
+
+Install paths:
+
+- Docker (try it in 30 seconds):
+
+  ```bash
+  # One secret (>= 32 bytes), shared by this server and by whatever backend mints your tokens
+  echo "FLUXFILES_SECRET=$(openssl rand -hex 32)" >> .env
+  docker run -d --name fluxfiles -p 8080:80 --env-file .env ghcr.io/thai-pc/fluxfiles:latest
+  TOKEN=$(docker exec fluxfiles php -r 'require "/app/packages/core/embed.php"; echo fluxfiles_token(["user" => "demo", "perms" => ["read","write","delete"], "disks" => ["local"]]);')
+  echo "http://localhost:8080/public/index.html?token=$TOKEN"
+  ```
+
+  The `?token=` URL is for trying it locally only.
+- Composer: `composer require fluxfiles/fluxfiles`, then `php vendor/bin/fluxfiles serve` with `FLUXFILES_SECRET` exported in the same shell. Production web-server configs are in `docs/guides/DEPLOYMENT.md`.
+- Laravel: `composer require fluxfiles/laravel`, then register a claims resolver (`FluxFiles::resolveClaimsUsing(...)`); until you do, `<x-fluxfiles>` renders "not available".
+- WordPress: install the plugin ZIP from https://github.com/thai-pc/fluxfiles/releases?q=wordpress-v and use Media > FluxFiles, the `[fluxfiles]` shortcode or the block.
+
+Packages (all MIT):
+
+- `fluxfiles/fluxfiles` (Composer): core server, API and UI; `embed.php` provides `fluxfiles_token()`.
+- `fluxfiles/laravel` (Composer): `<x-fluxfiles>` Blade component, `FluxFiles::token()`, config, route proxy.
+- `ghcr.io/thai-pc/fluxfiles` (Docker): the core server image.
+- WordPress plugin (release ZIP, tags `wordpress-v*`): media page, shortcode, block, S3/R2/SFTP and AI tagging settings.
+- `fluxfiles` (npm): the JavaScript SDK (`FluxFiles.open({...})`), also served by your FluxFiles server as `/fluxfiles.min.js`.
+- `@fluxfiles/react` (npm): `<FluxFiles>`, `<FluxFilesModal>`, `useFluxFiles()`.
+- `@fluxfiles/vue` (npm): Vue 3 components and composables, Nuxt 3 auto-import.
+- `@fluxfiles/ckeditor4`, `@fluxfiles/ckeditor5`, `@fluxfiles/tinymce`, `@fluxfiles/summernote` (npm): editor plugins.
+- `@fluxfiles/node` (npm) and `fluxfiles-token` (PyPI): mint tokens from Node or Python, byte-compatible with the PHP helper. They only mint tokens; the core server still serves the files.
+- `@fluxfiles/mcp` (npm): MCP server (`npx -y @fluxfiles/mcp`) that lets an AI agent list, search and read files, and optionally write, through a scoped token.
+
+Mint a token on your backend (all SDKs also accept a `claims` map for any claim by its raw name):
+
+```php
+require 'vendor/fluxfiles/fluxfiles/embed.php';
+$token = fluxfiles_token(['user' => (string) $user->id, 'perms' => ['read', 'write'],
+    'disks' => ['s3'], 'prefix' => "users/{$user->id}/"]);
+```
+
+```js
+import { createToken } from '@fluxfiles/node'; // reads FLUXFILES_SECRET when `secret` is omitted
+const token = createToken({ userId: String(user.id), perms: ['read', 'write'], disks: ['s3'], prefix: `users/${user.id}/` });
+```
+
+Security rules for an integration:
+
+- Mint tokens on your server, never in the browser, and keep `FLUXFILES_SECRET` server-side.
+- Your token backend and the FluxFiles server must use the same `FLUXFILES_SECRET`, at least 32 bytes; a token signed with another secret is rejected.
+- Never put the main JWT in a URL. The SDK and adapters pass it to the iframe over `postMessage`, and API calls send `Authorization: Bearer`. (The short-lived per-file tokens in `/img` and `/stream` URLs are a different, scoped token type.)
+- Set `FLUXFILES_ALLOWED_ORIGINS` (CORS) and `FLUXFILES_FRAME_ANCESTORS` (who may frame the UI) to your app's exact origins. If neither is set, any website can frame the UI.
+- Keep TTLs short (1 hour by default). A token can't be revoked before it expires except by rotating `FLUXFILES_SECRET`, which invalidates every token.
+- Scope each user with `prefix` (and `owner_only` for shared folders) rather than trusting the front end; the server confines every path to the token's prefix.
+
+## Docs
+
+- [README](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/README.md): `README.md`; overview, quick start, embedding, adapters, security in brief
+- [Guide](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/docs/guides/GUIDE.md): `docs/guides/GUIDE.md`; install, configure, embed (SDK options, events, token refresh), storage disks and BYOB, multi-tenant, security, troubleshooting
+- [Configuration reference](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/docs/reference/CONFIG.md): `docs/reference/CONFIG.md`; every JWT claim and env var, the single source of truth
+- [API reference](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/docs/guides/API.md): `docs/guides/API.md`; every HTTP route
+- [Deployment](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/docs/guides/DEPLOYMENT.md): `docs/guides/DEPLOYMENT.md`; nginx and Apache, permissions, upload limits, the DB backend
+- [Migrating](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/docs/guides/MIGRATING.md): `docs/guides/MIGRATING.md`; from Responsive FileManager, RichFilemanager, KCFinder and others
+- [Feature deep dives](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/docs/guides/FEATURES.md): `docs/guides/FEATURES.md`; WebP/AVIF and srcset, watermark, usage dashboard, BYO embeds, white-label
+
+## Adapters
+
+- [JavaScript SDK](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/sdk/README.md): `packages/sdk/README.md`
+- [React](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/react/README.md): `packages/react/README.md`
+- [Vue / Nuxt](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/vue/README.md): `packages/vue/README.md`
+- [Laravel](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/laravel/README.md): `packages/laravel/README.md`
+- [WordPress](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/wordpress/README.md): `packages/wordpress/README.md`
+- [Node token SDK](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/node/README.md): `packages/node/README.md`
+- [Python token SDK](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/python/README.md): `packages/python/README.md`
+- [MCP server](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/mcp/README.md): `packages/mcp/README.md`
+- [CKEditor 4](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/ckeditor4/README.md): `packages/ckeditor4/README.md`
+- [CKEditor 5](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/ckeditor5/README.md): `packages/ckeditor5/README.md`
+- [TinyMCE](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/tinymce/README.md): `packages/tinymce/README.md`
+- [Summernote](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/packages/summernote/README.md): `packages/summernote/README.md`
+
+## Optional
+
+- [Changelog](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/CHANGELOG.md): `CHANGELOG.md`; every release (large, about 400 KB)
+- [Paid-module activation](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/docs/guides/ACTIVATE.md): `docs/guides/ACTIVATE.md`; install and enable a paid module with a licence key
+- [All documents](https://raw.githubusercontent.com/thai-pc/fluxfiles/master/docs/README.md): `docs/README.md`; the documentation index
+- [Website](https://fluxfiles.thai-pc.com/): product overview, pricing and a live demo (https://fluxfiles-demo.thai-pc.com/)

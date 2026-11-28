@@ -176,6 +176,7 @@ The full list, token handling and a production checklist are in the [security se
 | [API](docs/guides/API.md) | Every route |
 | [Migrating](docs/guides/MIGRATING.md) | Coming from Responsive FileManager, RichFilemanager, KCFinder, Roxy Fileman, Tiny File Manager or File Browser |
 | [All documents](docs/README.md) | Guides, references, design and security records |
+| [llms.txt](llms.txt) | For AI assistants (Claude, ChatGPT, Cursor, Copilot): install paths, packages, token example and security rules in one file, with links to the raw docs |
 
 ## Contributing
 
