@@ -10,7 +10,7 @@ entry's `> Released:` line names the exact tags it shipped.
 
 ## [1.0.63] — 2026-11-28
 
-> Released: `sdk-v1.0.4`, `react-v1.0.3`, `vue-v1.0.2`, `ckeditor4-v1.0.3`, `ckeditor5-v1.0.4`, `tinymce-v1.0.4`, `summernote-v1.0.3`, `node-v1.2.2`, `mcp-v1.1.3`: the first npm releases through **trusted publishing** (GitHub Actions OIDC, with provenance).
+> Released: `sdk-v1.0.5`, `react-v1.0.4`, `vue-v1.0.3` (the `sdk-v1.0.4`, `react-v1.0.3` and `vue-v1.0.2` tags exist but never published: npm 11 refused the implicit `latest` tag, fixed in PR 362), `ckeditor4-v1.0.3`, `ckeditor5-v1.0.4`, `tinymce-v1.0.4`, `summernote-v1.0.3`, `node-v1.2.2`, `mcp-v1.1.3`: the first npm releases through **trusted publishing** (GitHub Actions OIDC, with provenance).
 
 ### Changed
 - npm packages are published from `npm-publish.yml` in the `release` environment through npm trusted publishing (OIDC) with a signed provenance attestation, built without a registry token in the environment. No code changes in the packages beyond what is listed here.
