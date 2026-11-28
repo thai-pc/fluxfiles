@@ -105,6 +105,8 @@ jobs:
           See CHANGELOG.md for what shipped in this release.
           EOF
 
+          # --latest=false: the repo's "Latest release" is the core server (core-v*), which
+          # is what a visitor to the repo is looking for; plugin ZIPs are found by tag.
           # Idempotent: a re-run of the workflow updates the existing release
           # instead of failing on "already exists".
           if gh release view "$MONOREPO_TAG" >/dev/null 2>&1; then
@@ -112,7 +114,7 @@ jobs:
             gh release edit "$MONOREPO_TAG" --notes-file /tmp/notes.md
           else
             gh release create "$MONOREPO_TAG" "build/fluxfiles-${VERSION}.zip" \
-              --title "WordPress plugin v${VERSION}" --notes-file /tmp/notes.md
+              --title "WordPress plugin v${VERSION}" --notes-file /tmp/notes.md --latest=false
           fi
           echo "Released $MONOREPO_TAG (sha256 ${SHA})"
 
