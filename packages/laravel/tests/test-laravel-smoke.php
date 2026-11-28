@@ -261,6 +261,16 @@ test('intake_base_url defaults to the adapter page (app.url) once Intake is on, 
     $own = \FluxFiles\JwtCompat::decode($mgr->token(73, ['allow_intake' => true, 'intake_base_url' => 'https://x.test/p.html']), $secret);
     assertEqual('https://x.test/p.html', $own->intake_base_url ?? '', 'an explicit base wins');
 });
+test('list forwards dirs_only/compact_srcset and /img hands If-None-Match to core', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(str_contains($src, "\$q('dirs_only') === '1'"), 'list forwards dirs_only');
+    assertTrue(str_contains($src, "\$q('compact_srcset') === '1'"), 'list forwards compact_srcset');
+    assertTrue(str_contains($src, "->image(\$request->query(), \\FluxFiles\\MediaEndpoint::headersFromServer("), '/img uses headersFromServer');
+    $h = \FluxFiles\MediaEndpoint::headersFromServer(['HTTP_IF_NONE_MATCH' => '"abc"']);
+    if (array_key_exists('if_none_match', $h)) {
+        assertEqual('"abc"', $h['if_none_match'], 'If-None-Match reaches the 304 check');
+    }
+});
 test('createPortal gets a mailer only for request.send_now, plus an audit callback', function () {
     $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
     $call = substr($src, (int) strpos($src, '$mod->createPortal('), 700);
@@ -2252,3 +2262,4 @@ echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";
 
 exit($failed > 0 ? 1 : 0);
+

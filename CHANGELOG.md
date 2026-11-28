@@ -8,6 +8,9 @@ entry's `> Released:` line names the exact tags it shipped.
 
 ## [Unreleased]
 
+### Changed
+- Laravel and WordPress proxies forward core's `dirs_only` and `compact_srcset` list options (folder tree and lighter listings), and the WordPress `/img` route passes `If-None-Match` so it can answer `304` (Laravel already did through `MediaEndpoint::headersFromServer`). Needs core >= 1.8.0 to take effect; an older core ignores the extra arguments. WordPress code change waits on master for the next plugin release.
+
 ## [1.0.64] — 2026-11-28
 
 > Released: `core-v1.8.3`: the UI opens the disk the token grants instead of defaulting to `local`.
