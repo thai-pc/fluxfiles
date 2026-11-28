@@ -361,7 +361,7 @@ class Claims
      *            standalone/Docker evaluation), so the default TRUE cannot put an upsell
      *            inside a paying operator's product. FALSE is the hard off switch, for
      *            operators shipping the free core in production. */
-    public bool $proHints = true;
+    public bool $proHints = false;
 
     /** @var bool Block re-uploading identical CONTENT (SHA-256 dedup)? Default FALSE
      *            — like Finder / Google Drive / Dropbox, an identical upload is kept
@@ -952,7 +952,7 @@ class Claims
         $c->showHidden = (bool) ($payload->show_hidden ?? false);
         // Default TRUE (opt-out): the UI only ever renders the affordance on an
         // unlicensed, unframed server, so an absent claim can't upsell a paying tenant.
-        $c->proHints = isset($payload->pro_hints) ? (bool) $payload->pro_hints : true;
+        $c->proHints = isset($payload->pro_hints) ? (bool) $payload->pro_hints : false;
         $c->dedupeUploads = (bool) ($payload->dedupe_uploads ?? false);
         $c->auditReads = (bool) ($payload->audit_reads ?? false);
         $c->stripExif = (bool) ($payload->strip_exif ?? false);

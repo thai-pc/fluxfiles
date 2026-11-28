@@ -1615,7 +1615,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      * storage location (not the disk name, so two disk names or BYOB tokens that
      * point at the same bucket/prefix share one lock). That covers every PHP worker
      * of a single server; several app servers writing one bucket still need the
-     * DB backend (`FLUXFILES_STORAGE_BACKEND=db`), see docs/guides/OPERATIONS.md.
+     * DB backend (`FLUXFILES_STORAGE_BACKEND=db`), see docs/design/DB-STORAGE-MIGRATION-DESIGN.md.
      * Best-effort: when no lock directory is writable, nothing is locked (the old
      * behaviour) rather than failing the request.
      *

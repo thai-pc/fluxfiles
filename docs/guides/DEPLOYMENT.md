@@ -1,9 +1,8 @@
 # Deployment (self-host)
 
 Web server config, directory permissions, and upload-size limits for running
-FluxFiles yourself. This is separate from [`OPERATIONS.md`](OPERATIONS.md),
-which is the runbook for the different job of **selling** FluxFiles (Polar,
-the licence server, module hosting) — none of that applies here.
+FluxFiles yourself. Nothing about selling FluxFiles (Polar, the licence server,
+module hosting) applies here.
 
 Requires PHP **8.1 or newer** (8.1–8.5 tested; keep your PHP on a security-patched release) with `gd`, `curl`, `json`,
 `openssl`, `mbstring`, `fileinfo`. Optional binaries: Ghostscript **≥ 10.05.0** (PDF

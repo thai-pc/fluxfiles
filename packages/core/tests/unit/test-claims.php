@@ -593,10 +593,10 @@ test('fromJwtPayload wires intakeBrand + intakeAnalytics', function () {
     assertEqual(true, $c2->intakeAnalytics);
 });
 
-test('pro_hints defaults ON and is an opt-OUT switch', function () {
-    // Default true is safe because the UI additionally requires an unlicensed AND
-    // unframed server before it renders anything — see fluxfiles-private-docs: design/OPERATOR-SHARE-INTAKE-UI.md §5.1.
-    assertEqual(true, claimsWith([])->proHints, 'absent → on');
+test('pro_hints defaults OFF and is an opt-IN switch (core >= 1.8.2)', function () {
+    // Opt-in since core 1.8.2 (the MIT standalone UI shows no upsell by default); even when
+    // on, the UI additionally requires an unlicensed AND unframed server before it renders anything — see fluxfiles-private-docs: design/OPERATOR-SHARE-INTAKE-UI.md §5.1.
+    assertEqual(false, claimsWith([])->proHints, 'absent → off');
     assertEqual(false, claimsWith(['pro_hints' => false])->proHints, 'explicit off honoured');
     assertEqual(true, claimsWith(['pro_hints' => true])->proHints, 'explicit on');
     // Coercion: a JSON payload can carry 0/1/"" rather than a real bool.

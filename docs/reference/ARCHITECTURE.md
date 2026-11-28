@@ -211,7 +211,7 @@ Notes:
   the new core to appear on Packagist first.
 - Keep release-tag pushes **≤ 3 per `git push`** (more can silently skip workflows).
 - Paid modules are released from their own private repos and packed with
-  `php scripts/pack-modules.php` (see `docs/guides/OPERATIONS.md`).
+  `php scripts/pack-modules.php` (runbook: `fluxfiles-private-docs: guides/OPERATIONS.md`).
 
 ---
 

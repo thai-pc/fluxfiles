@@ -129,8 +129,8 @@ keys remain valid for lifetime updates; this policy applies only to newly issued
 ### Lifetime deal and updates renewals (prepared, off by default)
 
 For a limited deal. Nothing is sold until the Polar products exist
-(`polar-setup.php --with-lifetime`, see OPERATIONS.md "Switching on the lifetime
-deal"); the plans below are inert in the meantime.
+(`polar-setup.php --with-lifetime`, see `fluxfiles-private-docs: guides/OPERATIONS.md` "Switching on the
+lifetime deal"); the plans below are inert in the meantime.
 
 | Plan | Price | Grants |
 |---|---|---|
@@ -358,7 +358,7 @@ looks it up through `/licenses`.
 
 ## Private admin UI (all phases)
 
-The implementation follows [the approved design](../../docs/design/LICENSE-ADMIN-UI-DESIGN.md),
+The implementation follows the approved design (`fluxfiles-private-docs: design/LICENSE-ADMIN-UI-DESIGN.md`),
 §0, §2–6, §7.1/3/4/7, §8.1/3 and §15. There is no new JWT claim, framework,
 composer dependency, CDN or build step. Copy the directory with its `client/`,
 `admin/`, `ops/` and mail templates intact. PHP 8.1–8.5 is supported; extensions:
