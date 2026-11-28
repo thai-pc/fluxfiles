@@ -1090,8 +1090,6 @@ Mint everything in one options object — `fluxfiles_token(['user' => …, 'clai
 - [`docs/guides/ACTIVATE.md`](ACTIVATE.md) — bought a paid edition: installing
   a module, where the licence key goes, which of the three gates an error comes from.
 - [`docs/guides/DEPLOYMENT.md`](DEPLOYMENT.md) — web-server config for self-hosting.
-- [`docs/guides/OPERATIONS.md`](OPERATIONS.md) — selling FluxFiles: the
-  "going live" runbook (Polar, licence server, module hosting).
 
 A token minted by `fluxfiles_token()` looks like this:
 

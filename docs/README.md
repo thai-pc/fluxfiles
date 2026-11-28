@@ -17,7 +17,6 @@ every new document to the matching section below.
 ## Operators and sellers
 
 - [Activation](guides/ACTIVATE.md) — install and enable paid modules, licence keys, SSO setup, error meanings.
-- [Operations runbook](guides/OPERATIONS.md) — licence/update infrastructure for whoever sells FluxFiles.
 
 ## Reference
 
@@ -41,7 +40,6 @@ modules stay public (`guides/FEATURES.md`, `reference/CONFIG.md`).
 - [DB storage backend](design/DB-STORAGE-MIGRATION-DESIGN.md) — implemented in core-v0.2.79/0.2.80.
 - [License-expiry notifications](design/LICENSE-EXPIRY-NOTIFICATIONS-DESIGN.md) — implemented in core-v0.2.84.
 - [Licence key refresh](design/LICENSE-KEY-REFRESH-DESIGN.md) — implemented (server + core client in core-v1.2.0).
-- [Licence server admin UI](design/LICENSE-ADMIN-UI-DESIGN.md) — implemented and deployed 2026-11-09.
 - [Multi-prefix tokens](design/MULTI-PREFIX-TOKEN-DESIGN.md) — **draft, not implemented**, awaiting decisions.
 - [Python token SDK](design/PYTHON-TOKEN-SDK-DESIGN.md) — implemented in python-v0.1.0.
 - [Teammate folder sharing](design/TEAMMATE-FOLDER-SHARING-DESIGN.md) — pattern documentation, nothing to implement.

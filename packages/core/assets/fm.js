@@ -598,10 +598,10 @@ function fluxFilesApp() {
                         this.loadFiles();
                         this.loadQuota();
                         // Standalone-only (the toolbar badge never renders framed, see
-                        // licenseBadgeVisible) and honours the pro_hints hard-off switch —
-                        // same two conditions openUsage()/proGate() apply — so an operator
-                        // who disabled hints never pays this request either, and an embedded
-                        // end-customer's browser never fetches the operator's license status.
+                        // licenseBadgeVisible). This feeds the operator's own licence badge
+                        // (grace / expiry warnings), so it runs unless pro_hints is EXPLICITLY
+                        // false — unlike proGate()'s upsell, which needs pro_hints: true. An
+                        // embedded end-customer's browser never fetches the operator's status.
                         if (window.parent === window && this.tokenAllows('pro_hints', true) !== false) {
                             this.loadLicense();
                         }
@@ -4344,7 +4344,7 @@ function fluxFilesApp() {
         //            The operator has deliberately withheld the feature from this tenant;
         //            advertising it inside their product would sell against them.
         //   'locked' claim off AND the server is unlicensed AND we are NOT framed
-        //            (top-level /public/, i.e. the Docker evaluation) AND pro_hints is on
+        //            (top-level /public/, i.e. the Docker evaluation) AND the token opts in with pro_hints
         //            → a small "Pro" affordance with a docs link.
         //
         // This is NOT the optimize/terminal precedent (claim-gated, invisible when off) and
@@ -4356,7 +4356,7 @@ function fluxFilesApp() {
             // Order matters: it short-circuits so the common paths cost ZERO extra requests.
             if (this.tokenAllows(claim, false)) return 'on';        // licensed tenants never fetch the license
             if (window.parent !== window) return 'hidden';          // every embedded/adapter path exits here
-            if (this.tokenAllows('pro_hints', true) === false) return 'hidden';  // hard off switch
+            if (this.tokenAllows('pro_hints', false) !== true) return 'hidden';  // opt-in (default off since core 1.8.2)
             if (this.licenseInfo === null) {
                 // Not known yet: kick the (memoized) fetch and stay hidden for this tick.
                 // Alpine re-renders when it resolves, so this settles without a watcher.

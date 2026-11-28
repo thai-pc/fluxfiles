@@ -8,6 +8,16 @@ entry's `> Released:` line names the exact tags it shipped.
 
 ## [Unreleased]
 
+## [1.0.62] — 2026-11-28
+
+> Released: `core-v1.8.2`: the standalone UI no longer advertises the paid add-ons unless the operator opts in.
+
+### Changed
+- `pro_hints` is now **opt-in** (default `false`, was `true`). The locked "Pro" entries for paid modules only render when the token carries `pro_hints: true`, the server is unlicensed and the UI is not framed, so the MIT standalone UI (e.g. the Docker quick start) shows no upsell by default. A page without a token no longer probes `/api/fm/license`. The WordPress plugin already minted `false`; embedded UIs were never affected.
+
+### Docs
+- The seller-side operations runbook and the licence-server admin UI design moved to the vendor's private docs; public references now cite `fluxfiles-private-docs: …`.
+
 ## [1.0.61] — 2026-11-28
 
 > Released: `core-v1.8.1`: presigned uploads keep the owner and honour the collision policy, a guard `.htaccess` in the local upload root, no raw storage errors in responses, `nosniff` on every JSON answer.

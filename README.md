@@ -32,7 +32,7 @@ echo "http://localhost:8080/public/index.html?token=$TOKEN"
 
 Open the printed URL. The `?token=` URL is only for trying it locally; in a real app the SDK hands the token to the iframe, and it never appears in a URL.
 
-On an unlicensed server the standalone UI shows locked "Pro" entries for the paid add-ons. To hide them, mint tokens with the `pro_hints` claim set to `false` (`'claims' => ['pro_hints' => false]`); embedded (framed) UIs never show them. See [CONFIG.md](docs/reference/CONFIG.md).
+The UI never advertises the paid add-ons unless you opt in: with the `pro_hints` claim set to `true` (`'claims' => ['pro_hints' => true]`), an unlicensed, non-framed standalone UI shows locked "Pro" entries; embedded (framed) UIs never show them. See [CONFIG.md](docs/reference/CONFIG.md).
 
 **Before you embed it in an app, lock down who may use it.** Add your app's exact origin(s) (scheme + host + port, no path, comma-separated) to `.env`:
 

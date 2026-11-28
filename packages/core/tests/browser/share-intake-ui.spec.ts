@@ -18,13 +18,13 @@ import { mintToken, mintTokenWithClaims, openManager, uploadFile, pngFile, cardB
 const LOCK = '.ff-pro-locked';
 const LINKS_BTN = 'button[aria-label="Links"]';
 
-test('locked: free core, claim off, top level → the Pro affordance, and no share API call', async ({ page }) => {
+test('locked: free core, claim off, top level, pro_hints opted in → the Pro affordance, and no share API call', async ({ page }) => {
   const calls: string[] = [];
   page.on('request', (r) => {
     if (/\/api\/fm\/(share|intake)/.test(r.url())) calls.push(r.url());
   });
 
-  await openManager(page, mintToken());
+  await openManager(page, mintTokenWithClaims({ pro_hints: true }));
   await expect(page.locator(LOCK)).toBeVisible();
 
   await page.locator(LOCK).click();
@@ -32,6 +32,13 @@ test('locked: free core, claim off, top level → the Pro affordance, and no sha
   await expect(page.getByRole('dialog', { name: 'Available in FluxFiles Pro' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Learn more' })).toBeVisible();
   expect(calls).toEqual([]);
+});
+
+test('hidden by default: no pro_hints claim → no Pro affordance (the licence badge fetch may still run)', async ({ page }) => {
+  await openManager(page, mintToken());
+  await expect(page.locator('.ff-app')).toBeVisible();
+  await expect(page.locator(LOCK)).not.toBeVisible();
+  await expect(page.locator(LINKS_BTN)).not.toBeVisible();
 });
 
 test('hidden: pro_hints=false is a hard off switch — no affordance, no license call', async ({ page }) => {
@@ -69,14 +76,14 @@ test('hidden: licensed but withheld → nothing renders (never sell against the 
     })
   );
 
-  await openManager(page, mintToken());          // claim OFF, but the server is licensed
+  await openManager(page, mintTokenWithClaims({ pro_hints: true }));   // claim OFF + hints opted in, but the server is licensed
   await expect(page.locator('.ff-app')).toBeVisible();
   await expect(page.locator(LOCK)).not.toBeVisible();
   await expect(page.locator(LINKS_BTN)).not.toBeVisible();
 });
 
 test('hidden: framed → never advertise inside a resold product', async ({ page }) => {
-  const token = mintToken();
+  const token = mintTokenWithClaims({ pro_hints: true });   // opted in: framing alone must hide it
   // setContent keeps the page's current URL as the base, so navigate to the real
   // origin first — against about:blank the relative iframe src would never load.
   await page.goto('/public/index.html');

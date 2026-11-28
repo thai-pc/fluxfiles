@@ -451,7 +451,7 @@ in `fluxfiles-pro`.
 | Area | Files | Est. |
 |---|---|---|
 | Licence server | `PolarWebhook.php` (+subscription_id, billing_reason), `LicenseStore.php` (column, `newestRefreshable`, `supersedeActiveForSubscription`, revoke by subscription), `LicenseSigner.php` (`verify`, `issuedAtLeast`), `LicenseIssuer.php`, `server.php` (`/refresh`, `/revoke` subscription), **new** `backfill-subscription-ids.php`, `README.md`, `.env.example`, `LicenseMailer.php` (subscription mail copy: "running `fluxfiles license refresh` daily makes this automatic") | ~1 day |
-| Core (free) | **new** `api/LicenseRefresh.php`, **new** `api/LicenseKeyFile.php`, `api/LicenseManager.php` (`issuedAt()`, `fromEnv()` hook), `bin/fluxfiles` (`license refresh`, pre-update hook, effective key, `.env` path fix), `api/AboutInfo.php` (source line), `docs/reference/CONFIG.md`, `docs/guides/OPERATIONS.md` (nginx `/refresh`, cron), `CHANGELOG.md` | ~1.5 days |
+| Core (free) | **new** `api/LicenseRefresh.php`, **new** `api/LicenseKeyFile.php`, `api/LicenseManager.php` (`issuedAt()`, `fromEnv()` hook), `bin/fluxfiles` (`license refresh`, pre-update hook, effective key, `.env` path fix), `api/AboutInfo.php` (source line), `docs/reference/CONFIG.md`, `fluxfiles-private-docs: guides/OPERATIONS.md` (nginx `/refresh`, cron), `CHANGELOG.md` | ~1.5 days |
 | WP Pro (private) | `includes/ProLicense.php`, `includes/ProUpdater.php`, `includes/ProPlugin.php` (cron), `includes/ProAdmin.php` (status row), `uninstall.php`, `lib/LicenseRefresh.php` (+ repinned `lib/LicenseManager.php`), `modules.lock.json` `_core.tag`, the `test-pro-smoke.php` lib list | ~1 day |
 | Laravel | `README.md` only | <1 h |
 
