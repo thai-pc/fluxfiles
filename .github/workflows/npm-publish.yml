@@ -91,6 +91,9 @@ jobs:
 
       - name: Publish (skip only if this version already exists)
         working-directory: ${{ steps.pkg.outputs.dir }}
+        # --tag latest: every package still lists 1.27.0 from an old numbering scheme, and npm 11
+        # refuses to move `latest` to a lower version implicitly ("Cannot implicitly apply the
+        # latest tag"), so name the tag. Releases are always the newest line here.
         # --ignore-scripts: dist/ was built above (prepublishOnly would just rebuild
         # it with the token in the environment). --provenance works with a classic
         # token. To drop NPM_TOKEN entirely, configure a trusted publisher for each
@@ -103,10 +106,10 @@ jobs:
         # `|| echo` once hid an expired-NPM_TOKEN 404 and went green).
         run: |
           set -o pipefail
-          if npm publish --access public --provenance --ignore-scripts 2>&1 | tee /tmp/pub.log; then
+          if npm publish --access public --provenance --ignore-scripts --tag latest 2>&1 | tee /tmp/pub.log; then
             echo "Published."
           else
-            if grep -qiE 'cannot publish over|previously published|EPUBLISHCONFLICT|You cannot publish over the previously published versions' /tmp/pub.log; then
+            if grep -qiE 'cannot publish over|EPUBLISHCONFLICT|You cannot publish over the previously published versions' /tmp/pub.log; then
               # A conflict also fires for a version number that was published once and then
               # unpublished (npm never reuses one). That must fail, not skip: react-v1.0.0
               # went green while npm served no 1.0.0 at all.
