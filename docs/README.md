@@ -12,6 +12,7 @@ every new document to the matching section below.
 - [API reference](guides/API.md) — standalone HTTP routes, incl. tus resumable upload and the paid-module routes.
 - [Feature deep dives](guides/FEATURES.md) — on-demand WebP/AVIF, srcset, watermark, usage dashboard, the BYO terminal embed, About dialog and white-label.
 - [Industry presets](guides/INDUSTRY-PRESETS.md) — copy-paste token configs per vertical.
+- [llms.txt](../llms.txt) — for AI assistants integrating FluxFiles: a one-file summary (architecture, install paths, packages, token example, security rules) with links to the raw Markdown docs ([llmstxt.org](https://llmstxt.org) convention). The website also serves `llms-full.txt` with these docs inlined.
 - [Migrating from an unmaintained file manager](guides/MIGRATING.md) — Responsive FileManager, KCFinder, Roxy Fileman, RichFilemanager, Tiny File Manager, File Browser: concept mapping, before/after snippets (TinyMCE, CKEditor 4/5), keeping existing upload folders and URLs, indexing existing files, FAQ.
 
 ## Operators and sellers
