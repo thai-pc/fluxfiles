@@ -37,7 +37,7 @@ jobs:
           persist-credentials: false
 
       # Release tags must be cut from master. A tag on an unreviewed branch would
-      # otherwise publish with the NPM_TOKEN.
+      # otherwise publish through the trusted publisher.
       - name: Tag must be on master
         run: |
           git fetch --no-tags origin master
@@ -94,16 +94,16 @@ jobs:
         # --tag latest: every package still lists 1.27.0 from an old numbering scheme, and npm 11
         # refuses to move `latest` to a lower version implicitly ("Cannot implicitly apply the
         # latest tag"), so name the tag. Releases are always the newest line here.
-        # --ignore-scripts: dist/ was built above (prepublishOnly would just rebuild
-        # it with the token in the environment). --provenance works with a classic
-        # token. To drop NPM_TOKEN entirely, configure a trusted publisher for each
-        # package on npmjs.com (repo thai-pc/fluxfiles, workflow npm-publish.yml,
-        # environment release); npm then authenticates this job via OIDC and the
-        # NODE_AUTH_TOKEN env below can be removed.
+        # --ignore-scripts: dist/ was built above (prepublishOnly would just rebuild it).
+        # Auth is npm trusted publishing (OIDC, `id-token: write`): every package has a
+        # trusted publisher on npmjs.com for repo thai-pc/fluxfiles, workflow
+        # npm-publish.yml, environment `release` (set up 2026-11-28; the first OIDC
+        # publishes were 1.0.63). There is no registry token in this workflow — renaming
+        # this file or the environment breaks publishing until npmjs.com is updated.
         #
         # Re-runs must be idempotent, so swallow an "already published" conflict —
         # but ONLY that. Auth/network/other errors must FAIL the job (a bare
-        # `|| echo` once hid an expired-NPM_TOKEN 404 and went green).
+        # `|| echo` once hid an expired-token 404 and went green).
         run: |
           set -o pipefail
           if npm publish --access public --provenance --ignore-scripts --tag latest 2>&1 | tee /tmp/pub.log; then
@@ -122,9 +122,7 @@ jobs:
                 exit 1
               fi
             else
-              echo "::error::npm publish failed (not an already-published conflict). Check NPM_TOKEN validity/permissions."
+              echo "::error::npm publish failed (not an already-published conflict). Check the trusted publisher on npmjs.com (repo, workflow file name, environment)."
               exit 1
             fi
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
