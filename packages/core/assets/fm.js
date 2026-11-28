@@ -405,9 +405,10 @@ function fluxFilesApp() {
                     this._lastConfigSig = sig;
 
                     this.token = p.token || '';
-                    this.currentDisk = p.disk || 'local';
+                    const pick = this._resolveDisks(p.disk || 'local', Array.isArray(p.disks) ? p.disks : null);
+                    this.currentDisk = pick.disk;
                     this.endpoint = p.endpoint || '';
-                    this.config = p;
+                    this.config = Object.assign({}, p, { disks: pick.disks });
                     if (p.path !== undefined) this.currentPath = p.path || '';
                     this.authRequired = false;
                     this._initTheme();
@@ -479,10 +480,11 @@ function fluxFilesApp() {
                 }
                 this.endpoint = boot.endpoint || window.location.origin;
                 this.token = boot.token;
-                if (boot.disk) this.currentDisk = boot.disk;
                 if (boot.path) this.currentPath = boot.path;
+                const bootPick = this._resolveDisks(boot.disk || '', boot.disks ? boot.disks.split(',') : (boot.disk ? [boot.disk] : null));
+                this.currentDisk = bootPick.disk;
                 this.config = {
-                    disks: (boot.disks || boot.disk || 'local').split(','),
+                    disks: bootPick.disks,
                     theme: boot.theme || null,
                     multiple: boot.multiple !== false,
                     maxUploadMb: boot.maxUploadMb || null,
@@ -538,11 +540,12 @@ function fluxFilesApp() {
                         window.history.replaceState({}, '', u.toString());
                     } catch (e) { /* non-fatal */ }
                 }
-                if (params.get('disk')) this.currentDisk = params.get('disk');
+                const urlPick = this._resolveDisks(params.get('disk') || '', params.get('disks') ? params.get('disks').split(',') : null);
+                this.currentDisk = urlPick.disk;
                 const urlPath = params.get('path');
                 if (urlPath !== null && urlPath !== '') this.currentPath = urlPath;
                 this.config = {
-                    disks: (params.get('disks') || 'local').split(','),
+                    disks: urlPick.disks,
                     theme: params.get('theme') || null,
                     multiple: params.get('multiple') === '1' || params.get('multiple') === 'true',
                     maxUploadMb: params.get('maxUploadMb') ? parseInt(params.get('maxUploadMb'), 10) : null,
@@ -3047,6 +3050,26 @@ function fluxFilesApp() {
         // Utility
         // Activity log (audit) — decode the JWT payload client-side (cosmetic only;
         // the server enforces the 'audit' permission) to know whether to show it.
+        // Pick the disk(s) to open from what the host asked for AND what the token allows.
+        // Hosts and adapters (SDK, React, Vue) send disk 'local' / disks ['local'] when the
+        // integrator passes nothing, and `?token=` alone implied 'local' too, so a token
+        // scoped to e.g. ['r2'] opened on 'local' and got "Access denied to this storage
+        // disk". A requested disk the token does not grant would be refused by the server
+        // anyway, so fall back to the token's first disk. An opaque/claim-less token keeps
+        // the request as is (the server's default is ['local']).
+        _resolveDisks(requestedDisk, requestedList) {
+            const own = this._tokenPayload().disks;
+            const asked = Array.isArray(requestedList) ? requestedList.filter(Boolean) : [];
+            if (!Array.isArray(own) || !own.length) {
+                const list = asked.length ? asked : ['local'];
+                return { disk: requestedDisk || list[0], disks: list };
+            }
+            let list = asked.filter(d => own.includes(d));
+            if (!list.length) list = own.slice();
+            const disk = (requestedDisk && own.includes(requestedDisk)) ? requestedDisk : list[0];
+            if (!list.includes(disk)) list.unshift(disk);
+            return { disk, disks: list };
+        },
         _tokenPayload() {
             try {
                 const seg = (this.token || '').split('.')[1] || '';
