@@ -8,6 +8,19 @@ entry's `> Released:` line names the exact tags it shipped.
 
 ## [Unreleased]
 
+## [1.0.64] — 2026-11-28
+
+> Released: `core-v1.8.3`: the UI opens the disk the token grants instead of defaulting to `local`.
+
+### Fixed
+- UI: the standalone `?token=` page (the README quick start), the server boot config and `FM_CONFIG` all opened the `local` disk when no disk was given, and the SDK, React and Vue adapters send `disk: 'local'` / `disks: ['local']` by default, so a token scoped to e.g. `['r2']` or `['s3']` failed on first load with "Access denied to this storage disk" unless the integrator passed the disk explicitly. The UI now keeps a requested disk the token grants and otherwise opens the token's first disk, with the disk list narrowed to the token's disks. A token without a readable `disks` claim keeps the old behaviour (the server's default is `['local']`). No adapter release is needed (PR 367).
+
+### Changed
+- GitHub: plugin releases (`wordpress-v*`) are no longer marked as the repository's Latest release; the core release is (PR 366).
+
+### Docs
+- `llms.txt` at the repository root for developers and AI assistants integrating FluxFiles (PR 365).
+
 ## [1.0.63] — 2026-11-28
 
 > Released: `sdk-v1.0.5`, `react-v1.0.4`, `vue-v1.0.3` (the `sdk-v1.0.4`, `react-v1.0.3` and `vue-v1.0.2` tags exist but never published: npm 11 refused the implicit `latest` tag, fixed in PR 362), `ckeditor4-v1.0.3`, `ckeditor5-v1.0.4`, `tinymce-v1.0.4`, `summernote-v1.0.3`, `node-v1.2.2`, `mcp-v1.1.3`: the first npm releases through **trusted publishing** (GitHub Actions OIDC, with provenance).
